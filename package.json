@@ -25,5 +25,8 @@
   "bugs": {
     "url": "https://github.com/saideepaksana/Analytics-BI/issues"
   },
-  "homepage": "https://github.com/saideepaksana/Analytics-BI#readme"
+  "homepage": "https://github.com/saideepaksana/Analytics-BI#readme",
+  "devDependencies": {
+    "@originjs/vite-plugin-federation": "^1.4.1"
+  }
 }
