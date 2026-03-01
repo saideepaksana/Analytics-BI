@@ -1,0 +1,29 @@
+{
+  "name": "analytics-bi-dashboard-creation-and-visualization",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:client": "npm run dev -w apps/client",
+    "dev:server": "node apps/server/src/core/server.js",
+    "dev": "npm run dev:client & npm run dev:server",
+    "install:all": "npm install"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/saideepaksana/Analytics-BI-Dashboard-Creation-and-Visualization.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/saideepaksana/Analytics-BI-Dashboard-Creation-and-Visualization/issues"
+  },
+  "homepage": "https://github.com/saideepaksana/Analytics-BI-Dashboard-Creation-and-Visualization#readme"
+}

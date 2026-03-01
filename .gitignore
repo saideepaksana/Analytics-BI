@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+dist/
+build/
+.eslintcache
+
+# Environment & Secrets
+.env
+.env.local
+.env.development.local
+
+# Debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
