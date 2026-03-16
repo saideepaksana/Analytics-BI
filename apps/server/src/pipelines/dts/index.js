@@ -1,8 +1,8 @@
-import { Transform } from 'node:stream';
-import { sanitizeString } from './cleaner.js';
-import { parseDate } from './normalizer.js';
-import CleanRecord from '../../models/CleanRecord.js';
-import DLQRecord from '../../models/DLQRecord.js'; 
+const { Transform } = require('node:stream');
+const { sanitizeString } = require('./cleaner');
+const { parseDate } = require('./normalizer');
+const CleanRecord = require('../../models/CleanRecord');
+const DLQRecord = require('../../models/DLQRecord');
 
 const schemaMapper = {
   productName: sanitizeString,
@@ -18,7 +18,7 @@ class DTSEngineStream extends Transform {
 
     async _transform(chunk, encoding, callback) {
         const cleanedRow = {};
-        
+
         Object.keys(chunk).forEach((key) => {
             const rawValue = chunk[key];
             const cleaningFunction = schemaMapper[key];
@@ -30,20 +30,20 @@ class DTSEngineStream extends Transform {
 
         if (error) {
             const deadLetterRecord = {
-                datasetId: this.datasetId, 
-                rawData: chunk,       
-                error: error.message   
+                datasetId: this.datasetId,
+                rawData: chunk,
+                error: error.message
             };
 
-            // Route unfixable data to the DLQ 
+            // Route unfixable data to the DLQ
             await DLQRecord.create(deadLetterRecord);
             console.log("Routing unfixable record to DLQ", deadLetterRecord);
-            
-            callback(); 
+
+            callback();
         } else {
             callback(null, cleanedRow);
         }
     }
 }
 
-export default DTSEngineStream;
+module.exports = DTSEngineStream;

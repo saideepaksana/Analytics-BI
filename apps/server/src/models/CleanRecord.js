@@ -1,14 +1,11 @@
-import mongoose from 'mongoose';
-const {Schema} = mongoose;
-
+const mongoose = require('mongoose');
+const { Schema } = mongoose;
 
 const CleanRecordSchema = new Schema({
-    
     price: {
         type: Number,
         required: true
     },
-
     productName: {
         type: String,
         required: true
@@ -16,4 +13,4 @@ const CleanRecordSchema = new Schema({
 });
 
 const CleanRecord = mongoose.model('CleanRecord', CleanRecordSchema);
-export default CleanRecord;
+module.exports = CleanRecord;

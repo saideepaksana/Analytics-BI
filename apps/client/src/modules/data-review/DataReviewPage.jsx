@@ -29,7 +29,7 @@ const DataReviewPage = ({ datasetId = 'demo' }) => {
   } = useMetadata(datasetId);
 
   // Handler for role changes in schema view
-  const handleRoleChange = async (column, newRole, index) => {
+  const handleRoleChange = async (column, newRole) => {
     try {
       await updateSchema(column.name, { role: newRole });
     } catch (err) {
@@ -38,7 +38,7 @@ const DataReviewPage = ({ datasetId = 'demo' }) => {
   };
 
   // Handler for quarantine actions
-  const handleQuarantineReview = (row, index) => {
+  const handleQuarantineReview = (row) => {
     console.log('Reviewing row:', row);
     // Implement modal or detail view for reviewing
   };

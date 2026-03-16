@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+const mongoose = require("mongoose");
 const { Schema } = mongoose;
 
 const DLQRecordSchema = new Schema({
@@ -9,7 +9,7 @@ const DLQRecordSchema = new Schema({
     rawData: {
         type: Schema.Types.Mixed,
         required: true
-    }, 
+    },
     error: {
         type: String,
         required: true
@@ -21,4 +21,4 @@ const DLQRecordSchema = new Schema({
 });
 
 const DLQRecord = mongoose.model('DLQRecord', DLQRecordSchema);
-export default DLQRecord;
+module.exports = DLQRecord;

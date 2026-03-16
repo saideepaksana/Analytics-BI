@@ -1,10 +1,10 @@
-import _ from "lodash";
-import { addDays } from "date-fns";
-import { sanitizeString } from "./cleaner.js";
+const _ = require("lodash");
+const { addDays } = require("date-fns");
+const { sanitizeString } = require("./cleaner");
 
-export const parseDate = (value) => {
+const parseDate = (value) => {
     const cleanValue = sanitizeString(value);
-    
+
     if (_.isNil(cleanValue)) {
         return null;
     }
@@ -14,14 +14,16 @@ export const parseDate = (value) => {
     // Convert Excel serial dates
     if (!isNaN(numericValue)) {
         const baseDate = new Date(1899, 11, 30);
-        return addDays(baseDate, numericValue).toISOString(); 
+        return addDays(baseDate, numericValue).toISOString();
     } else {
         // Standard date parsing
         const date = new Date(cleanValue);
-        if (!isNaN(date.getTime())){
-            return date.toISOString(); 
+        if (!isNaN(date.getTime())) {
+            return date.toISOString();
         } else {
             return null;
         }
     }
-}
+};
+
+module.exports = { parseDate };

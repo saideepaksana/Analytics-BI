@@ -1,10 +1,12 @@
-import _ from "lodash";
+const _ = require("lodash");
 
-export const sanitizeString = (value) => {
+const sanitizeString = (value) => {
     if (_.isNil(value) || value === '') {
-        return null; 
+        return null;
     }
 
-    const stringValue = String(value).replace(/"/g,'').trim();
+    const stringValue = String(value).replace(/"/g, '').trim();
     return _.capitalize(stringValue);
-}
+};
+
+module.exports = { sanitizeString };
