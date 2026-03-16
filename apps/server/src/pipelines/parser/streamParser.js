@@ -73,7 +73,7 @@ async function parseExcel(buffer, datasetId) {
         const values = row.values.slice(1); // ExcelJS row.values is 1-indexed
 
         if (rowNumber === 1) {
-            headers = values.map((h) => (h ? String(h).trim() : `col_${rowNumber}`));
+            headers = values.map((h, i) => (h ? String(h).trim() : `col_${i + 1}`));
             return;
         }
 
