@@ -1,198 +1,186 @@
-import { useState, useEffect, useCallback } from 'react';
-import axios from 'axios';
+import { useCallback, useEffect, useState } from "react";
+import axios from "axios";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5001/api";
 
-/**
- * useMetadata Hook - Fetches and manages inferred metadata from backend
- * @param {string} datasetId - The ID of the dataset to fetch metadata for
- * @param {Object} options - Configuration options
- * @returns {Object} - { metadata, schema, quarantinedRows, previewData, loading, error, refetch, updateSchema }
- */
 export const useMetadata = (datasetId, options = {}) => {
-  const { autoFetch = true, previewLimit = 100 } = options;
+  const { autoFetch = true, previewLimit = 25 } = options;
 
   const [state, setState] = useState({
     metadata: null,
     schema: [],
     quarantinedRows: [],
     previewData: [],
-    columns: [],
     loading: false,
-    error: null,
+    error: ""
   });
 
-  // Fetch all metadata for a dataset
   const fetchMetadata = useCallback(async () => {
-    if (!datasetId) return;
-
-    setState((prev) => ({ ...prev, loading: true, error: null }));
-
-    try {
-      const response = await axios.get(`${API_BASE_URL}/datasets/${datasetId}/metadata`);
-      const { metadata, schema, quarantinedRows, preview, columns } = response.data;
-
-      setState({
-        metadata,
-        schema: schema || [],
-        quarantinedRows: quarantinedRows || [],
-        previewData: preview || [],
-        columns: columns || [],
-        loading: false,
-        error: null,
-      });
-    } catch (err) {
-      setState((prev) => ({
-        ...prev,
-        loading: false,
-        error: err.response?.data?.message || err.message || 'Failed to fetch metadata',
-      }));
+    if (!datasetId) {
+      return;
     }
-  }, [datasetId]);
 
-  // Fetch only preview data
-  const fetchPreview = useCallback(async (limit = previewLimit) => {
-    if (!datasetId) return;
+    setState((prev) => ({ ...prev, loading: true, error: "" }));
 
     try {
-      const response = await axios.get(
-        `${API_BASE_URL}/datasets/${datasetId}/preview`,
-        { params: { limit } }
-      );
+      const response = await axios.get(`${API_BASE_URL}/datasets/${datasetId}/metadata`, {
+        params: { limit: previewLimit }
+      });
+
       setState((prev) => ({
         ...prev,
+        metadata: response.data.metadata || null,
+        schema: response.data.schema || [],
+        quarantinedRows: response.data.quarantinedRows || [],
         previewData: response.data.preview || [],
-        columns: response.data.columns || prev.columns,
+        loading: false,
+        error: ""
       }));
-    } catch (err) {
-      console.error('Failed to fetch preview:', err);
+    } catch (error) {
+      setState((prev) => ({
+        ...prev,
+        loading: false,
+        error: error.response?.data?.message || error.message || "Failed to load metadata"
+      }));
     }
   }, [datasetId, previewLimit]);
 
-  // Fetch only schema
-  const fetchSchema = useCallback(async () => {
-    if (!datasetId) return;
+  const updateSchema = useCallback(
+    async (columnName, updates) => {
+      if (!datasetId) {
+        return;
+      }
 
-    try {
-      const response = await axios.get(`${API_BASE_URL}/datasets/${datasetId}/schema`);
-      setState((prev) => ({
-        ...prev,
-        schema: response.data.schema || [],
-      }));
-    } catch (err) {
-      console.error('Failed to fetch schema:', err);
-    }
-  }, [datasetId]);
+      await axios.patch(`${API_BASE_URL}/datasets/${datasetId}/schema/${columnName}`, updates);
+      await fetchMetadata();
+    },
+    [datasetId]
+  );
 
-  // Fetch quarantined rows
-  const fetchQuarantinedRows = useCallback(async () => {
-    if (!datasetId) return;
-
-    try {
-      const response = await axios.get(`${API_BASE_URL}/datasets/${datasetId}/quarantine`);
-      setState((prev) => ({
-        ...prev,
-        quarantinedRows: response.data.quarantinedRows || [],
-      }));
-    } catch (err) {
-      console.error('Failed to fetch quarantined rows:', err);
-    }
-  }, [datasetId]);
-
-  // Update schema (e.g., change column role)
-  const updateSchema = useCallback(async (columnName, updates) => {
-    if (!datasetId) return;
-
-    try {
-      const response = await axios.patch(
-        `${API_BASE_URL}/datasets/${datasetId}/schema/${columnName}`,
-        updates
-      );
-      
-      setState((prev) => ({
-        ...prev,
-        schema: prev.schema.map((col) =>
-          col.name === columnName ? { ...col, ...updates } : col
-        ),
-      }));
-
+  const deleteQuarantinedRow = useCallback(
+    async (rowIndex) => {
+      if (!datasetId) {
+        return;
+      }
+      const response = await axios.delete(`${API_BASE_URL}/datasets/${datasetId}/quarantine/${rowIndex}`);
+      setState((prev) => {
+        const nextRows = prev.quarantinedRows.filter((_, index) => index !== rowIndex);
+        return {
+          ...prev,
+          quarantinedRows: nextRows,
+          metadata: prev.metadata
+            ? {
+                ...prev.metadata,
+                rowCount: response.data?.rowCount ?? prev.metadata.rowCount,
+                quarantinedCount: response.data?.quarantinedCount ?? nextRows.length
+              }
+            : prev.metadata
+        };
+      });
       return response.data;
-    } catch (err) {
-      console.error('Failed to update schema:', err);
-      throw err;
-    }
-  }, [datasetId]);
+    },
+    [datasetId, fetchMetadata]
+  );
 
-  // Delete quarantined row
-  const deleteQuarantinedRow = useCallback(async (rowIndex) => {
-    if (!datasetId) return;
-
-    try {
-      await axios.delete(
-        `${API_BASE_URL}/datasets/${datasetId}/quarantine/${rowIndex}`
-      );
-      
+  const deleteAllQuarantinedRows = useCallback(
+    async () => {
+      if (!datasetId) {
+        return null;
+      }
+      const response = await axios.delete(`${API_BASE_URL}/datasets/${datasetId}/quarantine`);
       setState((prev) => ({
         ...prev,
-        quarantinedRows: prev.quarantinedRows.filter((_, i) => i !== rowIndex),
+        quarantinedRows: [],
+        metadata: prev.metadata
+          ? {
+              ...prev.metadata,
+              rowCount: response.data?.rowCount ?? prev.metadata.rowCount,
+              quarantinedCount: response.data?.quarantinedCount ?? 0
+            }
+          : prev.metadata
       }));
-    } catch (err) {
-      console.error('Failed to delete quarantined row:', err);
-      throw err;
-    }
-  }, [datasetId]);
+      return response.data;
+    },
+    [datasetId]
+  );
 
-  // Restore quarantined row to main dataset
-  const restoreQuarantinedRow = useCallback(async (rowIndex) => {
-    if (!datasetId) return;
+  const restoreQuarantinedRow = useCallback(
+    async (rowIndex, updatedData) => {
+      if (!datasetId) {
+        return;
+      }
 
-    try {
-      await axios.post(
-        `${API_BASE_URL}/datasets/${datasetId}/quarantine/${rowIndex}/restore`
-      );
-      
-      setState((prev) => ({
-        ...prev,
-        quarantinedRows: prev.quarantinedRows.filter((_, i) => i !== rowIndex),
-      }));
-      
-      // Refetch preview to include restored row
-      await fetchPreview();
-    } catch (err) {
-      console.error('Failed to restore quarantined row:', err);
-      throw err;
-    }
-  }, [datasetId, fetchPreview]);
+      // Backend-only validation pass before restore.
+      await axios.post(`${API_BASE_URL}/datasets/${datasetId}/quarantine/${rowIndex}/validate`, {
+        updatedData
+      });
 
-  // Export quarantined rows
-  const exportQuarantinedRows = useCallback(async (format = 'csv') => {
-    if (!datasetId) return;
+      const response = await axios.post(`${API_BASE_URL}/datasets/${datasetId}/quarantine/${rowIndex}/restore`, {
+        updatedData
+      });
+      setState((prev) => {
+        const nextRows = prev.quarantinedRows.filter((_, index) => index !== rowIndex);
+        const restoredData = response.data?.restoredData;
+        const nextPreview = restoredData
+          ? [restoredData, ...prev.previewData].slice(0, previewLimit)
+          : prev.previewData;
 
-    try {
-      const response = await axios.get(
-        `${API_BASE_URL}/datasets/${datasetId}/quarantine/export`,
-        { 
-          params: { format },
-          responseType: 'blob' 
-        }
-      );
-      
-      // Create download link
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `quarantine-${datasetId}.${format}`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error('Failed to export quarantined rows:', err);
-      throw err;
-    }
-  }, [datasetId]);
+        return {
+          ...prev,
+          quarantinedRows: nextRows,
+          previewData: nextPreview,
+          metadata: prev.metadata
+            ? {
+                ...prev.metadata,
+                rowCount: response.data?.rowCount ?? prev.metadata.rowCount,
+                quarantinedCount: response.data?.quarantinedCount ?? nextRows.length
+              }
+            : prev.metadata
+        };
+      });
+      await fetchMetadata();
+      return response.data;
+    },
+    [datasetId, previewLimit, fetchMetadata]
+  );
 
-  // Auto-fetch on mount and datasetId change
+  const restoreAllValidQuarantinedRows = useCallback(
+    async () => {
+      if (!datasetId) {
+        return null;
+      }
+      const response = await axios.post(`${API_BASE_URL}/datasets/${datasetId}/quarantine/restore-all`);
+      setState((prev) => {
+        const failedRows = response.data?.failedRows || [];
+        const failedRowNumbers = new Set(failedRows.map((row) => row.rowNumber));
+
+        const remainingQuarantined = prev.quarantinedRows.filter((row) =>
+          failedRowNumbers.has(row.rowNumber)
+        );
+
+        const restoredRows = (response.data?.restoredRows || []).map((row) => row.data);
+        const nextPreview = [...restoredRows, ...prev.previewData].slice(0, previewLimit);
+
+        return {
+          ...prev,
+          quarantinedRows: remainingQuarantined,
+          previewData: nextPreview,
+          metadata: prev.metadata
+            ? {
+                ...prev.metadata,
+                rowCount: response.data?.rowCount ?? prev.metadata.rowCount,
+                quarantinedCount:
+                  response.data?.quarantinedCount ?? remainingQuarantined.length
+              }
+            : prev.metadata
+        };
+      });
+      await fetchMetadata();
+      return response.data;
+    },
+    [datasetId, previewLimit, fetchMetadata]
+  );
+
   useEffect(() => {
     if (autoFetch && datasetId) {
       fetchMetadata();
@@ -202,13 +190,11 @@ export const useMetadata = (datasetId, options = {}) => {
   return {
     ...state,
     refetch: fetchMetadata,
-    fetchPreview,
-    fetchSchema,
-    fetchQuarantinedRows,
     updateSchema,
     deleteQuarantinedRow,
+    deleteAllQuarantinedRows,
     restoreQuarantinedRow,
-    exportQuarantinedRows,
+    restoreAllValidQuarantinedRows
   };
 };
 
