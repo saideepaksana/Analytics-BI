@@ -1,5 +1,5 @@
 import { useState } from "react";
-// import { IngestionWizard } from "./modules/ingestion";
+import { IngestionWizard } from "./modules/ingestion";
 import { DataReviewPage } from "./modules/data-review";
 import "./modules/data-review/styles/data-review.css";
 
@@ -14,12 +14,12 @@ function App() {
         {/* <p>Upload, clean, infer schema, and review your dataset.</p> */}
       </header>
 
-      {/* <IngestionWizard
+      <IngestionWizard
         onCompleted={(result) => {
           setActiveDatasetId(result.datasetId);
           setUploadSummary(result);
         }}
-      /> */}
+      />
 
       {uploadSummary ? (
         <section className="card">

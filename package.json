@@ -10,7 +10,7 @@
   ],
   "scripts": {
     "dev:client": "npm run dev -w apps/client",
-    "dev:server": "node apps/server/src/core/server.js",
+    "dev:server": "npm run dev -w apps/server",
     "dev": "npm run dev:client & npm run dev:server",
     "install:all": "npm install"
   },
