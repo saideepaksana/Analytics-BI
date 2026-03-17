@@ -120,7 +120,7 @@ class DTSEngineStream extends Transform {
                 nullable: col.nullable !== false,
                 type: col.type,
                 role: col.role,
-                constraints: col.constraints || {} // 🔥 extensible
+                constraints: col.constraints || {} //  extensible
             };
         }
     }

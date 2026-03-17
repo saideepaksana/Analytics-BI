@@ -6,6 +6,7 @@ const mongoose = require("mongoose");
 const connectDB = require("./core/db");
 const { initStorage } = require("./core/storage");
 const uploadRoutes = require("./api/upload/upload.routes");
+const datasetsRoutes = require("./api/query/datasets.routes");
 
 const app = express();
 
@@ -22,6 +23,7 @@ app.use(express.json());
 
 //Routes
 app.use("/api/upload", uploadRoutes);
+app.use("/api/datasets", datasetsRoutes);
 
 //check server status
 app.get("/", (req, res) => {
