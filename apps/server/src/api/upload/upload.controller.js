@@ -11,6 +11,9 @@ exports.uploadFile = async (req, res) => {
     //Mode validation
     const validModes = ["new", "append", "replace"];
     const mode = req.body.mode || "new";
+    const uploadId = typeof req.body.uploadId === "string" ? req.body.uploadId.trim() : "";
+    const requestedDatasetId =
+      typeof req.body.datasetId === "string" ? req.body.datasetId.trim() : "";
 
     if (!validModes.includes(mode)) {
       return res.status(400).json({
@@ -18,8 +21,21 @@ exports.uploadFile = async (req, res) => {
       });
     }
 
+    if ((mode === "append" || mode === "replace") && !requestedDatasetId) {
+      return res.status(400).json({
+        message: "datasetId is required for append/replace mode",
+      });
+    }
+
     //GridFS bucket
-    const bucket = getBucket();
+    let bucket;
+    try {
+      bucket = getBucket();
+    } catch (err) {
+      return res.status(503).json({
+        message: "Storage not ready. Please try again in a moment.",
+      });
+    }
 
     //basic safty check for file name
     const safeFileName = req.file.originalname.replace(/[^a-zA-Z0-9.\-_]/g, "_");
@@ -34,6 +50,11 @@ exports.uploadFile = async (req, res) => {
       metadata: {
         uploadedAt: new Date(),
         mode: mode,
+        uploadId: uploadId || undefined,
+        datasetId: requestedDatasetId || undefined,
+        originalName: req.file.originalname,
+        mimeType: req.file.mimetype,
+        sizeBytes: req.file.size,
       },
     });
 
@@ -41,10 +62,16 @@ exports.uploadFile = async (req, res) => {
 
     //success
     uploadStream.on("finish", () => {
+      const datasetId = mode === "new" ? String(uploadStream.id) : requestedDatasetId;
       return res.status(200).json({
         message: "File uploaded successfully",
+        datasetId,
+        fileId: String(uploadStream.id),
         fileName: safeFileName,
-        mode: mode,
+        mode,
+        rowCount: 0,
+        quarantinedCount: 0,
+        uploadId: uploadId || undefined,
       });
     });
 

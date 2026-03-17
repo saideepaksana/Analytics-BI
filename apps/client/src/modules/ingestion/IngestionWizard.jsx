@@ -1,12 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
-import { io } from "socket.io-client";
 import FileUpload from "./FileUpload";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5001/api";
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:5001";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api";
 
 const createUploadId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // keep in sync with backend multer limit
 
 const MODE_OPTIONS = [
   {
@@ -32,6 +32,12 @@ const prettyMode = (mode) => {
   return "New";
 };
 
+const getAxiosErrorMessage = (err) => {
+  if (!err) return "Upload failed";
+  if (axios.isCancel?.(err)) return "Upload cancelled";
+  return err.response?.data?.message || err.message || "Upload failed";
+};
+
 function IngestionWizard({ onCompleted }) {
   const [currentStep, setCurrentStep] = useState(1);
   const [file, setFile] = useState(null);
@@ -42,11 +48,15 @@ function IngestionWizard({ onCompleted }) {
   const [stage, setStage] = useState("idle");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const cancelSourceRef = useRef(null);
 
   const needsDatasetId = mode === "append" || mode === "replace";
 
   const canSubmit = useMemo(() => {
     if (!file || loading) {
+      return false;
+    }
+    if (file.size > MAX_FILE_SIZE_BYTES) {
       return false;
     }
     if (needsDatasetId && !datasetId.trim()) {
@@ -57,6 +67,12 @@ function IngestionWizard({ onCompleted }) {
 
   const canGoStep2 = Boolean(file) && !loading;
   const canGoStep3 = canGoStep2 && (!needsDatasetId || Boolean(datasetId.trim()));
+
+  useEffect(() => {
+    if (mode === "new" && datasetId) {
+      setDatasetId("");
+    }
+  }, [mode, datasetId]);
 
   useEffect(() => {
     if (!file && currentStep > 1) {
@@ -70,28 +86,15 @@ function IngestionWizard({ onCompleted }) {
   }, [file, currentStep, canGoStep3]);
 
   useEffect(() => {
-    if (!uploadId) {
-      return undefined;
-    }
+    setError("");
+    setProgress(0);
+    setStage("idle");
+    setUploadId("");
+    cancelSourceRef.current?.cancel?.("Upload superseded");
+    cancelSourceRef.current = null;
+  }, [file]);
 
-    const socket = io(SOCKET_URL, { transports: ["websocket"] });
-    socket.emit("upload:subscribe", { uploadId });
-
-    socket.on("upload:progress", (event) => {
-      if (event.uploadId !== uploadId) {
-        return;
-      }
-      setProgress(event.progress || 0);
-      setStage(event.stage || "processing");
-      if (event.stage === "failed") {
-        setError(event.detail || "Upload failed");
-      }
-    });
-
-    return () => {
-      socket.disconnect();
-    };
-  }, [uploadId]);
+  useEffect(() => () => cancelSourceRef.current?.cancel?.("Component unmounted"), []);
 
   const handleUpload = async () => {
     if (!canSubmit) {
@@ -101,8 +104,8 @@ function IngestionWizard({ onCompleted }) {
     try {
       setLoading(true);
       setError("");
-      setProgress(2);
-      setStage("starting");
+      setProgress(0);
+      setStage("uploading");
 
       const generatedUploadId = createUploadId();
       setUploadId(generatedUploadId);
@@ -115,7 +118,17 @@ function IngestionWizard({ onCompleted }) {
         formData.append("datasetId", datasetId.trim());
       }
 
-      const response = await axios.post(`${API_BASE_URL}/upload`, formData);
+      const cancelSource = axios.CancelToken?.source?.();
+      cancelSourceRef.current = cancelSource;
+
+      const response = await axios.post(`${API_BASE_URL}/upload`, formData, {
+        cancelToken: cancelSource?.token,
+        onUploadProgress: (event) => {
+          if (!event.total) return;
+          const percent = Math.min(99, Math.round((event.loaded / event.total) * 100));
+          setProgress(percent);
+        },
+      });
 
       setProgress(100);
       setStage("done");
@@ -123,11 +136,22 @@ function IngestionWizard({ onCompleted }) {
       onCompleted?.(response.data);
     } catch (uploadError) {
       console.error("Upload error details:", uploadError.response?.data || uploadError);
-      setError(uploadError.response?.data?.message || uploadError.message || "Upload failed");
+      setError(getAxiosErrorMessage(uploadError));
       setStage("failed");
     } finally {
       setLoading(false);
+      cancelSourceRef.current = null;
     }
+  };
+
+  const handleCancel = () => {
+    cancelSourceRef.current?.cancel?.("User cancelled");
+    cancelSourceRef.current = null;
+    setLoading(false);
+    setStage("idle");
+    setProgress(0);
+    setError("");
+    setUploadId("");
   };
 
   return (
@@ -166,11 +190,20 @@ function IngestionWizard({ onCompleted }) {
 
       {currentStep === 1 ? (
         <>
-          <FileUpload file={file} onFileSelected={setFile} disabled={loading} />
+          <FileUpload
+            file={file}
+            onFileSelected={(nextFile) => {
+              setFile(nextFile);
+              setError("");
+            }}
+            disabled={loading}
+            maxSizeBytes={MAX_FILE_SIZE_BYTES}
+            onValidationError={setError}
+          />
 
           <div className="wizard-actions">
-            <button type="button" className="ghost-btn" disabled>
-              Cancel
+            <button type="button" className="ghost-btn" onClick={() => setFile(null)} disabled={loading || !file}>
+              Clear
             </button>
             <button
               type="button"
@@ -258,8 +291,13 @@ function IngestionWizard({ onCompleted }) {
             <button type="button" className="ghost-btn" onClick={() => setCurrentStep(2)} disabled={loading}>
               Back
             </button>
+            {loading ? (
+              <button type="button" className="ghost-btn" onClick={handleCancel}>
+                Cancel Upload
+              </button>
+            ) : null}
             <button type="button" className="primary-btn" onClick={handleUpload} disabled={!canSubmit}>
-              {loading ? "Uploading..." : "Upload and Process"}
+              {loading ? "Uploading..." : "Upload"}
             </button>
           </div>
         </>

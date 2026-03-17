@@ -8,6 +8,8 @@ const router = express.Router();
 const allowedExtensions = [".csv", ".xls", ".xlsx"];
 const allowedMimeTypes = [
   "text/csv",
+  "application/csv",
+  "text/plain",
   "application/vnd.ms-excel",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 ];
