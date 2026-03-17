@@ -1,6 +1,16 @@
-
 const { getBucket } = require("../../core/storage");
 const { Readable } = require("stream");
+const Metadata = require("../../models/Metadata");
+const CleanRecord = require("../../models/CleanRecord");
+const DLQRecord = require("../../models/DLQRecord");
+const { processGridFsFile } = require("../../pipelines/parser/streamParser");
+const { classifyAllColumns } = require("../../pipelines/schema-inference/classifyColumns");
+const { transformRows } = require("../../pipelines/dts/index");
+
+const getNextRowBase = async (datasetId) => {
+  const latest = await CleanRecord.findOne({ datasetId }).sort({ rowNumber: -1 }).select("rowNumber").lean();
+  return latest?.rowNumber || 0;
+};
 
 exports.uploadFile = async (req, res) => {
   try {
@@ -28,7 +38,7 @@ exports.uploadFile = async (req, res) => {
       });
     }
 
-    //GridFS bucket
+    // GridFS bucket
     let bucket;
     try {
       bucket = getBucket();
@@ -38,15 +48,15 @@ exports.uploadFile = async (req, res) => {
       });
     }
 
-    //basic safty check for file name
+    // Basic safety check for file name.
     const safeFileName = req.file.originalname.replace(/[^a-zA-Z0-9.\-_]/g, "_");
 
     console.log(`Uploading file: ${safeFileName}, mode: ${mode}`);
 
-    // buffer to stream
+    // Buffer to stream.
     const readableStream = Readable.from(req.file.buffer);
 
-    //Upload to GridFS
+    // Upload to GridFS.
     const uploadStream = bucket.openUploadStream(safeFileName, {
       metadata: {
         uploadedAt: new Date(),
@@ -59,29 +69,111 @@ exports.uploadFile = async (req, res) => {
       },
     });
 
-    readableStream.pipe(uploadStream);
-
-    //success
-    uploadStream.on("finish", () => {
-      const datasetId = mode === "new" ? String(uploadStream.id) : requestedDatasetId;
-      return res.status(200).json({
-        message: "File uploaded successfully",
-        datasetId,
-        fileId: String(uploadStream.id),
-        fileName: safeFileName,
-        mode,
-        rowCount: 0,
-        quarantinedCount: 0,
-        uploadId: uploadId || undefined,
-      });
+    await new Promise((resolve, reject) => {
+      readableStream.pipe(uploadStream);
+      uploadStream.on("finish", resolve);
+      uploadStream.on("error", reject);
     });
 
-    //error
-    uploadStream.on("error", (err) => {
-      console.error("GridFS Upload Error:", err);
-      return res.status(500).json({
-        message: "File upload failed",
-      });
+    const datasetId = mode === "new" ? String(uploadStream.id) : requestedDatasetId;
+    const sourceFileId = String(uploadStream.id);
+
+    if (mode === "replace") {
+      await Promise.all([
+        CleanRecord.deleteMany({ datasetId }),
+        DLQRecord.deleteMany({ datasetId })
+      ]);
+    }
+
+    const rowBase = mode === "append" ? await getNextRowBase(datasetId) : 0;
+
+    const parsedRows = [];
+    const { parseQuarantineRows = [] } = await processGridFsFile({
+      gridFsFileId: sourceFileId,
+      originalFileName: safeFileName,
+      onBatch: async (batchRows) => {
+        parsedRows.push(...batchRows);
+      }
+    });
+
+    const rawRows = parsedRows.map((row) => row.data || {});
+    const inferredColumns = classifyAllColumns(rawRows, rawRows.length);
+    const schema = inferredColumns.map((column) => ({
+      name: column.name,
+      type: column.dataType,
+      dataType: column.dataType,
+      role: column.role,
+      suggestedAggregation: column.suggestedAggregation || null,
+      sampleValues: column.sampleValues || [],
+      nullCount: column.nullCount || 0,
+      uniqueCount: column.uniqueCount || 0
+    }));
+
+    const { validRows, invalidRows } = transformRows(rawRows, datasetId, schema);
+
+    const cleanDocs = validRows.map((data, index) => ({
+      datasetId,
+      rowNumber: rowBase + index + 1,
+      data,
+      sourceFileName: safeFileName,
+      status: "VALID"
+    }));
+
+    if (cleanDocs.length > 0) {
+      await CleanRecord.insertMany(cleanDocs);
+    }
+
+    const dlqDocs = [
+      ...parseQuarantineRows.map((row, index) => ({
+        datasetId,
+        rowNumber: rowBase + parsedRows.length + index + 1,
+        rawData: row.rawData,
+        errorMessages: row.errors || ["Structural parse error"],
+        status: "QUARANTINED"
+      })),
+      ...invalidRows.map((row, index) => ({
+        datasetId,
+        rowNumber: rowBase + cleanDocs.length + parseQuarantineRows.length + index + 1,
+        rawData: row.rawData,
+        errorMessages: row.errors || ["Validation failed"],
+        status: "QUARANTINED"
+      }))
+    ];
+
+    if (dlqDocs.length > 0) {
+      await DLQRecord.insertMany(dlqDocs);
+    }
+
+    const existingMeta = mode === "append" ? await Metadata.findOne({ datasetId }).lean() : null;
+    const updatedRowCount = (existingMeta?.rowCount || 0) + cleanDocs.length;
+    const updatedQuarantineCount = (existingMeta?.quarantinedCount || 0) + dlqDocs.length;
+    const finalSchema = schema.length > 0 ? schema : existingMeta?.schema || [];
+
+    await Metadata.findOneAndUpdate(
+      { datasetId },
+      {
+        $set: {
+          datasetId,
+          fileName: safeFileName,
+          mode,
+          schema: finalSchema,
+          rowCount: mode === "append" ? updatedRowCount : cleanDocs.length,
+          quarantinedCount: mode === "append" ? updatedQuarantineCount : dlqDocs.length,
+          sourceFileId
+        }
+      },
+      { upsert: true }
+    );
+
+    return res.status(200).json({
+      message: "File uploaded and processed successfully",
+      datasetId,
+      fileId: sourceFileId,
+      fileName: safeFileName,
+      mode,
+      rowCount: mode === "append" ? updatedRowCount : cleanDocs.length,
+      quarantinedCount: mode === "append" ? updatedQuarantineCount : dlqDocs.length,
+      uploadId: uploadId || undefined
     });
 
   } catch (error) {

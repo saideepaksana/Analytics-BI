@@ -1,30 +1,24 @@
 const mongoose = require("mongoose");
 
-/**
- * Metadata Schema
- * Stores the inferred schema for every collection uploaded to the platform.
- * Each document here represents one uploaded dataset/collection.
- */
-
 const ColumnSchema = new mongoose.Schema(
   {
-    name: { type: String, required: true },       // e.g. "Revenue", "Region"
-    dataType: { type: String, required: true },   // "string", "number", "date", "boolean"
+    name: { type: String, required: true },
+    // Keep both keys for backward compatibility across old/new inference flows.
+    type: { type: String },
+    dataType: { type: String },
     role: {
       type: String,
       enum: ["dimension", "measure"],
-      required: true,
+      default: "dimension"
     },
-
     suggestedAggregation: {
       type: String,
       enum: ["sum", "avg", "count", "min", "max", null],
-      default: null,
+      default: null
     },
-
     sampleValues: [mongoose.Schema.Types.Mixed],
     nullCount: { type: Number, default: 0 },
-    uniqueCount: { type: Number, default: 0 },
+    uniqueCount: { type: Number, default: 0 }
   },
   { _id: false }
 );
@@ -42,35 +36,39 @@ const RelationshipSchema = new mongoose.Schema(
 
 const MetadataSchema = new mongoose.Schema(
   {
-    
-    collectionName: { type: String, required: true, unique: true },
-
-    // Who uploaded it and when
-    uploadedBy: { type: String, required: true },
-    ingestionRule: {
+    // Primary key used by current Data Review APIs.
+    datasetId: { type: String, required: true, unique: true, index: true },
+    fileName: { type: String, default: "" },
+    mode: {
       type: String,
       enum: ["new", "append", "replace"],
-      required: true,
+      default: "new"
     },
+    schema: { type: [ColumnSchema], default: [] },
+    rowCount: { type: Number, default: 0 },
+    quarantinedCount: { type: Number, default: 0 },
+    sourceFileId: { type: String, default: "" },
 
-    // Total rows in the collection
+    // Legacy fields used by older schema-inference flow.
+    collectionName: { type: String },
+    uploadedBy: { type: String },
+    ingestionRule: {
+      type: String,
+      enum: ["new", "append", "replace"]
+    },
     totalRows: { type: Number, default: 0 },
+    columns: { type: [ColumnSchema], default: [] },
 
-    // Inferred columns (the main output of your work)
-    columns: [ColumnSchema],
+    relationships: { type: [RelationshipSchema], default: [] },
 
-    // Detected relationships with other collections
-    relationships: [RelationshipSchema],
-
-    // Status of the inference run
     inferenceStatus: {
       type: String,
       enum: ["pending", "complete", "failed"],
-      default: "pending",
+      default: "pending"
     },
-    inferenceError: { type: String, default: null },
+    inferenceError: { type: String, default: null }
   },
-  { timestamps: true } // adds createdAt and updatedAt
+  { timestamps: true }
 );
 
 module.exports = mongoose.model("Metadata", MetadataSchema);

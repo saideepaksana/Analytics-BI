@@ -75,6 +75,10 @@ function IngestionWizard({ onCompleted }) {
   }, [mode, datasetId]);
 
   useEffect(() => {
+    if (loading) {
+      return;
+    }
+
     if (!file && currentStep > 1) {
       setCurrentStep(1);
       return;
@@ -83,7 +87,7 @@ function IngestionWizard({ onCompleted }) {
     if (!canGoStep3 && currentStep > 2) {
       setCurrentStep(2);
     }
-  }, [file, currentStep, canGoStep3]);
+  }, [file, currentStep, canGoStep3, loading]);
 
   useEffect(() => {
     setError("");

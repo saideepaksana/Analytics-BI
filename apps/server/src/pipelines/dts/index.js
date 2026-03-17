@@ -9,6 +9,18 @@ const DLQRecord = require('../../models/DLQRecord.js');
 
 const DATE_TYPES = new Set(['date', 'datetime', 'timestamp']);
 
+const hasNameToken = (key, tokens = []) => {
+    const normalized = String(key || '').toLowerCase().replace(/[^a-z0-9]+/g, '_');
+    return tokens.some((token) => {
+        const safe = String(token).toLowerCase();
+        const pattern = new RegExp(`(^|_)${safe}(_|$)`);
+        return pattern.test(normalized);
+    });
+};
+
+const looksNumericByName = (key) =>
+    hasNameToken(key, ['price', 'amount', 'cost', 'quantity', 'count', 'id']);
+
 const resolveCleanerForColumn = (schemaColumn) => {
     const type = schemaColumn.type?.toLowerCase();
     if (DATE_TYPES.has(type)) return parseDate;
@@ -46,7 +58,7 @@ const semanticValidateRow = (row, schemaMap) => {
         }
 
         // ── 3. Number/Decimal validation (prices, amounts) ──
-        if (type === 'decimal' || type === 'number' || lowerKey.includes('price') || lowerKey.includes('amount')) {
+        if (type === 'decimal' || type === 'number' || hasNameToken(lowerKey, ['price', 'amount'])) {
             if (typeof value !== 'number') {
                 errors.push(`${key}: Expected number, got ${typeof value}`);
             } else if (!Number.isFinite(value)) {
@@ -65,7 +77,7 @@ const semanticValidateRow = (row, schemaMap) => {
         }
 
         // ── 4. Integer validation (quantity, count, ids) ──
-        if (type === 'integer' || lowerKey.includes('quantity') || lowerKey.includes('count')) {
+        if (type === 'integer' || hasNameToken(lowerKey, ['quantity', 'count'])) {
             if (!Number.isInteger(value)) {
                 errors.push(`${key}: Must be whole number, got ${value}`);
             } else if (value < 0) {
@@ -296,9 +308,7 @@ const validateRow = (candidateData) => {
         // Check if field looks like it should be a number
         if (typeof value === 'string') {
             const lowerKey = key.toLowerCase();
-            if (lowerKey.includes('price') || lowerKey.includes('amount') || 
-                lowerKey.includes('cost') || lowerKey.includes('quantity') ||
-                lowerKey.includes('count') || lowerKey.includes('id')) {
+            if (looksNumericByName(lowerKey)) {
                 const numValue = parseFloat(value);
                 if (isNaN(numValue)) {
                     errors.push(`${key}: Expected numeric value, got "${value}"`);
@@ -358,9 +368,7 @@ const cleanAndNormalizeRow = (candidateData, schemaMap = {}) => {
                     // No schema - use field name heuristics as fallback
                     const lowerKey = key.toLowerCase();
                     
-                    if (lowerKey.includes('price') || lowerKey.includes('amount') || 
-                        lowerKey.includes('cost') || lowerKey.includes('quantity') ||
-                        lowerKey.includes('count') || lowerKey.includes('id')) {
+                    if (looksNumericByName(lowerKey)) {
                         // Try to parse as number
                         const numValue = parseFloat(trimmed);
                         cleanedValue = isNaN(numValue) ? trimmed : numValue;
