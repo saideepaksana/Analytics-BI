@@ -7,6 +7,35 @@ const { processGridFsFile } = require("../../pipelines/parser/streamParser");
 const { classifyAllColumns } = require("../../pipelines/schema-inference/classifyColumns");
 const { transformRows } = require("../../pipelines/dts/index");
 
+const SIGNED_NUMERIC_FIELDS = new Set(["base_excess"]);
+
+const normalizeColumnName = (name) => String(name || "").toLowerCase().replace(/[^a-z0-9]+/g, "_");
+
+const hasToken = (name, tokens = []) => {
+  const normalized = normalizeColumnName(name);
+  return tokens.some((token) => {
+    const safe = String(token).toLowerCase();
+    const pattern = new RegExp(`(^|_)${safe}(_|$)`);
+    return pattern.test(normalized);
+  });
+};
+
+const isPositiveOnlyNumericField = (name) =>
+  hasToken(name, ["price", "amount", "cost", "quantity", "count", "total"]);
+
+const inferConstraints = (column) => {
+  const normalized = normalizeColumnName(column.name);
+  const constraints = {};
+
+  if (["number", "decimal", "integer", "int", "float", "double"].includes(column.dataType)) {
+    if (!SIGNED_NUMERIC_FIELDS.has(normalized) && isPositiveOnlyNumericField(column.name)) {
+      constraints.min = 0;
+    }
+  }
+
+  return constraints;
+};
+
 const getNextRowBase = async (datasetId) => {
   const latest = await CleanRecord.findOne({ datasetId }).sort({ rowNumber: -1 }).select("rowNumber").lean();
   return latest?.rowNumber || 0;
@@ -103,6 +132,7 @@ exports.uploadFile = async (req, res) => {
       type: column.dataType,
       dataType: column.dataType,
       role: column.role,
+      constraints: inferConstraints(column),
       suggestedAggregation: column.suggestedAggregation || null,
       sampleValues: column.sampleValues || [],
       nullCount: column.nullCount || 0,

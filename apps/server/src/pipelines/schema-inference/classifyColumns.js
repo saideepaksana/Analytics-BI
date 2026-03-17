@@ -38,6 +38,28 @@ const MEASURE_NAME_KEYWORDS = [
 // Suffixes that force a column to be a Dimension (even if numeric)
 const DIMENSION_SUFFIX = ["_id", "_code", "_key", "_no", "_num", "_ref"];
 
+const normalizeColumnName = (name) =>
+  String(name || "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+
+const tokenizeColumnName = (name) =>
+  normalizeColumnName(name)
+    .split("_")
+    .filter(Boolean);
+
+const hasTokenMatch = (tokens, keywords) => {
+  const tokenSet = new Set(tokens);
+  return keywords.some((keyword) => tokenSet.has(keyword));
+};
+
+const countTokenMatches = (tokens, keywords) => {
+  const tokenSet = new Set(tokens);
+  return keywords.reduce((count, keyword) => count + (tokenSet.has(keyword) ? 1 : 0), 0);
+};
+
 /**
  * Infer the JavaScript data type of a column by sampling its values.
  * Returns: "string" | "number" | "date" | "boolean" | "mixed" | "empty"
@@ -88,11 +110,13 @@ function inferDataType(sampleValues) {
  */
 function classifyColumn(columnName, sampleValues, totalRows) {
   const nameLower = columnName.toLowerCase().trim();
+  const normalizedName = normalizeColumnName(columnName);
+  const nameTokens = tokenizeColumnName(columnName);
   const dataType = inferDataType(sampleValues);
 
   // --- RULE 4: Suffix override (highest priority) ---
   const hasDimensionSuffix = DIMENSION_SUFFIX.some((suffix) =>
-    nameLower.endsWith(suffix)
+    normalizedName.endsWith(suffix)
   );
   if (hasDimensionSuffix) {
     return {
@@ -104,12 +128,10 @@ function classifyColumn(columnName, sampleValues, totalRows) {
   }
 
   // --- RULE 1: Name-based keyword check ---
-  const isDimensionByName = DIMENSION_NAME_KEYWORDS.some((kw) =>
-    nameLower.includes(kw)
-  );
-  const isMeasureByName = MEASURE_NAME_KEYWORDS.some((kw) =>
-    nameLower.includes(kw)
-  );
+  const isDimensionByName = hasTokenMatch(nameTokens, DIMENSION_NAME_KEYWORDS);
+  const isMeasureByName = hasTokenMatch(nameTokens, MEASURE_NAME_KEYWORDS);
+  const dimensionKeywordHits = countTokenMatches(nameTokens, DIMENSION_NAME_KEYWORDS);
+  const measureKeywordHits = countTokenMatches(nameTokens, MEASURE_NAME_KEYWORDS);
 
   // --- RULE 2: Type-based check ---
   const isNumericType = dataType === "number";
@@ -119,37 +141,54 @@ function classifyColumn(columnName, sampleValues, totalRows) {
   const nonNullSamples = sampleValues.filter((v) => v !== null && v !== undefined && v !== "");
   const uniqueValues = [...new Set(nonNullSamples)];
   const uniqueCount = uniqueValues.length;
-  const cardinalityRatio = totalRows > 0 ? uniqueCount / totalRows : 0;
+  const denominator = Math.max(nonNullSamples.length, totalRows || 0, 1);
+  const cardinalityRatio = uniqueCount / denominator;
 
-  // Low cardinality numeric: only treat as dimension when no measure keyword matches
-  // This prevents small test samples (4-8 rows) from misclassifying real measures
+  // Numeric categories are usually low-cardinality and low-ratio.
+  // Keep this conservative so true measures are not demoted.
   const isLowCardinalityNumeric =
-    isNumericType && uniqueCount <= 10 && !isMeasureByName;
+    isNumericType && uniqueCount <= 12 && cardinalityRatio <= 0.2 && !isMeasureByName;
 
   // --- Decision logic (priority order matters) ---
   let role;
   let confidence;
   let suggestedAggregation = null;
 
+  // Weighted score: provides a stable tie-breaker when signals disagree.
+  let dimensionScore = 0;
+  let measureScore = 0;
+
+  if (isCategoricalType) {
+    dimensionScore += 3;
+  }
+  if (isNumericType) {
+    measureScore += 2;
+  }
+  if (isLowCardinalityNumeric) {
+    dimensionScore += 2;
+  }
+  dimensionScore += dimensionKeywordHits * 1.5;
+  measureScore += measureKeywordHits * 1.5;
+
   if (isCategoricalType) {
     // Strings, dates, booleans are always dimensions
     role = "dimension";
     confidence = 0.9;
-  } else if (isMeasureByName && isNumericType) {
+  } else if (isMeasureByName && isNumericType && measureKeywordHits >= dimensionKeywordHits) {
     // Strong keyword match wins — even over cardinality
     role = "measure";
     confidence = 0.9;
-  } else if (isLowCardinalityNumeric) {
+  } else if (isLowCardinalityNumeric && dimensionScore >= measureScore) {
     // Small distinct set of numbers with no measure keyword → likely a category (e.g. 1-5 rating)
     role = "dimension";
     confidence = 0.75;
-  } else if (isDimensionByName) {
+  } else if (isDimensionByName && dimensionKeywordHits > measureKeywordHits) {
     role = "dimension";
     confidence = 0.85;
   } else if (isNumericType) {
-    // Default: numeric columns without a clear name → assume measure
-    role = "measure";
-    confidence = 0.65;
+    // Numeric fallback uses weighted score to avoid brittle one-off rules.
+    role = measureScore >= dimensionScore ? "measure" : "dimension";
+    confidence = 0.7;
   } else {
     // Fallback for anything else
     role = "dimension";

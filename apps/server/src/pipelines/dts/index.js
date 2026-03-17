@@ -8,6 +8,7 @@ const DLQRecord = require('../../models/DLQRecord.js');
 // ─────────────────────────────────────────────────────────────
 
 const DATE_TYPES = new Set(['date', 'datetime', 'timestamp']);
+const POSITIVE_ONLY_NUMERIC_TOKENS = ['price', 'amount', 'cost', 'quantity', 'count', 'total'];
 
 const hasNameToken = (key, tokens = []) => {
     const normalized = String(key || '').toLowerCase().replace(/[^a-z0-9]+/g, '_');
@@ -20,6 +21,8 @@ const hasNameToken = (key, tokens = []) => {
 
 const looksNumericByName = (key) =>
     hasNameToken(key, ['price', 'amount', 'cost', 'quantity', 'count', 'id']);
+
+const isPositiveOnlyNumericField = (key) => hasNameToken(key, POSITIVE_ONLY_NUMERIC_TOKENS);
 
 const resolveCleanerForColumn = (schemaColumn) => {
     const type = schemaColumn.type?.toLowerCase();
@@ -65,9 +68,15 @@ const semanticValidateRow = (row, schemaMap) => {
                 errors.push(`${key}: Invalid number value`);
             } else {
                 // Apply constraints
-                const min = constraints.min !== undefined ? constraints.min : 0; // Default: prices can't be negative
+                const enforceDefaultNonNegative =
+                    constraints.min === undefined &&
+                    isPositiveOnlyNumericField(lowerKey);
+
+                const min = constraints.min !== undefined
+                    ? constraints.min
+                    : (enforceDefaultNonNegative ? 0 : undefined);
                 const max = constraints.max;
-                if (value < min) {
+                if (min !== undefined && value < min) {
                     errors.push(`${key}: Cannot be negative or less than ${min}`);
                 }
                 if (max !== undefined && value > max) {
@@ -80,8 +89,21 @@ const semanticValidateRow = (row, schemaMap) => {
         if (type === 'integer' || hasNameToken(lowerKey, ['quantity', 'count'])) {
             if (!Number.isInteger(value)) {
                 errors.push(`${key}: Must be whole number, got ${value}`);
-            } else if (value < 0) {
-                errors.push(`${key}: Cannot be negative`);
+            } else {
+                const enforceDefaultNonNegative =
+                    constraints.min === undefined &&
+                    isPositiveOnlyNumericField(lowerKey);
+
+                const min = constraints.min !== undefined
+                    ? constraints.min
+                    : (enforceDefaultNonNegative ? 0 : undefined);
+
+                if (min !== undefined && value < min) {
+                    errors.push(`${key}: Cannot be negative or less than ${min}`);
+                }
+                if (constraints.max !== undefined && value > constraints.max) {
+                    errors.push(`${key}: Exceeds maximum ${constraints.max}`);
+                }
             }
         }
 
