@@ -1,19 +1,50 @@
-import mongoose from 'mongoose';
-const {Schema} = mongoose;
+const mongoose = require("mongoose");
 
+const { Schema } = mongoose;
 
-const CleanRecordSchema = new Schema({
-    
-    price: {
-        type: Number,
-        required: true
+const CleanRecordSchema = new Schema(
+  {
+    // ── Dataset context ─────────────────────────────
+    datasetId: {
+      type: String,
+      required: true,
+      index: true
     },
 
-    productName: {
-        type: String,
-        required: true
-    }
-});
+    rowNumber: {
+      type: Number,
+      required: true
+    },
 
-const CleanRecord = mongoose.model('CleanRecord', CleanRecordSchema);
-export default CleanRecord;
+    // ── Actual cleaned row (dynamic) ────────────────
+    data: {
+      type: Schema.Types.Mixed,
+      required: true
+    },
+
+    // ── Optional flattened fields (for fast querying) ──
+    // (🔥 best-of-both-worlds addition)
+    searchable: {
+      type: Map,
+      of: Schema.Types.Mixed,
+      default: {}
+    },
+
+    // ── Metadata ────────────────────────────────────
+    sourceFileName: {
+      type: String,
+      default: ""
+    },
+
+    status: {
+      type: String,
+      enum: ["VALID", "WARNING"],
+      default: "VALID"
+    }
+  },
+  {
+    timestamps: true
+  }
+);
+
+module.exports = mongoose.model("CleanRecord", CleanRecordSchema);

@@ -1,71 +1,139 @@
-import { Transform } from 'node:stream';
-import { TYPE_CLEANER_MAP } from './cleaner.js';
-import { parseDate } from './normalizer.js';
-import DLQRecord from '../../models/DLQRecord.js';
+const { Transform } = require('node:stream');
+const { TYPE_CLEANER_MAP } = require('./cleaner.js');
+const { parseDate } = require('./normalizer.js');
+const DLQRecord = require('../../models/DLQRecord.js');
 
-// ─── What this file receives from other roles ─────────────────────────────────
-//
-//  FROM ROLE 4 (The Parser):
-//    • Each `chunk` is a plain JS object representing one parsed row.
-//      e.g. { productName: "laptop pro", price: "1,299.99", date: "44562" }
-//    • The `datasetId` string is passed in when the stream is constructed.
-//      Role 4 generates this ID when it creates the raw dataset in MongoDB.
-//
-//  FROM ROLE 6 (Schema Inference):
-//    • An array called `inferredSchema` passed into the constructor.
-//      This comes from the Metadata collection that Role 6 writes to after
-//      classifying columns. Each entry looks like:
-//        {
-//          name:     "price",       // column key, must match the chunk's keys
-//          type:     "decimal",     // drives which cleaner we pick
-//          role:     "measure",     // "dimension" | "measure" | "attribute"
-//          nullable: false          // if false + value is null → DLQ
-//        }
-//
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────
 
-// Maps date/timestamp types to the normalizer.
 const DATE_TYPES = new Set(['date', 'datetime', 'timestamp']);
 
-// Decide which cleaning function to use for a given schema column.
 const resolveCleanerForColumn = (schemaColumn) => {
     const type = schemaColumn.type?.toLowerCase();
     if (DATE_TYPES.has(type)) return parseDate;
-    return TYPE_CLEANER_MAP[type] || null; // null = unknown type, pass through raw
+    return TYPE_CLEANER_MAP[type] || null;
 };
 
-// ─── DTS Engine Stream ────────────────────────────────────────────────────────
+// ── Semantic Validation Layer (Production-Grade) ───────────────
+const semanticValidateRow = (row, schemaMap) => {
+    const errors = [];
+
+    for (const [key, value] of Object.entries(row)) {
+        const lowerKey = key.toLowerCase();
+        const meta = schemaMap[key];
+
+        if (!meta) continue;
+
+        const { type, nullable, constraints = {} } = meta;
+
+        // ── 1. Null/Empty Check for Required Fields ──
+        if (!nullable && (value === null || value === undefined)) {
+            errors.push(`${key}: Required field cannot be empty`);
+            continue; // Skip further validation if required field is empty
+        }
+
+        // Skip validation for null values on nullable fields
+        if (value === null || value === undefined) continue;
+
+        // ── 2. String validation ──
+        if (type === 'string' || type === 'varchar' || type === 'text') {
+            if (typeof value === 'string' && value === '' && !nullable) {
+                errors.push(`${key}: Cannot be empty`);
+            } else if (typeof value !== 'string') {
+                errors.push(`${key}: Expected text, got ${typeof value}`);
+            }
+        }
+
+        // ── 3. Number/Decimal validation (prices, amounts) ──
+        if (type === 'decimal' || type === 'number' || lowerKey.includes('price') || lowerKey.includes('amount')) {
+            if (typeof value !== 'number') {
+                errors.push(`${key}: Expected number, got ${typeof value}`);
+            } else if (!Number.isFinite(value)) {
+                errors.push(`${key}: Invalid number value`);
+            } else {
+                // Apply constraints
+                const min = constraints.min !== undefined ? constraints.min : 0; // Default: prices can't be negative
+                const max = constraints.max;
+                if (value < min) {
+                    errors.push(`${key}: Cannot be negative or less than ${min}`);
+                }
+                if (max !== undefined && value > max) {
+                    errors.push(`${key}: Exceeds maximum ${max}`);
+                }
+            }
+        }
+
+        // ── 4. Integer validation (quantity, count, ids) ──
+        if (type === 'integer' || lowerKey.includes('quantity') || lowerKey.includes('count')) {
+            if (!Number.isInteger(value)) {
+                errors.push(`${key}: Must be whole number, got ${value}`);
+            } else if (value < 0) {
+                errors.push(`${key}: Cannot be negative`);
+            }
+        }
+
+        // ── 5. Boolean validation ──
+        if (type === 'boolean') {
+            if (typeof value !== 'boolean') {
+                errors.push(`${key}: Expected true/false (yes, no, true, false, 1, 0, y, n), got "${value}"`);
+            }
+        }
+
+        // ── 6. Date validation ──
+        if (DATE_TYPES.has(type)) {
+            if (typeof value === 'string') {
+                const parsed = new Date(value);
+                if (isNaN(parsed.getTime())) {
+                    errors.push(`${key}: Invalid date format "${value}"`);
+                }
+            } else if (!(value instanceof Date) && typeof value !== 'string') {
+                errors.push(`${key}: Expected date format, got ${typeof value}`);
+            }
+        }
+
+        // ── 7. Enum validation (category, status) ──
+        if (constraints.enum && !constraints.enum.includes(value)) {
+            errors.push(`${key}: "${value}" is not valid. Allowed: ${constraints.enum.join(', ')}`);
+        }
+    }
+
+    return errors;
+};
+
+// ─────────────────────────────────────────────────────────────
+// DTS Engine (Hybrid)
+// ─────────────────────────────────────────────────────────────
+
 class DTSEngineStream extends Transform {
-    /**
-     * @param {string}   datasetId      - ID generated by Role 4 / Role 3 for this upload
-     * @param {Array}    inferredSchema - Schema array written by Role 6 to the Metadata collection
-     */
     constructor(datasetId, inferredSchema = []) {
         super({ objectMode: true });
+
         this.datasetId = datasetId;
         this.dlqBuffer = [];
 
-        // Build a fast lookup: columnName → { cleanerFn, nullable, type, role }
         this.schemaMap = {};
+
         for (const col of inferredSchema) {
             this.schemaMap[col.name] = {
                 cleanerFn: resolveCleanerForColumn(col),
-                nullable:  col.nullable !== false, // default: nullable unless explicitly false
-                type:      col.type,
-                role:      col.role,
+                nullable: col.nullable !== false,
+                type: col.type,
+                role: col.role,
+                constraints: col.constraints || {} // 🔥 extensible
             };
         }
     }
 
     async _transform(chunk, encoding, callback) {
         const cleanedRow = {};
-        const validationErrors = [];
+        const structuralErrors = [];
+        const warnings = [];
 
+        // ── 1. Cleaning + Structural Validation ───────────────
         for (const [key, rawValue] of Object.entries(chunk)) {
             const colMeta = this.schemaMap[key];
 
-            // ── Column not in schema (Role 6 hasn't seen it) ─────────────────
-            // Pass through untouched. Role 6 may have missed it or schema is partial.
             if (!colMeta) {
                 cleanedRow[key] = rawValue;
                 continue;
@@ -73,72 +141,284 @@ class DTSEngineStream extends Transform {
 
             const { cleanerFn, nullable, type } = colMeta;
 
-            // ── Apply the cleaner ─────────────────────────────────────────────
-            let cleanedValue;
-            if (cleanerFn) {
-                cleanedValue = cleanerFn(rawValue);
-            } else {
-                // Unknown type — no cleaner registered, pass through
-                cleanedValue = rawValue;
-            }
+            let cleanedValue = cleanerFn ? cleanerFn(rawValue) : rawValue;
 
-            // ── DLQ Rule: null on a non-nullable column ───────────────────────
-            // We never invent values. If a required field is null/empty after
-            // cleaning, the record is unfixable → goes to DLQ.
+            // Required field check - catches empty strings, nulls, etc.
             if (cleanedValue === null && !nullable) {
-                validationErrors.push({
-                    column:  key,
-                    type:    'missing_required_value',
-                    message: `Column "${key}" (type: ${type}) is required but value is null or unparseable after cleaning.`,
-                    raw:     rawValue,
+                structuralErrors.push({
+                    column: key,
+                    type: 'missing_required_value',
+                    message: `Column "${key}" is empty/missing (required)`,
+                    raw: rawValue,
+                    cleaned: cleanedValue
                 });
             }
 
-            // ── DLQ Rule: type coercion completely failed ─────────────────────
-            // e.g. the cleaner returned null for a number field because the raw
-            // value was "banana". We flag it but still write it as null so the
-            // record flows through for further checks.
-            if (cleanedValue === null && rawValue !== null && rawValue !== '' && nullable) {
-                validationErrors.push({
-                    column:  key,
-                    type:    'unparseable_value',
-                    severity: 'warning',
-                    message: `Column "${key}" (type: ${type}) could not be parsed. Raw value: "${rawValue}". Stored as null.`,
-                    raw:     rawValue,
+            // Parsing failure warning - for nullable fields
+            if (cleanedValue === null && rawValue !== null && rawValue !== '' && rawValue !== undefined && nullable) {
+                warnings.push({
+                    column: key,
+                    type: 'unparseable_value',
+                    message: `Could not parse "${rawValue}" (cleaned to null)`,
+                    raw: rawValue
                 });
             }
 
             cleanedRow[key] = cleanedValue;
         }
 
-        // ── Route to DLQ if any hard errors exist ─────────────────────────────
-        const hardErrors = validationErrors.filter(e => e.type === 'missing_required_value');
-        if (hardErrors.length > 0) {
+        // ── 2. Semantic Validation ────────────────────────────
+        const semanticErrors = semanticValidateRow(cleanedRow, this.schemaMap);
+
+        // ── 3. DLQ Decision ───────────────────────────────────
+        if (structuralErrors.length > 0 || semanticErrors.length > 0) {
             this.dlqBuffer.push({
                 datasetId: this.datasetId,
-                rawData:   chunk,
-                error:     hardErrors.map(e => e.message).join(' | '),
-                status:    'UNFIXABLE',
+                rowNumber: this.dlqBuffer.length + 1, // Add row number
+                rawData: chunk,
+                cleanedData: cleanedRow,
+                errorMessages: [  // Array of error messages
+                    ...structuralErrors.map(e => e.message),
+                    ...semanticErrors
+                ],
+                status: 'UNFIXABLE'
             });
-            console.log(`[DTS] Row buffered for DLQ (${hardErrors.length} hard error(s))`);
+
+            console.log(`[DTS] Sent to DLQ`);
             return callback();
         }
 
-        // ── Emit cleaned row (warnings are non-blocking) ──────────────────────
-        if (validationErrors.length > 0) {
-            console.warn(`[DTS] Row has warnings (continuing):`, validationErrors);
+        // ── 4. Emit Row (Warnings allowed) ────────────────────
+        if (warnings.length > 0) {
+            console.warn(`[DTS] Warnings:`, warnings);
         }
+
         callback(null, cleanedRow);
-
-    }
-
-    async _flush(callback) {
-        if (this.dlqBuffer.length > 0) {
-            await DLQRecord.insertMany(this.dlqBuffer);
-            console.log(`[DTS] Flushed ${this.dlqBuffer.length} records to DLQ`);
-        }
-        callback();
     }
 }
 
-export default DTSEngineStream;
+const transformRows = (rows, datasetId, inferredSchema = []) => {
+    const validRows = [];
+    const invalidRows = [];
+
+    const engine = new DTSEngineStream(datasetId, inferredSchema);
+
+    // Process rows synchronously
+    for (const row of rows) {
+        // Simulate the transform process
+        const cleanedRow = {};
+        const structuralErrors = [];
+        const warnings = [];
+
+        // 1. Cleaning + Structural Validation
+        for (const [key, rawValue] of Object.entries(row)) {
+            const colMeta = engine.schemaMap[key];
+
+            if (!colMeta) {
+                cleanedRow[key] = rawValue;
+                continue;
+            }
+
+            const { cleanerFn, nullable, type } = colMeta;
+
+            let cleanedValue = cleanerFn ? cleanerFn(rawValue) : rawValue;
+
+            // Required field check - catches empty strings, nulls, etc.
+            if (cleanedValue === null && !nullable) {
+                structuralErrors.push({
+                    column: key,
+                    type: 'missing_required_value',
+                    message: `Column "${key}" is empty/missing (required)`,
+                    raw: rawValue,
+                    cleaned: cleanedValue
+                });
+            }
+
+            // Parsing failure warning - for nullable fields
+            if (cleanedValue === null && rawValue !== null && rawValue !== '' && rawValue !== undefined && nullable) {
+                warnings.push({
+                    column: key,
+                    type: 'unparseable_value',
+                    message: `Could not parse "${rawValue}" (cleaned to null)`,
+                    raw: rawValue
+                });
+            }
+
+            cleanedRow[key] = cleanedValue;
+        }
+
+        // 2. Semantic Validation
+        const semanticErrors = semanticValidateRow(cleanedRow, engine.schemaMap);
+
+        // 3. DLQ Decision
+        if (structuralErrors.length > 0 || semanticErrors.length > 0) {
+            invalidRows.push({
+                rawData: row,
+                cleanedData: cleanedRow,
+                errors: [
+                    ...structuralErrors.map(e => e.message),
+                    ...semanticErrors
+                ]
+            });
+        } else {
+            validRows.push(cleanedRow);
+        }
+    }
+
+    return { validRows, invalidRows };
+};
+
+// ─────────────────────────────────────────────────────────────
+// Standalone Validation & Cleaning Utilities
+// ─────────────────────────────────────────────────────────────
+// Used by the REST API endpoints for quarantine row restoration
+
+const validateRow = (candidateData) => {
+    if (!candidateData || typeof candidateData !== 'object') {
+        return ['Invalid row data provided'];
+    }
+
+    const errors = [];
+
+    // Check for required fields (non-empty values)
+    const entries = Object.entries(candidateData);
+    if (entries.length === 0) {
+        return ['Row is empty'];
+    }
+
+    // Basic type and format validation
+    for (const [key, value] of entries) {
+        if (value === null || value === undefined || value === '') {
+            // Empty values might be allowed, but flag for reference
+            continue;
+        }
+
+        // Check if field looks like it should be a number
+        if (typeof value === 'string') {
+            const lowerKey = key.toLowerCase();
+            if (lowerKey.includes('price') || lowerKey.includes('amount') || 
+                lowerKey.includes('cost') || lowerKey.includes('quantity') ||
+                lowerKey.includes('count') || lowerKey.includes('id')) {
+                const numValue = parseFloat(value);
+                if (isNaN(numValue)) {
+                    errors.push(`${key}: Expected numeric value, got "${value}"`);
+                }
+            }
+        }
+    }
+
+    return errors;
+};
+
+const cleanAndNormalizeRow = (candidateData, schemaMap = {}) => {
+    if (!candidateData || typeof candidateData !== 'object') {
+        return {};
+    }
+
+    const cleaned = {};
+
+    for (const [key, value] of Object.entries(candidateData)) {
+        let cleanedValue = value;
+
+        // Get schema info for this field if available
+        const colMeta = schemaMap[key];
+        const type = colMeta?.type?.toLowerCase();
+
+        // Handle null/undefined
+        if (value === null || value === undefined) {
+            cleanedValue = null;
+        }
+        // Handle strings
+        else if (typeof value === 'string') {
+            const trimmed = value.trim();
+            if (trimmed === '') {
+                // Keep empty string for validation to catch (don't convert to null)
+                cleanedValue = '';
+            } else {
+                // Use schema type if available, otherwise guess based on field name
+                if (type === 'number' || type === 'integer' || type === 'decimal' || type === 'float' || type === 'double') {
+                    // Parse as number - keep non-numeric strings for validation to reject
+                    const numValue = parseFloat(trimmed);
+                    cleanedValue = isNaN(numValue) ? trimmed : numValue;
+                } else if (type === 'boolean' || type === 'bool') {
+                    // Parse as boolean - keep invalid strings for validation to reject
+                    const s = trimmed.toLowerCase();
+                    if (['true', '1', 'yes', 'y'].includes(s)) {
+                        cleanedValue = true;
+                    } else if (['false', '0', 'no', 'n'].includes(s)) {
+                        cleanedValue = false;
+                    } else {
+                        // Keep the invalid string so validation can catch it
+                        cleanedValue = s;
+                    }
+                } else if (type === 'date' || type === 'datetime' || type === 'timestamp') {
+                    // Try to parse as date using flexible parser
+                    cleanedValue = parseDate(trimmed);
+                } else if (!type) {
+                    // No schema - use field name heuristics as fallback
+                    const lowerKey = key.toLowerCase();
+                    
+                    if (lowerKey.includes('price') || lowerKey.includes('amount') || 
+                        lowerKey.includes('cost') || lowerKey.includes('quantity') ||
+                        lowerKey.includes('count') || lowerKey.includes('id')) {
+                        // Try to parse as number
+                        const numValue = parseFloat(trimmed);
+                        cleanedValue = isNaN(numValue) ? trimmed : numValue;
+                    } else if (lowerKey.includes('date') || lowerKey.includes('time')) {
+                        // Try to parse as date using flexible parser
+                        const parsed = parseDate(trimmed);
+                        cleanedValue = parsed || trimmed;
+                    } else {
+                        // String - capitalize first letter
+                        cleanedValue = trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase();
+                    }
+                } else {
+                    // String type - just trim, don't capitalize for user-provided data
+                    cleanedValue = trimmed;
+                }
+            }
+        }
+        // Handle numbers - only accept valid numbers for number fields
+        else if (typeof value === 'number') {
+            if (Number.isFinite(value)) {
+                // If schema expects string/boolean, keep the number so validation rejects it
+                if (type === 'string' || type === 'varchar' || type === 'text' || type === 'char') {
+                    cleanedValue = value;
+                } else if (type === 'boolean' || type === 'bool') {
+                    cleanedValue = value;
+                } else {
+                    // Number field - keep the number
+                    cleanedValue = value;
+                }
+            } else {
+                cleanedValue = null;
+            }
+        }
+        // Handle booleans - only accept for boolean fields
+        else if (typeof value === 'boolean') {
+            // If schema expects string/number, keep the boolean so validation rejects it
+            cleanedValue = value;
+        }
+
+        cleaned[key] = cleanedValue;
+    }
+
+    return cleaned;
+};
+
+const hasNoUsableValue = (normalizedData) => {
+    if (!normalizedData || typeof normalizedData !== 'object') {
+        return true;
+    }
+
+    // Check if there's at least one non-null, non-empty value
+    for (const value of Object.values(normalizedData)) {
+        if (value !== null && value !== undefined && value !== '') {
+            return false;
+        }
+    }
+
+    return true;
+};
+
+module.exports = { DTSEngineStream, transformRows, validateRow, cleanAndNormalizeRow, hasNoUsableValue, semanticValidateRow };
