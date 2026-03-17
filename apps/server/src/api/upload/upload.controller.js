@@ -6,8 +6,20 @@ const DLQRecord = require("../../models/DLQRecord");
 const { processGridFsFile } = require("../../pipelines/parser/streamParser");
 const { classifyAllColumns } = require("../../pipelines/schema-inference/classifyColumns");
 const { transformRows } = require("../../pipelines/dts/index");
+const { getIO } = require("../../core/socket");
 
 const SIGNED_NUMERIC_FIELDS = new Set(["base_excess"]);
+
+const emitProgress = (uploadId, payload) => {
+  if (!uploadId) {
+    return;
+  }
+  const io = getIO();
+  if (!io) {
+    return;
+  }
+  io.to(`upload:${uploadId}`).emit("upload:progress", { uploadId, ...payload });
+};
 
 const normalizeColumnName = (name) => String(name || "").toLowerCase().replace(/[^a-z0-9]+/g, "_");
 
@@ -81,6 +93,7 @@ exports.uploadFile = async (req, res) => {
     const safeFileName = req.file.originalname.replace(/[^a-zA-Z0-9.\-_]/g, "_");
 
     console.log(`Uploading file: ${safeFileName}, mode: ${mode}`);
+    emitProgress(uploadId, { stage: "received", progress: 1 });
 
     // Buffer to stream.
     const readableStream = Readable.from(req.file.buffer);
@@ -106,6 +119,7 @@ exports.uploadFile = async (req, res) => {
 
     const datasetId = mode === "new" ? String(uploadStream.id) : requestedDatasetId;
     const sourceFileId = String(uploadStream.id);
+    emitProgress(uploadId, { stage: "stored", progress: 20, datasetId, fileId: sourceFileId });
 
     if (mode === "replace") {
       await Promise.all([
@@ -117,6 +131,7 @@ exports.uploadFile = async (req, res) => {
     const rowBase = mode === "append" ? await getNextRowBase(datasetId) : 0;
 
     const parsedRows = [];
+    emitProgress(uploadId, { stage: "parsing", progress: 35, datasetId });
     const { parseQuarantineRows = [] } = await processGridFsFile({
       gridFsFileId: sourceFileId,
       originalFileName: safeFileName,
@@ -126,6 +141,7 @@ exports.uploadFile = async (req, res) => {
     });
 
     const rawRows = parsedRows.map((row) => row.data || {});
+    emitProgress(uploadId, { stage: "schema", progress: 55, datasetId });
     const inferredColumns = classifyAllColumns(rawRows, rawRows.length);
     const schema = inferredColumns.map((column) => ({
       name: column.name,
@@ -139,6 +155,7 @@ exports.uploadFile = async (req, res) => {
       uniqueCount: column.uniqueCount || 0
     }));
 
+    emitProgress(uploadId, { stage: "transforming", progress: 70, datasetId });
     const { validRows, invalidRows } = transformRows(rawRows, datasetId, schema);
 
     const cleanDocs = validRows.map((data, index) => ({
@@ -153,6 +170,7 @@ exports.uploadFile = async (req, res) => {
       await CleanRecord.insertMany(cleanDocs);
     }
 
+    emitProgress(uploadId, { stage: "quarantine", progress: 82, datasetId });
     const dlqDocs = [
       ...parseQuarantineRows.map((row, index) => ({
         datasetId,
@@ -179,6 +197,7 @@ exports.uploadFile = async (req, res) => {
     const updatedQuarantineCount = (existingMeta?.quarantinedCount || 0) + dlqDocs.length;
     const finalSchema = schema.length > 0 ? schema : existingMeta?.schema || [];
 
+    emitProgress(uploadId, { stage: "saving", progress: 92, datasetId });
     await Metadata.findOneAndUpdate(
       { datasetId },
       {
@@ -195,6 +214,7 @@ exports.uploadFile = async (req, res) => {
       { upsert: true }
     );
 
+    emitProgress(uploadId, { stage: "done", progress: 100, datasetId });
     return res.status(200).json({
       message: "File uploaded and processed successfully",
       datasetId,
@@ -208,6 +228,8 @@ exports.uploadFile = async (req, res) => {
 
   } catch (error) {
     console.error("Upload Controller Error:", error);
+    const uploadId = typeof req.body?.uploadId === "string" ? req.body.uploadId.trim() : "";
+    emitProgress(uploadId, { stage: "failed", progress: 100, detail: "Internal server error" });
     return res.status(500).json({
       message: "Internal server error",
     });

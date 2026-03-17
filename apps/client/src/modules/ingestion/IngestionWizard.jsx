@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
+import { io } from "socket.io-client";
 import FileUpload from "./FileUpload";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api";
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:5000";
 
 const createUploadId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
@@ -49,6 +51,7 @@ function IngestionWizard({ onCompleted }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const cancelSourceRef = useRef(null);
+  const socketRef = useRef(null);
 
   const needsDatasetId = mode === "append" || mode === "replace";
 
@@ -96,9 +99,45 @@ function IngestionWizard({ onCompleted }) {
     setUploadId("");
     cancelSourceRef.current?.cancel?.("Upload superseded");
     cancelSourceRef.current = null;
+    socketRef.current?.disconnect?.();
+    socketRef.current = null;
   }, [file]);
 
   useEffect(() => () => cancelSourceRef.current?.cancel?.("Component unmounted"), []);
+
+  useEffect(() => {
+    if (!uploadId) {
+      return undefined;
+    }
+
+    const socket = io(SOCKET_URL, { transports: ["websocket"] });
+    socketRef.current = socket;
+    socket.emit("upload:subscribe", { uploadId });
+
+    socket.on("upload:progress", (event) => {
+      if (!event || event.uploadId !== uploadId) {
+        return;
+      }
+
+      if (typeof event.progress === "number") {
+        setProgress((prev) => Math.max(prev, Math.min(100, event.progress)));
+      }
+      if (event.stage) {
+        setStage(event.stage);
+      }
+      if (event.stage === "failed") {
+        setError(event.detail || "Upload failed");
+      }
+    });
+
+    return () => {
+      socket.emit("upload:unsubscribe", { uploadId });
+      socket.disconnect();
+      if (socketRef.current === socket) {
+        socketRef.current = null;
+      }
+    };
+  }, [uploadId]);
 
   const handleUpload = async () => {
     if (!canSubmit) {
@@ -151,6 +190,8 @@ function IngestionWizard({ onCompleted }) {
   const handleCancel = () => {
     cancelSourceRef.current?.cancel?.("User cancelled");
     cancelSourceRef.current = null;
+    socketRef.current?.disconnect?.();
+    socketRef.current = null;
     setLoading(false);
     setStage("idle");
     setProgress(0);
