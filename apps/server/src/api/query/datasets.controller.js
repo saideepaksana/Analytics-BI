@@ -79,7 +79,7 @@ exports.updateSchemaColumn = async (req, res) => {
     const result = await Metadata.findOneAndUpdate(
       { datasetId, "schema.name": columnName },
       { $set: setObj },
-      { new: true }
+      { returnDocument: "after" }
     );
 
     if (!result) {
@@ -108,7 +108,7 @@ exports.deleteQuarantinedRow = async (req, res) => {
     const meta = await Metadata.findOneAndUpdate(
       { datasetId },
       { $inc: { quarantinedCount: -1 } },
-      { new: true }
+      { returnDocument: "after" }
     );
 
     return res.json({
@@ -131,7 +131,7 @@ exports.deleteAllQuarantinedRows = async (req, res) => {
     const meta = await Metadata.findOneAndUpdate(
       { datasetId },
       { $set: { quarantinedCount: 0 } },
-      { new: true }
+      { returnDocument: "after" }
     );
 
     return res.json({
@@ -207,7 +207,7 @@ exports.restoreQuarantinedRow = async (req, res) => {
     const meta = await Metadata.findOneAndUpdate(
       { datasetId },
       { $inc: { rowCount: 1, quarantinedCount: -1 } },
-      { new: true }
+      { returnDocument: "after" }
     );
 
     return res.json({

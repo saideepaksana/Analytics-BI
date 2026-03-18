@@ -132,7 +132,7 @@ const semanticValidateRow = (row, schemaMap) => {
         }
     }
 
-    return errors;
+    return [...new Set(errors)];
 };
 
 // ─────────────────────────────────────────────────────────────
