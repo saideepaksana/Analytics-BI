@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Analytics BI logo">
+  <defs>
+    <linearGradient id="abGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f766e" />
+      <stop offset="100%" stop-color="#f59e0b" />
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="#0b1324" />
+  <path d="M14 46h6V30h-6zm12 0h6V22h-6zm12 0h6V14h-6zm12 0h6V26h-6z" fill="url(#abGradient)" />
+</svg>

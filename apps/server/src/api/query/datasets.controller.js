@@ -3,6 +3,24 @@ const CleanRecord = require("../../models/CleanRecord");
 const DLQRecord = require("../../models/DLQRecord");
 const { validateRow, cleanAndNormalizeRow } = require("../../pipelines/dts/index");
 
+// GET /api/datasets
+exports.listDatasets = async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit, 10) || 100, 500);
+
+    const datasets = await Metadata.find({})
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .select("datasetId fileName mode rowCount quarantinedCount createdAt updatedAt")
+      .lean();
+
+    return res.json({ datasets });
+  } catch (error) {
+    console.error("[Datasets] listDatasets error:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
 // GET /api/datasets/:datasetId/metadata?limit=N
 exports.getDatasetMetadata = async (req, res) => {
   try {

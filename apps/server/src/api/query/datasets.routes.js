@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const {
+  listDatasets,
   getDatasetMetadata,
   updateSchemaColumn,
   deleteQuarantinedRow,
@@ -10,6 +11,7 @@ const {
   restoreAllValidQuarantinedRows,
 } = require("./datasets.controller");
 
+router.get("/", listDatasets);
 router.get("/:datasetId/metadata", getDatasetMetadata);
 router.patch("/:datasetId/schema/:columnName", updateSchemaColumn);
 router.delete("/:datasetId/quarantine/:rowIndex", deleteQuarantinedRow);

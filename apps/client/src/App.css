@@ -99,6 +99,22 @@
   font-size: 12px;
 }
 
+.datasets-head {
+  margin-bottom: 12px;
+}
+
+.datasets-head h2 {
+  margin: 0;
+}
+
+.datasets-head .muted {
+  margin: 6px 0 0;
+}
+
+.dataset-row-active {
+  background: #eef4ff;
+}
+
 @media (max-width: 900px) {
   .app-frame {
     grid-template-columns: 1fr;

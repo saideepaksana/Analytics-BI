@@ -1,13 +1,31 @@
 import { useState } from "react";
 import { IngestionWizard } from "./modules/ingestion";
 import { DataReviewPage } from "./modules/data-review";
+import { DatasetsPage } from "./modules/datasets";
 import "./modules/data-review/styles/data-review.css";
 import "./App.css";
 
 function App() {
   const [activeDatasetId, setActiveDatasetId] = useState("");
   const [uploadSummary, setUploadSummary] = useState(null);
-  const [activeView, setActiveView] = useState("ingestion"); // ingestion | review
+  const [activeView, setActiveView] = useState("ingestion"); // ingestion | review | datasets
+
+  const headerConfig = {
+    ingestion: {
+      title: "Upload & Ingest",
+      subtitle: "Upload a CSV/Excel file and track ingestion progress."
+    },
+    review: {
+      title: "Review Dataset",
+      subtitle: "Preview rows, adjust schema, and manage quarantined records."
+    },
+    datasets: {
+      title: "Datasets",
+      subtitle: "Browse all inserted datasets and open them in Data Review."
+    }
+  };
+
+  const activeHeader = headerConfig[activeView] || headerConfig.ingestion;
 
   return (
     <div className="app-frame">
@@ -37,6 +55,13 @@ function App() {
           >
             Data Review
           </button>
+          <button
+            type="button"
+            className={`nav-item ${activeView === "datasets" ? "active" : ""}`}
+            onClick={() => setActiveView("datasets")}
+          >
+            Datasets
+          </button>
         </nav>
 
         {uploadSummary ? (
@@ -60,12 +85,8 @@ function App() {
 
       <main className="app-shell">
         <header className="app-header">
-          <h1>{activeView === "ingestion" ? "Upload & Ingest" : "Review Dataset"}</h1>
-          <p>
-            {activeView === "ingestion"
-              ? "Upload a CSV/Excel file and track ingestion progress."
-              : "Preview rows, adjust schema, and manage quarantined records."}
-          </p>
+          <h1>{activeHeader.title}</h1>
+          <p>{activeHeader.subtitle}</p>
         </header>
 
         {activeView === "ingestion" ? (
@@ -95,6 +116,15 @@ function App() {
         ) : null}
 
         {activeView === "review" ? <DataReviewPage datasetId={activeDatasetId} /> : null}
+        {activeView === "datasets" ? (
+          <DatasetsPage
+            activeDatasetId={activeDatasetId}
+            onOpenDataset={(datasetId) => {
+              setActiveDatasetId(datasetId);
+              setActiveView("review");
+            }}
+          />
+        ) : null}
       </main>
     </div>
   );
