@@ -3,7 +3,7 @@
 }
 
 :root {
-  --bg: #eef2fb;
+  --bg: #f2eee7;
   --surface: #ffffff;
   --border: #d7ddea;
   --border-strong: #c7d2e7;
@@ -19,8 +19,8 @@ body {
   margin: 0;
   font-family: "Manrope", "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
   background:
-    radial-gradient(circle at 10% 10%, #f8faff 0, #f8faff 20%, transparent 20%) 0 0 / 28px 28px,
-    linear-gradient(155deg, #f4f6fc 0%, #e9eef9 100%);
+    radial-gradient(130% 95% at 0% 0%, #fffdf8 0%, #f5f1e8 46%, transparent 72%),
+    linear-gradient(155deg, #f6f2ea 0%, #ebe4d7 100%);
   color: var(--text);
 }
 

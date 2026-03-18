@@ -4,7 +4,7 @@ import axios from "axios";
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api";
 
 export const useMetadata = (datasetId, options = {}) => {
-  const { autoFetch = true, previewLimit = 25 } = options;
+  const { autoFetch = true, previewLimit = 200 } = options;
 
   const [state, setState] = useState({
     metadata: null,

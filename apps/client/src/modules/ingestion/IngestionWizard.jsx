@@ -8,7 +8,7 @@ const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:5000";
 
 const createUploadId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
-const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // keep in sync with backend multer limit
+const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024; // keep in sync with backend multer limit
 
 const MODE_OPTIONS = [
   {

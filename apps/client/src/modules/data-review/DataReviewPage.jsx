@@ -1,10 +1,14 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import DataGrid from "./components/DataGrid";
 import SchemaView from "./components/SchemaView";
 import QuarantineUI from "./components/QuarantineUI";
 import { useMetadata } from "./hooks/useMetadata";
 
+const PREVIEW_ROW_OPTIONS = [10, 20, 50, 100, 150, 200];
+
 function DataReviewPage({ datasetId }) {
+  const [previewLimit, setPreviewLimit] = useState(50);
+
   const {
     schema,
     previewData,
@@ -16,7 +20,10 @@ function DataReviewPage({ datasetId }) {
     restoreAllValidQuarantinedRows,
     deleteQuarantinedRow,
     deleteAllQuarantinedRows
-  } = useMetadata(datasetId, { autoFetch: Boolean(datasetId) });
+  } = useMetadata(datasetId, {
+    autoFetch: Boolean(datasetId),
+    previewLimit
+  });
 
   const hasData = useMemo(() => {
     return Boolean(datasetId) && (schema.length || previewData.length || quarantinedRows.length);
@@ -55,7 +62,12 @@ function DataReviewPage({ datasetId }) {
             onRoleChange={(column, role) => updateSchema(column.name, { role })}
           />
 
-          <DataGrid data={previewData} />
+          <DataGrid
+            data={previewData}
+            rowsToShow={previewLimit}
+            onRowsToShowChange={setPreviewLimit}
+            rowOptions={PREVIEW_ROW_OPTIONS}
+          />
         </>
       ) : (
         <p>No preview/schema is available for this dataset yet.</p>

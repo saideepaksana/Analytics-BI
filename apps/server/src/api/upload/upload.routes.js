@@ -17,7 +17,7 @@ const allowedMimeTypes = [
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB
+    fileSize: 50 * 1024 * 1024, // 50MB
   },
   fileFilter: (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
@@ -43,7 +43,7 @@ const handleUpload = (req, res, next) => {
     if (err instanceof multer.MulterError) {
       if (err.code === "LIMIT_FILE_SIZE") {
         return res.status(400).json({
-          message: "File too large. Max size is 10MB.",
+          message: "File too large. Max size is 50MB.",
         });
       }
       return res.status(400).json({ message: err.message });
