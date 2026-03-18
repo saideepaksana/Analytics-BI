@@ -64,7 +64,7 @@ function App() {
           </button>
         </nav>
 
-        {uploadSummary ? (
+        {/* {uploadSummary ? (
           <section className="sidebar-summary">
             <div className="sidebar-summary-title">Last Upload</div>
             <div className="sidebar-summary-row">
@@ -80,7 +80,7 @@ function App() {
               <span>{uploadSummary.quarantinedCount}</span>
             </div>
           </section>
-        ) : null}
+        ) : null} */}
       </aside>
 
       <main className="app-shell">
