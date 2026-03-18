@@ -55,6 +55,7 @@ function IngestionWizard({ onCompleted }) {
   const [uploadId, setUploadId] = useState("");
   const [progress, setProgress] = useState(0);
   const [stage, setStage] = useState("idle");
+  const [hasUploadStarted, setHasUploadStarted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [appendMismatchDetails, setAppendMismatchDetails] = useState(null);
@@ -78,6 +79,14 @@ function IngestionWizard({ onCompleted }) {
 
   const canGoStep2 = Boolean(file) && !loading;
   const canGoStep3 = canGoStep2 && (!needsDatasetId || Boolean(datasetId.trim()));
+  const shouldShowProgress = currentStep === 3 && hasUploadStarted && stage !== "idle";
+
+  const resetProgressState = () => {
+    setHasUploadStarted(false);
+    setProgress(0);
+    setStage("idle");
+    setUploadId("");
+  };
 
   useEffect(() => {
     if (mode === "new" && datasetId) {
@@ -102,9 +111,7 @@ function IngestionWizard({ onCompleted }) {
 
   useEffect(() => {
     setError("");
-    setProgress(0);
-    setStage("idle");
-    setUploadId("");
+    resetProgressState();
     setAppendMismatchDetails(null);
     cancelSourceRef.current?.cancel?.("Upload superseded");
     cancelSourceRef.current = null;
@@ -157,6 +164,7 @@ function IngestionWizard({ onCompleted }) {
       setLoading(true);
       setError("");
       setAppendMismatchDetails(null);
+      setHasUploadStarted(true);
       setProgress(0);
       setStage("uploading");
 
@@ -207,10 +215,8 @@ function IngestionWizard({ onCompleted }) {
     socketRef.current?.disconnect?.();
     socketRef.current = null;
     setLoading(false);
-    setStage("idle");
-    setProgress(0);
+    resetProgressState();
     setError("");
-    setUploadId("");
   };
 
   return (
@@ -321,7 +327,10 @@ function IngestionWizard({ onCompleted }) {
             <button
               type="button"
               className="primary-btn"
-              onClick={() => setCurrentStep(3)}
+              onClick={() => {
+                resetProgressState();
+                setCurrentStep(3);
+              }}
               disabled={!canGoStep3}
             >
               Next: Confirm Upload
@@ -339,15 +348,27 @@ function IngestionWizard({ onCompleted }) {
             {needsDatasetId ? <p><strong>Dataset ID:</strong> {datasetId || "Not set"}</p> : null}
           </div>
 
-          <div className="progress-wrap" aria-live="polite">
-            <div className="progress-bar" style={{ width: `${progress}%` }} />
-          </div>
-          <p className="progress-text">Progress: {progress}% ({stage})</p>
+          {shouldShowProgress ? (
+            <>
+              <div className="progress-wrap" aria-live="polite">
+                <div className="progress-bar" style={{ width: `${progress}%` }} />
+              </div>
+              <p className="progress-text">Progress: {progress}% ({stage})</p>
+            </>
+          ) : null}
 
           {error ? <p className="error-text">{error}</p> : null}
 
           <div className="wizard-actions">
-            <button type="button" className="ghost-btn" onClick={() => setCurrentStep(2)} disabled={loading}>
+            <button
+              type="button"
+              className="ghost-btn"
+              onClick={() => {
+                resetProgressState();
+                setCurrentStep(2);
+              }}
+              disabled={loading}
+            >
               Back
             </button>
             {loading ? (

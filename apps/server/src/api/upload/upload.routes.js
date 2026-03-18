@@ -8,10 +8,15 @@ const router = express.Router();
 const allowedExtensions = [".csv", ".xls", ".xlsx"];
 const allowedMimeTypes = [
   "text/csv",
+  "text/x-csv",
+  "application/x-csv",
   "application/csv",
+  "text/comma-separated-values",
   "text/plain",
   "application/vnd.ms-excel",
+  "application/vnd.ms-excel.sheet.macroEnabled.12",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/octet-stream",
 ];
 
 const upload = multer({
@@ -21,11 +26,10 @@ const upload = multer({
   },
   fileFilter: (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
+    const hasValidExtension = allowedExtensions.includes(ext);
 
-    if (
-      allowedExtensions.includes(ext) &&
-      allowedMimeTypes.includes(file.mimetype)
-    ) {
+    // Rely on extension validation because MIME values for Excel files vary widely across browsers/OS.
+    if (hasValidExtension) {
       cb(null, true);
     } else {
       cb(
