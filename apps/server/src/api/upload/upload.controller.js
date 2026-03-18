@@ -1,5 +1,7 @@
 const { getBucket } = require("../../core/storage");
 const { Readable } = require("stream");
+const ExcelJS = require("exceljs");
+const { parse } = require("fast-csv");
 const Metadata = require("../../models/Metadata");
 const CleanRecord = require("../../models/CleanRecord");
 const DLQRecord = require("../../models/DLQRecord");
@@ -53,6 +55,81 @@ const getNextRowBase = async (datasetId) => {
   return latest?.rowNumber || 0;
 };
 
+const normalizeHeader = (value, index) => {
+  const label = String(value ?? "").trim();
+  return label || `column_${index + 1}`;
+};
+
+const extractHeadersFromCsvBuffer = async (buffer) => {
+  const csvStream = parse({ headers: false, ignoreEmpty: true, trim: true });
+  Readable.from(buffer).pipe(csvStream);
+
+  for await (const row of csvStream) {
+    const values = Array.isArray(row) ? row : Object.values(row || {});
+    return values.map(normalizeHeader);
+  }
+
+  return [];
+};
+
+const extractHeadersFromWorkbookBuffer = async (buffer) => {
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(buffer);
+
+  const sheet = workbook.worksheets[0];
+  if (!sheet) {
+    return [];
+  }
+
+  const headerValues = sheet.getRow(1).values.slice(1);
+  return headerValues.map(normalizeHeader);
+};
+
+const extractIncomingHeaders = async (buffer, originalName) => {
+  const lowerName = String(originalName || "").toLowerCase();
+
+  if (lowerName.endsWith(".csv")) {
+    return extractHeadersFromCsvBuffer(buffer);
+  }
+
+  if (lowerName.endsWith(".xlsx") || lowerName.endsWith(".xls")) {
+    return extractHeadersFromWorkbookBuffer(buffer);
+  }
+
+  throw new Error("Unsupported file format");
+};
+
+const compareAppendColumns = ({ existingSchema = [], incomingHeaders = [] }) => {
+  const existingNames = existingSchema
+    .map((column) => column?.name)
+    .filter((name) => typeof name === "string" && name.trim().length > 0)
+    .map((name) => name.trim());
+
+  const normalizedExisting = new Map(existingNames.map((name) => [normalizeColumnName(name), name]));
+  const normalizedIncoming = new Map(
+    incomingHeaders
+      .map((name) => String(name || "").trim())
+      .filter(Boolean)
+      .map((name) => [normalizeColumnName(name), name])
+  );
+
+  const missingColumns = existingNames.filter((name) => !normalizedIncoming.has(normalizeColumnName(name)));
+  const unexpectedColumns = incomingHeaders.filter(
+    (name) => !normalizedExisting.has(normalizeColumnName(name))
+  );
+
+  const expectedCount = existingNames.length;
+  const receivedCount = incomingHeaders.length;
+
+  return {
+    isMatch: expectedCount === receivedCount && missingColumns.length === 0 && unexpectedColumns.length === 0,
+    expectedCount,
+    receivedCount,
+    missingColumns,
+    unexpectedColumns
+  };
+};
+
 exports.uploadFile = async (req, res) => {
   try {
     //File check
@@ -67,6 +144,8 @@ exports.uploadFile = async (req, res) => {
     const requestedDatasetId =
       typeof req.body.datasetId === "string" ? req.body.datasetId.trim() : "";
 
+    let existingMeta = null;
+
     if (!validModes.includes(mode)) {
       return res.status(400).json({
         message: "Invalid mode. Allowed: new, append, replace",
@@ -77,6 +156,40 @@ exports.uploadFile = async (req, res) => {
       return res.status(400).json({
         message: "datasetId is required for append/replace mode",
       });
+    }
+
+    if (mode === "append") {
+      existingMeta = await Metadata.findOne({ datasetId: requestedDatasetId }).lean();
+      if (!existingMeta) {
+        return res.status(404).json({
+          message: "Target dataset not found for append mode",
+        });
+      }
+
+      emitProgress(uploadId, { stage: "validating", progress: 3, datasetId: requestedDatasetId });
+      const incomingHeaders = await extractIncomingHeaders(req.file.buffer, req.file.originalname);
+      const comparison = compareAppendColumns({
+        existingSchema: existingMeta.schema || [],
+        incomingHeaders
+      });
+
+      if (!comparison.isMatch) {
+        const detail = `Expected ${comparison.expectedCount} columns but received ${comparison.receivedCount}.`;
+        emitProgress(uploadId, {
+          stage: "failed",
+          progress: 100,
+          detail: "Append blocked due to column mismatch"
+        });
+        return res.status(409).json({
+          code: "APPEND_SCHEMA_MISMATCH",
+          message: "Append blocked: uploaded file columns do not match the target dataset.",
+          detail,
+          expectedCount: comparison.expectedCount,
+          receivedCount: comparison.receivedCount,
+          missingColumns: comparison.missingColumns,
+          unexpectedColumns: comparison.unexpectedColumns
+        });
+      }
     }
 
     // GridFS bucket
@@ -192,7 +305,6 @@ exports.uploadFile = async (req, res) => {
       await DLQRecord.insertMany(dlqDocs);
     }
 
-    const existingMeta = mode === "append" ? await Metadata.findOne({ datasetId }).lean() : null;
     const updatedRowCount = (existingMeta?.rowCount || 0) + cleanDocs.length;
     const updatedQuarantineCount = (existingMeta?.quarantinedCount || 0) + dlqDocs.length;
     const finalSchema = schema.length > 0 ? schema : existingMeta?.schema || [];

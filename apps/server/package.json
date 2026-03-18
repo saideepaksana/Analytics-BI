@@ -4,7 +4,7 @@
   "description": "Analytics BI Backend Server",
   "main": "src/index.js",
   "scripts": {
-    "dev": "nodemon src/index.js",
+    "dev": "nodemon --quiet src/index.js",
     "start": "node src/index.js"
   },
   "keywords": [],

@@ -40,6 +40,13 @@ const getAxiosErrorMessage = (err) => {
   return err.response?.data?.message || err.message || "Upload failed";
 };
 
+const getAppendMismatchDetails = (payload = {}) => ({
+  expectedCount: payload.expectedCount ?? "-",
+  receivedCount: payload.receivedCount ?? "-",
+  missingColumns: Array.isArray(payload.missingColumns) ? payload.missingColumns : [],
+  unexpectedColumns: Array.isArray(payload.unexpectedColumns) ? payload.unexpectedColumns : []
+});
+
 function IngestionWizard({ onCompleted }) {
   const [currentStep, setCurrentStep] = useState(1);
   const [file, setFile] = useState(null);
@@ -50,6 +57,7 @@ function IngestionWizard({ onCompleted }) {
   const [stage, setStage] = useState("idle");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [appendMismatchDetails, setAppendMismatchDetails] = useState(null);
   const cancelSourceRef = useRef(null);
   const socketRef = useRef(null);
 
@@ -97,6 +105,7 @@ function IngestionWizard({ onCompleted }) {
     setProgress(0);
     setStage("idle");
     setUploadId("");
+    setAppendMismatchDetails(null);
     cancelSourceRef.current?.cancel?.("Upload superseded");
     cancelSourceRef.current = null;
     socketRef.current?.disconnect?.();
@@ -147,6 +156,7 @@ function IngestionWizard({ onCompleted }) {
     try {
       setLoading(true);
       setError("");
+      setAppendMismatchDetails(null);
       setProgress(0);
       setStage("uploading");
 
@@ -179,6 +189,10 @@ function IngestionWizard({ onCompleted }) {
       onCompleted?.(response.data);
     } catch (uploadError) {
       console.error("Upload error details:", uploadError.response?.data || uploadError);
+      const errorPayload = uploadError.response?.data;
+      if (errorPayload?.code === "APPEND_SCHEMA_MISMATCH") {
+        setAppendMismatchDetails(getAppendMismatchDetails(errorPayload));
+      }
       setError(getAxiosErrorMessage(uploadError));
       setStage("failed");
     } finally {
@@ -346,6 +360,44 @@ function IngestionWizard({ onCompleted }) {
             </button>
           </div>
         </>
+      ) : null}
+
+      {appendMismatchDetails ? (
+        <div className="ingestion-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="append-mismatch-title">
+          <div className="ingestion-modal-card">
+            <button
+              type="button"
+              className="ingestion-modal-close"
+              aria-label="Close"
+              onClick={() => setAppendMismatchDetails(null)}
+            >
+              x
+            </button>
+            <h3 id="append-mismatch-title">Append Blocked: Column Mismatch</h3>
+            <p>
+              The uploaded file does not match the selected dataset schema, so append has been stopped.
+            </p>
+
+            <div className="append-mismatch-meta">
+              <p><strong>Expected columns:</strong> {appendMismatchDetails.expectedCount}</p>
+              <p><strong>Uploaded columns:</strong> {appendMismatchDetails.receivedCount}</p>
+            </div>
+
+            {appendMismatchDetails.missingColumns.length ? (
+              <div className="append-mismatch-list">
+                <strong>Missing columns</strong>
+                <p>{appendMismatchDetails.missingColumns.join(", ")}</p>
+              </div>
+            ) : null}
+
+            {appendMismatchDetails.unexpectedColumns.length ? (
+              <div className="append-mismatch-list">
+                <strong>Unexpected columns</strong>
+                <p>{appendMismatchDetails.unexpectedColumns.join(", ")}</p>
+              </div>
+            ) : null}
+          </div>
+        </div>
       ) : null}
     </section>
   );

@@ -1,16 +1,14 @@
-require("dotenv").config();
+require("dotenv").config({ quiet: true });
 const express = require("express");
 const cors = require("cors");
 const mongoose = require("mongoose");
 const http = require("http");
 const { Server } = require("socket.io");
-
 const connectDB = require("./core/db");
 const { initStorage } = require("./core/storage");
 const uploadRoutes = require("./api/upload/upload.routes");
 const datasetsRoutes = require("./api/query/datasets.routes");
 const { setIO } = require("./core/socket");
-
 const app = express();
 const server = http.createServer(app);
 
