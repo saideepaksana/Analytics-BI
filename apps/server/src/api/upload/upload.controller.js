@@ -1,6 +1,6 @@
 const { getBucket } = require("../../core/storage");
 const { Readable } = require("stream");
-const ExcelJS = require("exceljs");
+const XLSX = require("xlsx");
 const { parse } = require("fast-csv");
 const Metadata = require("../../models/Metadata");
 const CleanRecord = require("../../models/CleanRecord");
@@ -73,15 +73,22 @@ const extractHeadersFromCsvBuffer = async (buffer) => {
 };
 
 const extractHeadersFromWorkbookBuffer = async (buffer) => {
-  const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(buffer);
+  const workbook = XLSX.read(buffer, { type: "buffer", raw: true });
+  const firstSheetName = workbook.SheetNames[0];
+  const firstSheet = firstSheetName ? workbook.Sheets[firstSheetName] : null;
 
-  const sheet = workbook.worksheets[0];
-  if (!sheet) {
+  if (!firstSheet) {
     return [];
   }
 
-  const headerValues = sheet.getRow(1).values.slice(1);
+  const rows = XLSX.utils.sheet_to_json(firstSheet, {
+    header: 1,
+    raw: true,
+    defval: null,
+    blankrows: false
+  });
+
+  const headerValues = Array.isArray(rows[0]) ? rows[0] : [];
   return headerValues.map(normalizeHeader);
 };
 
@@ -341,6 +348,15 @@ exports.uploadFile = async (req, res) => {
   } catch (error) {
     console.error("Upload Controller Error:", error);
     const uploadId = typeof req.body?.uploadId === "string" ? req.body.uploadId.trim() : "";
+
+    const lowerMessage = String(error?.message || "").toLowerCase();
+    if (lowerMessage.includes("can't find end of central directory")) {
+      emitProgress(uploadId, { stage: "failed", progress: 100, detail: "Invalid Excel file" });
+      return res.status(400).json({
+        message: "Invalid or corrupted Excel file. Please re-save as .xls/.xlsx and upload again."
+      });
+    }
+
     emitProgress(uploadId, { stage: "failed", progress: 100, detail: "Internal server error" });
     return res.status(500).json({
       message: "Internal server error",

@@ -1,6 +1,6 @@
 const path = require("path");
 const os = require("os");
-const ExcelJS = require("exceljs");
+const XLSX = require("xlsx");
 const { parse } = require("fast-csv");
 const { Worker } = require("worker_threads");
 const { ObjectId } = require("mongodb");
@@ -235,6 +235,14 @@ const createCsvIterator = async (gridFsFileId) => {
   };
 };
 
+const streamToBuffer = async (stream) =>
+  new Promise((resolve, reject) => {
+    const chunks = [];
+    stream.on("data", (chunk) => chunks.push(chunk));
+    stream.on("error", reject);
+    stream.on("end", () => resolve(Buffer.concat(chunks)));
+  });
+
 const createExcelIterator = async (gridFsFileId) => {
   const bucket = getBucket();
   if (!bucket) {
@@ -242,24 +250,32 @@ const createExcelIterator = async (gridFsFileId) => {
   }
 
   const downloadStream = bucket.openDownloadStream(toObjectId(gridFsFileId));
-  const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.read(downloadStream);
+  const workbookBuffer = await streamToBuffer(downloadStream);
+  const workbook = XLSX.read(workbookBuffer, { type: "buffer", raw: true });
+  const firstSheetName = workbook.SheetNames[0];
+  const firstSheet = firstSheetName ? workbook.Sheets[firstSheetName] : null;
 
-  const sheet = workbook.worksheets[0];
-  if (!sheet) {
+  if (!firstSheet) {
     return {
       headers: [],
       rowIterator: (async function* empty() {})()
     };
   }
 
-  const headerValues = sheet.getRow(1).values.slice(1);
+  const rows = XLSX.utils.sheet_to_json(firstSheet, {
+    header: 1,
+    raw: true,
+    defval: null,
+    blankrows: false
+  });
+
+  const headerValues = Array.isArray(rows[0]) ? rows[0] : [];
   const headers = headerValues.map(normalizeHeader);
   validateHeaders(headers);
 
   async function* iterator() {
-    for (let rowNum = 2; rowNum <= sheet.rowCount; rowNum += 1) {
-      const values = sheet.getRow(rowNum).values.slice(1);
+    for (let rowNum = 2; rowNum <= rows.length; rowNum += 1) {
+      const values = Array.isArray(rows[rowNum - 1]) ? rows[rowNum - 1] : [];
       if (values.every((value) => value === null || value === undefined || value === "")) {
         continue;
       }
