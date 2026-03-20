@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import DataGrid from "./components/DataGrid";
 import SchemaView from "./components/SchemaView";
+import RelationshipMap from "./components/RelationshipMap";
 import QuarantineUI from "./components/QuarantineUI";
 import { useMetadata } from "./hooks/useMetadata";
 
@@ -11,6 +12,7 @@ function DataReviewPage({ datasetId }) {
 
   const {
     schema,
+    relationships,
     previewData,
     quarantinedRows,
     loading,
@@ -26,8 +28,13 @@ function DataReviewPage({ datasetId }) {
   });
 
   const hasData = useMemo(() => {
-    return Boolean(datasetId) && (schema.length || previewData.length || quarantinedRows.length);
-  }, [datasetId, schema.length, previewData.length, quarantinedRows.length]);
+    return Boolean(datasetId) && (
+      schema.length ||
+      relationships.length ||
+      previewData.length ||
+      quarantinedRows.length
+    );
+  }, [datasetId, schema.length, relationships.length, previewData.length, quarantinedRows.length]);
 
   if (!datasetId) {
     return (
@@ -61,6 +68,8 @@ function DataReviewPage({ datasetId }) {
             editable
             onRoleChange={(column, role) => updateSchema(column.name, { role })}
           />
+
+          <RelationshipMap relationships={relationships} />
 
           <DataGrid
             data={previewData}

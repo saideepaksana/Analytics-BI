@@ -9,6 +9,7 @@ export const useMetadata = (datasetId, options = {}) => {
   const [state, setState] = useState({
     metadata: null,
     schema: [],
+    relationships: [],
     quarantinedRows: [],
     previewData: [],
     loading: false,
@@ -31,6 +32,7 @@ export const useMetadata = (datasetId, options = {}) => {
         ...prev,
         metadata: response.data.metadata || null,
         schema: response.data.schema || [],
+        relationships: response.data.relationships || [],
         quarantinedRows: response.data.quarantinedRows || [],
         previewData: response.data.preview || [],
         loading: false,

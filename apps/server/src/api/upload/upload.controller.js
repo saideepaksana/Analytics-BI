@@ -7,6 +7,7 @@ const CleanRecord = require("../../models/CleanRecord");
 const DLQRecord = require("../../models/DLQRecord");
 const { processGridFsFile } = require("../../pipelines/parser/streamParser");
 const { classifyAllColumns } = require("../../pipelines/schema-inference/classifyColumns");
+const { detectRelationships } = require("../../pipelines/schema-inference/relationshipMapper");
 const { transformRows } = require("../../pipelines/dts/index");
 const { getIO } = require("../../core/socket");
 
@@ -135,6 +136,53 @@ const compareAppendColumns = ({ existingSchema = [], incomingHeaders = [] }) => 
     missingColumns,
     unexpectedColumns
   };
+};
+
+const refreshDatasetRelationships = async () => {
+  const metadataDocs = await Metadata.find({})
+    .select("datasetId schema")
+    .lean();
+
+  const relationshipInputs = metadataDocs
+    .filter((doc) => typeof doc.datasetId === "string" && doc.datasetId.trim().length > 0)
+    .map((doc) => ({
+      collectionName: doc.datasetId,
+      columns: (doc.schema || []).map((column) => ({
+        name: column.name,
+        dataType: column.dataType || column.type || "string",
+        sampleValues: column.sampleValues || []
+      }))
+    }));
+
+  const detectedRelationships = relationshipInputs.length >= 2
+    ? detectRelationships(relationshipInputs)
+    : [];
+
+  const byDataset = new Map(metadataDocs.map((doc) => [doc.datasetId, []]));
+
+  for (const relationship of detectedRelationships) {
+    const { strategy, ...safeRelationship } = relationship;
+
+    if (byDataset.has(safeRelationship.fromCollection)) {
+      byDataset.get(safeRelationship.fromCollection).push(safeRelationship);
+    }
+
+    if (
+      safeRelationship.toCollection !== safeRelationship.fromCollection &&
+      byDataset.has(safeRelationship.toCollection)
+    ) {
+      byDataset.get(safeRelationship.toCollection).push(safeRelationship);
+    }
+  }
+
+  await Promise.all(
+    Array.from(byDataset.entries()).map(([datasetId, relationships]) =>
+      Metadata.updateOne(
+        { datasetId },
+        { $set: { relationships } }
+      )
+    )
+  );
 };
 
 exports.uploadFile = async (req, res) => {
@@ -332,6 +380,13 @@ exports.uploadFile = async (req, res) => {
       },
       { upsert: true }
     );
+
+    emitProgress(uploadId, { stage: "relationships", progress: 96, datasetId });
+    try {
+      await refreshDatasetRelationships();
+    } catch (relationshipError) {
+      console.warn("[Upload] Relationship mapping refresh failed:", relationshipError.message);
+    }
 
     emitProgress(uploadId, { stage: "done", progress: 100, datasetId });
     return res.status(200).json({

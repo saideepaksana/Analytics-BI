@@ -47,6 +47,7 @@ exports.getDatasetMetadata = async (req, res) => {
         createdAt: metadata.createdAt,
       },
       schema: metadata.schema || [],
+      relationships: metadata.relationships || [],
       quarantinedRows: quarantinedDocs.map((r) => ({
         _id: r._id,
         rowNumber: r.rowNumber,
