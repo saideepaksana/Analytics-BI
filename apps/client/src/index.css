@@ -3,22 +3,26 @@
 }
 
 :root {
-  --bg: #ffffff;
+  --bg: #f6f3ec;
   --surface: #ffffff;
-  --border: #d7ddea;
-  --border-strong: #c7d2e7;
+  --surface-soft: #f9f6ef;
+  --border: #d9d2c5;
+  --border-strong: #cfc5b5;
   --text: #1f2b46;
-  --muted: #60708f;
+  --muted: #6a7594;
   --brand: #2f66c8;
-  --brand-strong: #1d4ea6;
-  --soft: #f4f7ff;
+  --brand-strong: #1f4b99;
+  --soft: #eef3ff;
   --danger: #b91c1c;
 }
 
 body {
   margin: 0;
   font-family: "Manrope", "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-  background: var(--bg);
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.75), transparent 42%),
+    radial-gradient(circle at 100% 0%, rgba(214, 227, 253, 0.38), transparent 34%),
+    linear-gradient(165deg, #f7f4ed 0%, #f2eee4 100%);
   color: var(--text);
 }
 
@@ -29,37 +33,40 @@ body {
 .app-shell {
   max-width: none;
   margin: 0;
-  padding: 20px 24px 28px;
+  padding: 24px 28px 34px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
 }
 
 .app-header {
-  background: transparent;
-  color: var(--text);
-  border: 0;
-  border-radius: 0;
-  padding: 0;
-  box-shadow: none;
+  background: linear-gradient(135deg, #244074 0%, #1a2f55 100%);
+  color: #f8fbff;
+  border: 1px solid #304972;
+  border-radius: 16px;
+  padding: 18px 20px;
+  box-shadow: 0 16px 28px rgba(24, 42, 74, 0.22);
+  animation: rise-in 260ms ease-out;
 }
 
 .app-header h1 {
   margin: 0 0 6px;
-  font-size: 24px;
+  font-size: 30px;
+  letter-spacing: 0.2px;
 }
 
 .app-header p {
   margin: 0;
-  color: var(--muted);
+  color: #d6e3ff;
 }
 
 .card {
-  background: transparent;
-  border: 0;
-  border-radius: 0;
-  padding: 0;
-  box-shadow: none;
+  background: linear-gradient(180deg, #ffffff, #fcfbf7);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 10px 24px rgba(31, 49, 81, 0.08);
+  animation: rise-in 260ms ease-out;
 }
 
 .card h2 {
@@ -68,7 +75,7 @@ body {
 }
 
 .wizard-card {
-  border-top: 0;
+  border-top: 3px solid #5a8ce2;
 }
 
 .wizard-head {
@@ -212,7 +219,7 @@ button {
 .mode-card {
   border: 1px solid var(--border);
   border-radius: 10px;
-  background: #fafcff;
+  background: var(--surface-soft);
   padding: 12px;
   display: flex;
   align-items: flex-start;
@@ -243,10 +250,10 @@ button {
 }
 
 .confirm-card {
-  border: 1px solid #cfdbf0;
+  border: 1px solid var(--border-strong);
   border-radius: 10px;
   padding: 12px;
-  background: #f6f9ff;
+  background: #f7f5ef;
 }
 
 .confirm-card h3 {
@@ -276,7 +283,7 @@ button {
 }
 
 .ghost-btn {
-  background: #eff4ff;
+  background: #edf2ff;
   color: #365282;
   border: 1px solid #c6d5ef;
   border-radius: 8px;
@@ -404,7 +411,7 @@ button:disabled {
 
 @media (max-width: 700px) {
   .app-shell {
-    padding: 12px;
+    padding: 14px;
   }
 
   .wizard-head {
@@ -422,5 +429,16 @@ button:disabled {
 
   .dropzone-title {
     font-size: 17px;
+  }
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }

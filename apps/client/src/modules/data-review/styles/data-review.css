@@ -1,8 +1,9 @@
 .panel-block {
-  border: 0;
-  border-radius: 0;
-  padding: 0;
+  border: 1px solid #ddd5c8;
+  border-radius: 12px;
+  padding: 12px;
   margin-top: 12px;
+  background: linear-gradient(180deg, #fffefc, #f9f6ef);
 }
 
 .panel-head {
@@ -19,9 +20,9 @@
 }
 
 .warning-block {
-  border-left: 3px solid #f59e0b;
-  background: transparent;
-  padding-left: 10px;
+  border-left: 4px solid #f59e0b;
+  background: linear-gradient(180deg, #fff9ea, #fff5db);
+  padding-left: 12px;
 }
 
 .quarantine-top-actions {
@@ -38,6 +39,12 @@
   border-radius: 7px;
   font-size: 13px;
   font-weight: 600;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+.action-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 12px rgba(42, 72, 122, 0.15);
 }
 
 .action-btn.danger {
@@ -64,14 +71,14 @@
 
 .basic-table th,
 .basic-table td {
-  border: 1px solid #e5e7eb;
+  border: 1px solid #e3dccf;
   padding: 8px;
   text-align: left;
   font-size: 14px;
 }
 
 .basic-table thead th {
-  background: #f8fafc;
+  background: #f4f1e9;
   position: sticky;
   top: 0;
 }
