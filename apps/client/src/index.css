@@ -3,7 +3,7 @@
 }
 
 :root {
-  --bg: #f2eee7;
+  --bg: #ffffff;
   --surface: #ffffff;
   --border: #d7ddea;
   --border-strong: #c7d2e7;
@@ -18,9 +18,7 @@
 body {
   margin: 0;
   font-family: "Manrope", "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-  background:
-    radial-gradient(130% 95% at 0% 0%, #fffdf8 0%, #f5f1e8 46%, transparent 72%),
-    linear-gradient(155deg, #f6f2ea 0%, #ebe4d7 100%);
+  background: var(--bg);
   color: var(--text);
 }
 
@@ -29,21 +27,21 @@ body {
 }
 
 .app-shell {
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 20px 20px 40px;
+  max-width: none;
+  margin: 0;
+  padding: 20px 24px 28px;
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
 .app-header {
-  background: linear-gradient(130deg, #243f74, #1c2f57);
-  color: #f9fbff;
-  border: 1px solid #304972;
-  border-radius: 14px;
-  padding: 18px;
-  box-shadow: 0 8px 24px rgba(18, 34, 66, 0.25);
+  background: transparent;
+  color: var(--text);
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  box-shadow: none;
 }
 
 .app-header h1 {
@@ -53,15 +51,15 @@ body {
 
 .app-header p {
   margin: 0;
-  color: #d7e2ff;
+  color: var(--muted);
 }
 
 .card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 18px;
-  box-shadow: 0 8px 20px rgba(34, 54, 92, 0.07);
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  box-shadow: none;
 }
 
 .card h2 {
@@ -70,7 +68,7 @@ body {
 }
 
 .wizard-card {
-  border-top: 4px solid var(--brand);
+  border-top: 0;
 }
 
 .wizard-head {
