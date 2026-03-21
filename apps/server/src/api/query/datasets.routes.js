@@ -9,6 +9,7 @@ const {
   validateQuarantinedRow,
   restoreQuarantinedRow,
   restoreAllValidQuarantinedRows,
+  deleteDataset,
 } = require("./datasets.controller");
 
 router.get("/", listDatasets);
@@ -20,5 +21,6 @@ router.delete("/:datasetId/quarantine", deleteAllQuarantinedRows);
 router.post("/:datasetId/quarantine/restore-all", restoreAllValidQuarantinedRows);
 router.post("/:datasetId/quarantine/:rowIndex/validate", validateQuarantinedRow);
 router.post("/:datasetId/quarantine/:rowIndex/restore", restoreQuarantinedRow);
+router.delete("/:datasetId", deleteDataset);
 
 module.exports = router;

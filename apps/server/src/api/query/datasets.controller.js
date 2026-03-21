@@ -1,6 +1,7 @@
 const Metadata = require("../../models/Metadata");
 const CleanRecord = require("../../models/CleanRecord");
 const DLQRecord = require("../../models/DLQRecord");
+const RawRecord = require("../../models/RawRecord");
 const { validateRow, cleanAndNormalizeRow, semanticValidateRow } = require("../../pipelines/dts/index");
 
 // ─ Helper: Build schema map from metadata schema array ─
@@ -252,6 +253,32 @@ exports.restoreQuarantinedRow = async (req, res) => {
     });
   } catch (error) {
     console.error("[Datasets] restoreQuarantinedRow error:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+// DELETE /api/datasets/:datasetId
+exports.deleteDataset = async (req, res) => {
+  try {
+    const { datasetId } = req.params;
+
+    // Verify dataset exists
+    const metadata = await Metadata.findOne({ datasetId }).lean();
+    if (!metadata) {
+      return res.status(404).json({ message: "Dataset not found" });
+    }
+
+    // Delete all related records
+    await Promise.all([
+      Metadata.deleteOne({ datasetId }),
+      CleanRecord.deleteMany({ datasetId }),
+      DLQRecord.deleteMany({ datasetId }),
+      RawRecord.deleteMany({ datasetId }),
+    ]);
+
+    return res.json({ message: "Dataset deleted successfully", datasetId });
+  } catch (error) {
+    console.error("[Datasets] deleteDataset error:", error);
     return res.status(500).json({ message: "Internal server error" });
   }
 };

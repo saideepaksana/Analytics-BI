@@ -14,6 +14,8 @@ function DatasetsPage({ activeDatasetId, onOpenDataset }) {
   const [datasets, setDatasets] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [deleting, setDeleting] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(null);
 
   const fetchDatasets = useCallback(async () => {
     setLoading(true);
@@ -34,6 +36,30 @@ function DatasetsPage({ activeDatasetId, onOpenDataset }) {
   }, [fetchDatasets]);
 
   const hasDatasets = useMemo(() => datasets.length > 0, [datasets]);
+
+  const handleShowDeleteConfirm = useCallback((datasetId) => {
+    setConfirmDelete(datasetId);
+  }, []);
+
+  const handleCancelDelete = useCallback(() => {
+    setConfirmDelete(null);
+  }, []);
+
+  const handleConfirmDelete = useCallback(async () => {
+    const datasetId = confirmDelete;
+    setConfirmDelete(null);
+    setDeleting(datasetId);
+
+    try {
+      await axios.delete(`${API_BASE_URL}/datasets/${datasetId}`);
+      // Remove the deleted dataset from the list
+      setDatasets(prev => prev.filter(d => d.datasetId !== datasetId));
+    } catch (deleteError) {
+      setError(deleteError.response?.data?.message || deleteError.message || "Failed to delete dataset");
+    } finally {
+      setDeleting(null);
+    }
+  }, [confirmDelete]);
 
   return (
     <section className="card">
@@ -80,13 +106,23 @@ function DatasetsPage({ activeDatasetId, onOpenDataset }) {
                     <td>{dataset.quarantinedCount ?? 0}</td>
                     <td>{formatDate(dataset.createdAt)}</td>
                     <td>
-                      <button
-                        type="button"
-                        className="action-btn"
-                        onClick={() => onOpenDataset?.(dataset.datasetId)}
-                      >
-                        Open in Review
-                      </button>
+                      <div style={{ display: "flex", gap: "8px" }}>
+                        <button
+                          type="button"
+                          className="action-btn"
+                          onClick={() => onOpenDataset?.(dataset.datasetId)}
+                        >
+                          Open in Review
+                        </button>
+                        <button
+                          type="button"
+                          className="action-btn delete-btn"
+                          onClick={() => handleShowDeleteConfirm(dataset.datasetId)}
+                          disabled={deleting === dataset.datasetId}
+                        >
+                          {deleting === dataset.datasetId ? "Deleting..." : "Delete"}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -95,6 +131,34 @@ function DatasetsPage({ activeDatasetId, onOpenDataset }) {
           </table>
         </div>
       ) : null}
+
+      {confirmDelete && (
+        <div className="modal-overlay">
+          <div className="modal-dialog">
+            <div className="modal-content">
+              <h3>Delete Dataset?</h3>
+              <p>Are you sure you want to delete this dataset? This action cannot be undone and all associated data will be permanently removed.</p>
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="action-btn cancel-btn"
+                  onClick={handleCancelDelete}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="action-btn danger-btn"
+                  onClick={handleConfirmDelete}
+                  disabled={deleting !== null}
+                >
+                  {deleting !== null ? "Deleting..." : "Delete Dataset"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
