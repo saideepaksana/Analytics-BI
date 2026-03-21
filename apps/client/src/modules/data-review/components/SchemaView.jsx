@@ -30,18 +30,20 @@ function SchemaView({ schema = [], editable = false, onRoleChange }) {
           <li key={column.name} className="schema-item">
             <div className="schema-item-main">
               <strong>{column.name}</strong>
+            </div>
+            <div className="schema-item-tags">
               <span className={`badge badge-type badge-type-${typeClassName(column.type)}`}>
                 {column.type || "unknown"}
               </span>
+              <button
+                type="button"
+                className={`badge badge-${column.role}`}
+                onClick={() => editable && onRoleChange?.(column, nextRole(column.role))}
+                disabled={!editable}
+              >
+                {column.role}
+              </button>
             </div>
-            <button
-              type="button"
-              className={`badge badge-${column.role}`}
-              onClick={() => editable && onRoleChange?.(column, nextRole(column.role))}
-              disabled={!editable}
-            >
-              {column.role}
-            </button>
           </li>
         ))}
       </ul>
