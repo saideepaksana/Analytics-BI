@@ -4,6 +4,14 @@ function nextRole(currentRole) {
   return roles[(index + 1) % roles.length];
 }
 
+function typeClassName(type) {
+  const normalized = String(type || "unknown")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return normalized || "unknown";
+}
+
 function SchemaView({ schema = [], editable = false, onRoleChange }) {
   if (!schema.length) {
     return (
@@ -20,9 +28,11 @@ function SchemaView({ schema = [], editable = false, onRoleChange }) {
       <ul className="schema-list">
         {schema.map((column) => (
           <li key={column.name} className="schema-item">
-            <div>
+            <div className="schema-item-main">
               <strong>{column.name}</strong>
-              <span className="muted"> ({column.type})</span>
+              <span className={`badge badge-type badge-type-${typeClassName(column.type)}`}>
+                {column.type || "unknown"}
+              </span>
             </div>
             <button
               type="button"
