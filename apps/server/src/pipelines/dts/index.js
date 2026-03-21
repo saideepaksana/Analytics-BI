@@ -43,7 +43,7 @@ const semanticValidateRow = (row, schemaMap) => {
         const { type, nullable, constraints = {} } = meta;
 
         // ── 1. Null/Empty Check for Required Fields ──
-        if (!nullable && (value === null || value === undefined)) {
+        if (!nullable && (value === null || value === undefined || value === '')) {
             errors.push(`${key}: Required field cannot be empty`);
             continue; // Skip further validation if required field is empty
         }
@@ -51,12 +51,19 @@ const semanticValidateRow = (row, schemaMap) => {
         // Skip validation for null values on nullable fields
         if (value === null || value === undefined) continue;
 
+        // Additionally reject empty strings for nullable fields (they should be null instead)
+        if (value === '' && nullable) {
+            errors.push(`${key}: Empty string should be null for nullable fields`);
+            continue;
+        }
+
         // ── 2. String validation ──
-        if (type === 'string' || type === 'varchar' || type === 'text') {
-            if (typeof value === 'string' && value === '' && !nullable) {
-                errors.push(`${key}: Cannot be empty`);
-            } else if (typeof value !== 'string') {
+        if (type === 'string' || type === 'varchar' || type === 'text' || type === 'char') {
+            if (typeof value !== 'string') {
                 errors.push(`${key}: Expected text, got ${typeof value}`);
+            } else if (value === '' && !nullable) {
+                // Strictly reject empty strings for required fields
+                errors.push(`${key}: Cannot be empty string`);
             }
         }
 
@@ -107,10 +114,21 @@ const semanticValidateRow = (row, schemaMap) => {
             }
         }
 
-        // ── 5. Boolean validation ──
-        if (type === 'boolean') {
-            if (typeof value !== 'boolean') {
-                errors.push(`${key}: Expected true/false (yes, no, true, false, 1, 0, y, n), got "${value}"`);
+        // ── 5. Boolean validation — only accept predetermined values ──
+        if (type === 'boolean' || type === 'bool') {
+            if (typeof value === 'boolean') {
+                // Boolean primitives are accepted
+                continue;
+            }
+            if (typeof value === 'string') {
+                const s = value.toLowerCase().trim();
+                const validTrue = ['true', '1', 'yes', 'y'];
+                const validFalse = ['false', '0', 'no', 'n'];
+                if (!validTrue.includes(s) && !validFalse.includes(s)) {
+                    errors.push(`${key}: Must be true/false. Allowed values: true, false, yes, no, 1, 0, y, n. Got "${value}"`);
+                }
+            } else {
+                errors.push(`${key}: Boolean field must be true/false or string, got ${typeof value}`);
             }
         }
 
@@ -129,6 +147,31 @@ const semanticValidateRow = (row, schemaMap) => {
         // ── 7. Enum validation (category, status) ──
         if (constraints.enum && !constraints.enum.includes(value)) {
             errors.push(`${key}: "${value}" is not valid. Allowed: ${constraints.enum.join(', ')}`);
+        }
+
+        // ── 8. Heuristic Boolean Validation (even if column inferred as string) ──
+        // Detect boolean columns by name patterns like "active", "enabled", "is_*", "*_flag"
+        const booleanNamePatterns = ['active', 'enabled', 'disabled', 'flag', 'is_', '_flag', 'bool', 'true', 'false', 'yes', 'no'];
+        const isBooleanByName = booleanNamePatterns.some(pattern => {
+            if (pattern.startsWith('_') || pattern.endsWith('_')) {
+                return lowerKey.includes(pattern);
+            }
+            const nameRegex = new RegExp(`(^|_)${pattern}(_|$)`);
+            return nameRegex.test(lowerKey);
+        });
+
+        if (isBooleanByName && type !== 'boolean' && type !== 'bool') {
+            // Field looks like a boolean but was inferred as something else
+            if (typeof value === 'string') {
+                const s = value.toLowerCase().trim();
+                const validTrue = ['true', '1', 'yes', 'y'];
+                const validFalse = ['false', '0', 'no', 'n'];
+                if (!validTrue.includes(s) && !validFalse.includes(s)) {
+                    errors.push(`${key}: Looks like a boolean field. Must be true/false. Allowed: true, false, yes, no, 1, 0, y, n. Got "${value}"`);
+                }
+            } else if (typeof value !== 'boolean' && typeof value !== 'number') {
+                errors.push(`${key}: Looks like a boolean field. Expected boolean/string, got ${typeof value}`);
+            }
         }
     }
 
@@ -151,7 +194,7 @@ class DTSEngineStream extends Transform {
         for (const col of inferredSchema) {
             this.schemaMap[col.name] = {
                 cleanerFn: resolveCleanerForColumn(col),
-                nullable: col.nullable !== false,
+                nullable: col.nullable === true, // ─ Default to required (non-nullable) ─
                 type: col.type,
                 role: col.role,
                 constraints: col.constraints || {} //  extensible
@@ -199,6 +242,20 @@ class DTSEngineStream extends Transform {
             }
 
             cleanedRow[key] = cleanedValue;
+        }
+
+        // ─ Condition Check: Row has usable values before semantic validation ─
+        if (hasNoUsableValue(cleanedRow)) {
+            this.dlqBuffer.push({
+                datasetId: this.datasetId,
+                rowNumber: this.dlqBuffer.length + 1,
+                rawData: chunk,
+                cleanedData: cleanedRow,
+                errorMessages: ['Row contains no usable values'],
+                status: 'UNFIXABLE'
+            });
+            console.log(`[DTS] Row rejected: no usable values`);
+            return callback();
         }
 
         // ── 2. Semantic Validation ────────────────────────────
@@ -281,10 +338,20 @@ const transformRows = (rows, datasetId, inferredSchema = []) => {
             cleanedRow[key] = cleanedValue;
         }
 
-        // 2. Semantic Validation
+        // 2. Check if row has any usable values (condition check before semantic validation)
+        if (hasNoUsableValue(cleanedRow)) {
+            invalidRows.push({
+                rawData: row,
+                cleanedData: cleanedRow,
+                errors: ['Row contains no usable values']
+            });
+            continue;
+        }
+
+        // 3. Semantic Validation
         const semanticErrors = semanticValidateRow(cleanedRow, engine.schemaMap);
 
-        // 3. DLQ Decision
+        // 4. DLQ Decision
         if (structuralErrors.length > 0 || semanticErrors.length > 0) {
             invalidRows.push({
                 rawData: row,
@@ -314,26 +381,49 @@ const validateRow = (candidateData) => {
 
     const errors = [];
 
-    // Check for required fields (non-empty values)
+    // ─ Condition 1: Check row is not empty ─
     const entries = Object.entries(candidateData);
     if (entries.length === 0) {
         return ['Row is empty'];
     }
 
-    // Basic type and format validation
+    // ─ Condition 2: Check for at least one non-null/non-empty value ─
+    const hasUsableValue = entries.some(([_, value]) =>
+        value !== null && value !== undefined && value !== ''
+    );
+    if (!hasUsableValue) {
+        return ['Row has no usable values'];
+    }
+
+    // ─ Condition 3: Type and format validation ─
     for (const [key, value] of entries) {
+        // Skip null/empty for now - they may be allowed
         if (value === null || value === undefined || value === '') {
-            // Empty values might be allowed, but flag for reference
             continue;
         }
 
-        // Check if field looks like it should be a number
+        const lowerKey = key.toLowerCase();
+
+        // Check numeric fields
         if (typeof value === 'string') {
-            const lowerKey = key.toLowerCase();
             if (looksNumericByName(lowerKey)) {
                 const numValue = parseFloat(value);
                 if (isNaN(numValue)) {
                     errors.push(`${key}: Expected numeric value, got "${value}"`);
+                }
+            }
+        }
+
+        // Check boolean fields - only accept predetermined values
+        if (lowerKey.includes('bool') || lowerKey.includes('active') || lowerKey.includes('enabled') || lowerKey.includes('flag')) {
+            if (typeof value !== 'boolean' && typeof value !== 'string') {
+                errors.push(`${key}: Boolean fields must be boolean or string, got ${typeof value}`);
+            }
+            if (typeof value === 'string') {
+                const s = value.toLowerCase().trim();
+                const validValues = ['true', 'false', '1', '0', 'yes', 'no', 'y', 'n'];
+                if (!validValues.includes(s)) {
+                    errors.push(`${key}: Invalid boolean value. Allowed: ${validValues.join(', ')}`);
                 }
             }
         }
@@ -364,8 +454,8 @@ const cleanAndNormalizeRow = (candidateData, schemaMap = {}) => {
         else if (typeof value === 'string') {
             const trimmed = value.trim();
             if (trimmed === '') {
-                // Keep empty string for validation to catch (don't convert to null)
-                cleanedValue = '';
+                // ── Convert empty strings to null for proper validation ──
+                cleanedValue = null;
             } else {
                 // Use schema type if available, otherwise guess based on field name
                 if (type === 'number' || type === 'integer' || type === 'decimal' || type === 'float' || type === 'double') {
@@ -403,8 +493,17 @@ const cleanAndNormalizeRow = (candidateData, schemaMap = {}) => {
                         cleanedValue = trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase();
                     }
                 } else {
-                    // String type - just trim, don't capitalize for user-provided data
-                    cleanedValue = trimmed;
+                    // String type - but check if it looks numeric or boolean by field name
+                    const lowerKey = key.toLowerCase();
+                    
+                    if (looksNumericByName(lowerKey)) {
+                        // Looks numeric - try to convert
+                        const numValue = parseFloat(trimmed);
+                        cleanedValue = isNaN(numValue) ? trimmed : numValue;
+                    } else {
+                        // Regular string - just trim
+                        cleanedValue = trimmed;
+                    }
                 }
             }
         }

@@ -316,6 +316,7 @@ exports.uploadFile = async (req, res) => {
       type: column.dataType,
       dataType: column.dataType,
       role: column.role,
+      nullable: false, // ─ Fields are required (non-nullable) by default ─
       constraints: inferConstraints(column),
       suggestedAggregation: column.suggestedAggregation || null,
       sampleValues: column.sampleValues || [],

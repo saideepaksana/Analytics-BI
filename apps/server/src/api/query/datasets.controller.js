@@ -1,7 +1,20 @@
 const Metadata = require("../../models/Metadata");
 const CleanRecord = require("../../models/CleanRecord");
 const DLQRecord = require("../../models/DLQRecord");
-const { validateRow, cleanAndNormalizeRow } = require("../../pipelines/dts/index");
+const { validateRow, cleanAndNormalizeRow, semanticValidateRow } = require("../../pipelines/dts/index");
+
+// ─ Helper: Build schema map from metadata schema array ─
+const buildSchemaMap = (metadataSchema = []) => {
+  const schemaMap = {};
+  for (const col of metadataSchema) {
+    schemaMap[col.name] = {
+      type: col.type || col.dataType,
+      nullable: col.nullable === true, // ─ Respect the explicit nullable flag (default is false/required) ─
+      constraints: col.constraints || {}
+    };
+  }
+  return schemaMap;
+};
 
 // GET /api/datasets
 exports.listDatasets = async (req, res) => {
@@ -153,19 +166,31 @@ exports.validateQuarantinedRow = async (req, res) => {
     const idx = parseInt(req.params.rowIndex);
     const { updatedData } = req.body;
 
-    const rows = await DLQRecord.find({ datasetId }).sort({ rowNumber: 1 }).lean();
+    const [rows, metaDoc] = await Promise.all([
+      DLQRecord.find({ datasetId }).sort({ rowNumber: 1 }).lean(),
+      Metadata.findOne({ datasetId }).lean()
+    ]);
+
     if (isNaN(idx) || idx < 0 || idx >= rows.length) {
       return res.status(404).json({ message: "Row not found" });
     }
 
-    const dataToValidate = updatedData || rows[idx].rawData;
-    const errors = validateRow(dataToValidate);
+    const dataToRestore = updatedData || rows[idx].rawData;
+    
+    // ─ Build schemaMap from metadata ─
+    const schemaMap = buildSchemaMap(metaDoc?.schema || []);
+    
+    // ─ FIRST: Clean/convert the data to proper types ─
+    const cleanedData = cleanAndNormalizeRow(dataToRestore, schemaMap);
+    
+    // ─ THEN: Validate against full schema (all fields) ─
+    const semanticErrors = semanticValidateRow(cleanedData, schemaMap);
 
-    if (errors.length > 0) {
-      return res.status(422).json({ message: "Validation failed", errors });
+    if (semanticErrors.length > 0) {
+      return res.status(422).json({ message: "Validation failed", errors: semanticErrors });
     }
 
-    return res.json({ message: "Validation passed", errors: [] });
+    return res.json({ message: "Validation passed", errors: [], cleanedData });
   } catch (error) {
     console.error("[Datasets] validateQuarantinedRow error:", error);
     return res.status(500).json({ message: "Internal server error" });
@@ -179,7 +204,11 @@ exports.restoreQuarantinedRow = async (req, res) => {
     const idx = parseInt(req.params.rowIndex);
     const { updatedData } = req.body;
 
-    const rows = await DLQRecord.find({ datasetId }).sort({ rowNumber: 1 }).lean();
+    const [rows, metaDoc] = await Promise.all([
+      DLQRecord.find({ datasetId }).sort({ rowNumber: 1 }).lean(),
+      Metadata.findOne({ datasetId }).lean()
+    ]);
+
     if (isNaN(idx) || idx < 0 || idx >= rows.length) {
       return res.status(404).json({ message: "Row not found" });
     }
@@ -187,13 +216,17 @@ exports.restoreQuarantinedRow = async (req, res) => {
     const row = rows[idx];
     const dataToRestore = updatedData || row.rawData;
 
-    const errors = validateRow(dataToRestore);
-    if (errors.length > 0) {
-      return res.status(422).json({ message: "Validation failed", errors });
-    }
+    // ─ Build schemaMap from metadata ─
+    const schemaMap = buildSchemaMap(metaDoc?.schema || []);
 
-    const cleanedData = cleanAndNormalizeRow(dataToRestore);
-    const metaDoc = await Metadata.findOne({ datasetId }).select("fileName").lean();
+    // ─ FIRST: Clean and normalize with schema context ─
+    const cleanedData = cleanAndNormalizeRow(dataToRestore, schemaMap);
+
+    // ─ THEN: Validate against full schema (ALL fields, not just original issue) ─
+    const semanticErrors = semanticValidateRow(cleanedData, schemaMap);
+    if (semanticErrors.length > 0) {
+      return res.status(422).json({ message: "Validation failed", errors: semanticErrors });
+    }
 
     await CleanRecord.create({
       datasetId,
@@ -233,16 +266,22 @@ exports.restoreAllValidQuarantinedRows = async (req, res) => {
       Metadata.findOne({ datasetId }).lean(),
     ]);
 
+    // ─ Build schemaMap from metadata ─
+    const schemaMap = buildSchemaMap(metaDoc?.schema || []);
+
     const restoredRows = [];
     const failedRows = [];
 
     for (const row of rows) {
-      const errors = validateRow(row.rawData);
-      if (errors.length === 0) {
-        const cleanedData = cleanAndNormalizeRow(row.rawData);
+      // ─ FIRST: Clean/convert to proper types ─
+      const cleanedData = cleanAndNormalizeRow(row.rawData, schemaMap);
+      
+      // ─ THEN: Validate against full schema (ALL fields) ─
+      const semanticErrors = semanticValidateRow(cleanedData, schemaMap);
+      if (semanticErrors.length === 0) {
         restoredRows.push({ _id: row._id, data: cleanedData, rowNumber: row.rowNumber });
       } else {
-        failedRows.push({ rowNumber: row.rowNumber, errors });
+        failedRows.push({ rowNumber: row.rowNumber, errors: semanticErrors });
       }
     }
 
