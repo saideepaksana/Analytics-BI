@@ -1,0 +1,956 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Analytics BI — UI Reference Mockup</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+
+:root {
+  --navy:   #0d1520;
+  --navy2:  #111c2d;
+  --navy3:  #172034;
+  --navy4:  #1d273e;
+  --navy5:  #243048;
+  --navy6:  #2a3855;
+  --blue:   #3b82f6;
+  --blue2:  #2563eb;
+  --indigo: #6366f1;
+  --glow:   rgba(59,130,246,0.22);
+  --glowsm: rgba(59,130,246,0.10);
+  --t1:     #e4ecfa;
+  --t2:     #8fa8d0;
+  --t3:     #4a6090;
+  --t4:     #2a3a5a;
+  --green:  #22c55e;
+  --amber:  #f59e0b;
+  --red:    #ef4444;
+  --purple: #a855f7;
+  --teal:   #14b8a6;
+  --border: rgba(59,130,246,0.13);
+  --border2:rgba(59,130,246,0.22);
+
+  --neu-out:  5px 5px 12px rgba(0,0,0,0.55), -3px -3px 8px rgba(255,255,255,0.032);
+  --neu-in:   inset 4px 4px 10px rgba(0,0,0,0.55), inset -2px -2px 6px rgba(255,255,255,0.028);
+  --card-shadow: 8px 8px 20px rgba(0,0,0,0.6), -4px -4px 12px rgba(255,255,255,0.03);
+}
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: #07101e;
+  color: var(--t1);
+  padding: 40px 32px;
+  min-height: 100vh;
+}
+
+/* ─── PAGE HEADER ─── */
+.ref-header {
+  text-align: center;
+  margin-bottom: 48px;
+}
+.ref-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 36px;
+  font-weight: 800;
+  color: var(--t1);
+  letter-spacing: -0.02em;
+}
+.ref-title span { color: var(--blue); }
+.ref-subtitle {
+  font-size: 14px;
+  color: var(--t3);
+  margin-top: 8px;
+  letter-spacing: 0.04em;
+}
+.ref-chips {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+.ref-chip {
+  padding: 4px 14px;
+  border-radius: 20px;
+  font-size: 11.5px;
+  font-weight: 600;
+  border: 1px solid var(--border2);
+  background: var(--navy3);
+  color: var(--blue);
+  font-family: 'Space Mono', monospace;
+}
+
+/* ─── BROWSER FRAME ─── */
+.browser-wrap {
+  margin-bottom: 48px;
+}
+.browser-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--t3);
+  margin-bottom: 10px;
+  padding-left: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.browser-label::before {
+  content:'';
+  display:inline-block;
+  width:3px; height:14px;
+  background:var(--blue);
+  border-radius:2px;
+  box-shadow: 0 0 8px var(--blue);
+}
+.browser {
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 30px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(59,130,246,0.18);
+}
+.browser-bar {
+  background: #0e1a2b;
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.dots { display:flex; gap:6px; }
+.dot { width:11px; height:11px; border-radius:50%; }
+.dot-r { background:#ff5f57; }
+.dot-y { background:#ffbd2e; }
+.dot-g { background:#28ca41; }
+.url-bar {
+  flex:1;
+  background: var(--navy3);
+  border-radius:6px;
+  padding: 5px 12px;
+  font-size: 11.5px;
+  color: var(--t3);
+  font-family: 'Space Mono', monospace;
+  border: 1px solid var(--border);
+}
+.browser-body {
+  display: flex;
+  background: var(--navy);
+  min-height: 560px;
+}
+
+/* ─── SIDEBAR ─── */
+.sb {
+  width: 210px;
+  min-width: 210px;
+  background: var(--navy2);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+}
+.sb-brand {
+  padding: 18px 16px 14px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sb-icon {
+  width: 34px; height: 34px;
+  background: linear-gradient(135deg, var(--blue), var(--indigo));
+  border-radius: 9px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Space Mono', monospace;
+  font-size: 12px; font-weight: 700; color: #fff;
+  box-shadow: var(--neu-out);
+  flex-shrink: 0;
+}
+.sb-name { font-size: 13.5px; font-weight: 600; color: var(--t1); }
+.sb-sprint { font-size: 10px; color: var(--t3); }
+.sb-section {
+  padding: 14px 14px 4px;
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--t4);
+}
+.sb-item {
+  display: flex; align-items: center; gap: 9px;
+  padding: 9px 12px; margin: 1px 7px;
+  border-radius: 9px;
+  font-size: 13px; color: var(--t3);
+  cursor: pointer;
+  position: relative;
+}
+.sb-item.active {
+  background: var(--glowsm);
+  color: var(--blue);
+  font-weight: 500;
+  border: 1px solid rgba(59,130,246,0.14);
+  box-shadow: var(--neu-in);
+}
+.sb-item.active::before {
+  content:''; position:absolute; left:0; top:50%; transform:translateY(-50%);
+  width:3px; height:18px;
+  background:var(--blue);
+  border-radius:0 3px 3px 0;
+  box-shadow:0 0 7px var(--blue);
+}
+.sb-dot { font-size:15px; width:18px; text-align:center; flex-shrink:0; }
+.sb-badge {
+  margin-left:auto; background:var(--blue);
+  color:#fff; font-size:9.5px; font-weight:700;
+  padding:1px 6px; border-radius:20px;
+}
+.sb-footer {
+  margin-top:auto;
+  padding:12px 10px;
+  border-top:1px solid var(--border);
+}
+.sb-user {
+  display:flex; align-items:center; gap:9px;
+  padding:8px 10px; border-radius:9px;
+  background:var(--navy3); box-shadow:var(--neu-in);
+}
+.sb-avatar {
+  width:30px; height:30px; border-radius:50%;
+  background:linear-gradient(135deg,var(--indigo),var(--purple));
+  display:flex; align-items:center; justify-content:center;
+  font-size:11px; font-weight:700; color:#fff; flex-shrink:0;
+}
+.sb-uname { font-size:12px; font-weight:500; color:var(--t1); }
+.sb-urole { font-size:10px; color:var(--t3); }
+
+/* ─── MAIN AREA ─── */
+.main-area { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+
+/* ─── TOPBAR ─── */
+.topbar {
+  padding: 13px 22px;
+  background: var(--navy2);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.pg-title { font-size: 16px; font-weight: 600; color: var(--t1); }
+.pg-sub { font-size: 11px; color: var(--t3); margin-top: 1px; }
+.tb-actions { display:flex; align-items:center; gap:8px; }
+.btn {
+  padding: 7px 14px; border-radius: 8px;
+  font-size: 12px; font-weight: 500;
+  cursor: pointer; border: 1px solid transparent;
+  font-family: 'DM Sans', sans-serif;
+}
+.btn-ghost {
+  background: var(--navy3); color: var(--t3);
+  border-color: var(--border); box-shadow:var(--neu-out);
+}
+.btn-primary {
+  background: var(--blue); color: #fff;
+  box-shadow: 0 3px 12px rgba(59,130,246,0.4);
+}
+.search {
+  display:flex; align-items:center; gap:7px;
+  background:var(--navy4); border:1px solid var(--border);
+  border-radius:8px; padding:6px 12px; box-shadow:var(--neu-in);
+}
+.search input {
+  background:none; border:none; outline:none;
+  color:var(--t1); font-size:12px; width:160px;
+  font-family:'DM Sans',sans-serif;
+}
+.search input::placeholder { color: var(--t3); }
+
+/* ─── CONTENT AREA ─── */
+.content { flex:1; overflow-y:auto; padding:18px 22px; }
+
+/* ─── KPI ─── */
+.kpi-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:13px; margin-bottom:18px; }
+.kpi {
+  background:var(--navy3); border-radius:12px;
+  padding:15px 16px; border:1px solid var(--border);
+  box-shadow:var(--card-shadow); position:relative; overflow:hidden;
+}
+.kpi::before {
+  content:''; position:absolute; top:0; left:0; right:0; height:2px;
+  background:var(--accent,var(--blue));
+}
+.kpi-lbl { font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.08em; color:var(--t3); margin-bottom:7px; }
+.kpi-val { font-size:24px; font-weight:700; font-family:'Space Mono',monospace; color:var(--t1); letter-spacing:-0.02em; }
+.kpi-chg { font-size:10.5px; margin-top:5px; }
+.up { color:var(--green); } .dn { color:var(--red); }
+.kpi-ico { position:absolute; top:14px; right:14px; font-size:20px; opacity:0.45; }
+
+/* ─── SECTION CARD ─── */
+.sc {
+  background:var(--navy3); border-radius:12px;
+  border:1px solid var(--border); box-shadow:var(--card-shadow);
+  overflow:hidden; margin-bottom:16px;
+}
+.sc-hd {
+  padding:13px 18px;
+  border-bottom:1px solid var(--border);
+  display:flex; align-items:center; justify-content:space-between;
+}
+.sc-title { font-size:13px; font-weight:600; color:var(--t1); }
+.sc-sub { font-size:10.5px; color:var(--t3); margin-top:2px; }
+.sc-body { padding:16px 18px; }
+
+/* ─── BADGE ─── */
+.bdg {
+  display:inline-flex; align-items:center;
+  padding:3px 8px; border-radius:20px;
+  font-size:10px; font-weight:700;
+}
+.bdg-g { background:rgba(34,197,94,.12); color:var(--green); }
+.bdg-a { background:rgba(245,158,11,.12); color:var(--amber); }
+.bdg-r { background:rgba(239,68,68,.12); color:var(--red); }
+.bdg-b { background:rgba(59,130,246,.12); color:var(--blue); }
+
+/* ─── TABLE ─── */
+.tbl { width:100%; border-collapse:collapse; font-size:12px; }
+.tbl th {
+  text-align:left; padding:8px 12px;
+  font-size:9.5px; font-weight:700; text-transform:uppercase; letter-spacing:.07em;
+  color:var(--t3); border-bottom:1px solid var(--border); background:var(--navy4);
+}
+.tbl td {
+  padding:9px 12px; color:var(--t2);
+  border-bottom:1px solid rgba(59,130,246,0.05);
+  vertical-align:middle;
+}
+.tbl tr:last-child td { border-bottom:none; }
+
+/* ─── CHARTS LAYOUT ─── */
+.row2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px; }
+.row-23 { display:grid; grid-template-columns:2fr 1fr; gap:16px; margin-bottom:16px; }
+
+/* ─── LEGEND ─── */
+.leg { display:flex; gap:12px; margin-bottom:8px; font-size:10.5px; color:var(--t3); flex-wrap:wrap; }
+.ld { width:9px; height:9px; border-radius:2px; flex-shrink:0; }
+
+/* ─── INGESTION STEPS ─── */
+.step-row { display:flex; align-items:center; margin-bottom:22px; }
+.stp { display:flex; align-items:center; gap:8px; flex:1; }
+.stp-circle {
+  width:28px; height:28px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  font-size:11px; font-weight:700; flex-shrink:0;
+}
+.stp-circle.done { background:var(--green); color:#fff; box-shadow:0 0 10px rgba(34,197,94,.4); }
+.stp-circle.active { background:var(--blue); color:#fff; box-shadow:0 0 10px rgba(59,130,246,.5); }
+.stp-circle.pend { background:var(--navy4); color:var(--t3); box-shadow:var(--neu-in); }
+.stp-lbl { font-size:12px; font-weight:500; }
+.stp-lbl.active { color:var(--blue); }
+.stp-lbl.done { color:var(--green); }
+.stp-lbl.pend { color:var(--t3); }
+.stp-line { flex:1; height:1px; background:var(--border); margin:0 8px; }
+.stp-line.done { background:rgba(34,197,94,.4); }
+
+/* ─── DROPZONE ─── */
+.dz {
+  border:2px dashed var(--border2);
+  border-radius:12px; padding:36px 20px; text-align:center;
+  background:var(--navy4); box-shadow:var(--neu-in);
+}
+.dz-ico { font-size:30px; margin-bottom:10px; color:var(--t3); }
+.dz-t { font-size:14px; font-weight:600; color:var(--t1); margin-bottom:4px; }
+.dz-s { font-size:11px; color:var(--t3); margin-bottom:14px; }
+.fmt-chips { display:flex; justify-content:center; gap:6px; }
+.fmt { padding:3px 10px; border-radius:20px; font-size:10px; font-weight:700; background:var(--navy5); color:var(--t3); border:1px solid var(--border); font-family:'Space Mono',monospace; box-shadow:var(--neu-out); }
+
+/* ─── MODE CARDS ─── */
+.modes { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
+.mode {
+  padding:14px; border-radius:10px;
+  background:var(--navy4); border:1px solid var(--border);
+  box-shadow:var(--neu-out);
+}
+.mode.sel { border-color:var(--blue); background:rgba(59,130,246,0.07); box-shadow:0 0 0 1px rgba(59,130,246,.2),var(--neu-out); }
+.mode-ico { font-size:18px; margin-bottom:6px; }
+.mode-t { font-size:12px; font-weight:600; color:var(--t1); margin-bottom:3px; }
+.mode-d { font-size:10.5px; color:var(--t3); line-height:1.4; }
+
+/* ─── DATASET CARDS ─── */
+.ds-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+.ds-card {
+  background:var(--navy4); border-radius:11px;
+  border:1px solid var(--border); padding:16px;
+  box-shadow:var(--card-shadow);
+}
+.ds-ico { font-size:22px; margin-bottom:10px; }
+.ds-name { font-size:13px; font-weight:600; color:var(--t1); margin-bottom:3px; }
+.ds-meta { font-size:10px; color:var(--t3); margin-bottom:12px; }
+.ds-stats { display:flex; gap:12px; }
+.ds-st { font-size:10.5px; color:var(--t2); }
+.ds-st span { color:var(--blue); font-weight:700; font-family:'Space Mono',monospace; font-size:11px; }
+.ds-foot { margin-top:12px; padding-top:10px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
+
+/* ─── QUALITY BARS ─── */
+.qb { display:flex; align-items:center; gap:8px; margin-bottom:9px; }
+.qb-lbl { font-size:11px; color:var(--t2); width:90px; flex-shrink:0; }
+.qb-track { flex:1; height:5px; background:var(--navy5); border-radius:3px; overflow:hidden; box-shadow:var(--neu-in); }
+.qb-fill { height:100%; border-radius:3px; }
+.qb-pct { font-size:10.5px; font-family:'Space Mono',monospace; color:var(--t3); width:34px; text-align:right; }
+
+/* ─── SCHEMA PILLS ─── */
+.col-pills { display:flex; flex-wrap:wrap; gap:6px; padding:8px 0 12px; }
+.cpill {
+  display:inline-flex; align-items:center; gap:5px;
+  padding:4px 10px; border-radius:7px;
+  font-size:11px; font-weight:500; color:var(--t2);
+  background:var(--navy4); border:1px solid var(--border);
+  box-shadow:var(--neu-out);
+}
+.cpill.active { border-color:var(--blue); color:var(--blue); background:var(--glowsm); }
+.ctype {
+  font-size:8.5px; padding:1px 4px; border-radius:3px;
+  font-weight:700; font-family:'Space Mono',monospace;
+}
+.t-str { background:rgba(168,85,247,.15); color:var(--purple); }
+.t-num { background:rgba(59,130,246,.15); color:var(--blue); }
+.t-date { background:rgba(20,184,166,.15); color:var(--teal); }
+.t-bool { background:rgba(245,158,11,.15); color:var(--amber); }
+
+/* ─── SUMMARY CHIPS (Dataset Page) ─── */
+.sum-row { display:flex; gap:10px; margin-bottom:16px; }
+.sum-chip {
+  display:flex; align-items:center; gap:10px;
+  background:var(--navy3); border-radius:9px;
+  border:1px solid var(--border); padding:10px 16px;
+  box-shadow:var(--neu-out);
+}
+.sum-num { font-size:20px; font-weight:700; font-family:'Space Mono',monospace; }
+.sum-lbl { font-size:10px; color:var(--t3); }
+
+/* ─── SCROLLBAR ─── */
+::-webkit-scrollbar { width:4px; }
+::-webkit-scrollbar-track { background:var(--navy2); }
+::-webkit-scrollbar-thumb { background:var(--navy5); border-radius:2px; }
+
+/* ─── CHART WRAPPER ─── */
+.ch-wrap { position:relative; width:100%; }
+</style>
+</head>
+<body>
+
+<!-- ═══ PAGE HEADER ═══ -->
+<div class="ref-header">
+  <div class="ref-title">Analytics <span>BI</span> — UI Reference</div>
+  <div class="ref-subtitle">SPRINT 1 · DESIGN REFERENCE · All 4 pages · Dark Navy + Neumorphic + Electric Blue</div>
+  <div class="ref-chips">
+    <span class="ref-chip">Dark Navy / Charcoal</span>
+    <span class="ref-chip">Neumorphic Cards</span>
+    <span class="ref-chip">Electric Blue Accents</span>
+    <span class="ref-chip">Expanded Sidebar</span>
+    <span class="ref-chip">All Chart Types</span>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════
+     PAGE 1: DASHBOARD HOME
+════════════════════════════════════════ -->
+<div class="browser-wrap">
+  <div class="browser-label">Page 1 — Dashboard Home</div>
+  <div class="browser">
+    <div class="browser-bar">
+      <div class="dots">
+        <div class="dot dot-r"></div>
+        <div class="dot dot-y"></div>
+        <div class="dot dot-g"></div>
+      </div>
+      <div class="url-bar">localhost:5173 / dashboard</div>
+    </div>
+    <div class="browser-body">
+      <!-- Sidebar -->
+      <div class="sb">
+        <div class="sb-brand">
+          <div class="sb-icon">BI</div>
+          <div><div class="sb-name">Analytics BI</div><div class="sb-sprint">Sprint 1</div></div>
+        </div>
+        <div class="sb-section">Main</div>
+        <div class="sb-item active"><span class="sb-dot">◈</span> Dashboard</div>
+        <div class="sb-item"><span class="sb-dot">⇪</span> Ingestion <span class="sb-badge">1</span></div>
+        <div class="sb-item"><span class="sb-dot">⊞</span> Datasets</div>
+        <div class="sb-item"><span class="sb-dot">⊡</span> Data Review</div>
+        <div class="sb-section">Tools</div>
+        <div class="sb-item"><span class="sb-dot">◧</span> Query Builder</div>
+        <div class="sb-item"><span class="sb-dot">⬡</span> Visualizations</div>
+        <div class="sb-item"><span class="sb-dot">↗</span> Export</div>
+        <div class="sb-footer">
+          <div class="sb-user">
+            <div class="sb-avatar">SD</div>
+            <div><div class="sb-uname">Saideep</div><div class="sb-urole">Admin · Sprint 1</div></div>
+          </div>
+        </div>
+      </div>
+      <!-- Main -->
+      <div class="main-area">
+        <div class="topbar">
+          <div><div class="pg-title">Dashboard</div><div class="pg-sub">Overview of your analytics workspace</div></div>
+          <div class="tb-actions">
+            <div class="search"><span style="color:var(--t3);font-size:12px">⌕</span><input type="text" placeholder="Search metrics..."></div>
+            <button class="btn btn-ghost">⟳ Refresh</button>
+            <button class="btn btn-primary">+ New Widget</button>
+          </div>
+        </div>
+        <div class="content">
+          <!-- KPIs -->
+          <div class="kpi-grid">
+            <div class="kpi" style="--accent:var(--blue)">
+              <div class="kpi-lbl">Total Records</div>
+              <div class="kpi-val">2.4M</div>
+              <div class="kpi-chg up">▲ 12.4% vs last month</div>
+              <div class="kpi-ico">◈</div>
+            </div>
+            <div class="kpi" style="--accent:var(--green)">
+              <div class="kpi-lbl">Active Datasets</div>
+              <div class="kpi-val">18</div>
+              <div class="kpi-chg up">▲ 3 added this week</div>
+              <div class="kpi-ico">⊞</div>
+            </div>
+            <div class="kpi" style="--accent:var(--purple)">
+              <div class="kpi-lbl">Avg Quality Score</div>
+              <div class="kpi-val">94.2%</div>
+              <div class="kpi-chg up">▲ 2.1% improvement</div>
+              <div class="kpi-ico">✦</div>
+            </div>
+            <div class="kpi" style="--accent:var(--amber)">
+              <div class="kpi-lbl">Pending Ingestions</div>
+              <div class="kpi-val">3</div>
+              <div class="kpi-chg dn">▼ 2 require review</div>
+              <div class="kpi-ico">⇪</div>
+            </div>
+          </div>
+          <!-- Bar + Donut -->
+          <div class="row-23">
+            <div class="sc" style="margin-bottom:0">
+              <div class="sc-hd">
+                <div><div class="sc-title">Records Ingested Over Time</div><div class="sc-sub">Monthly volume — last 8 months</div></div>
+                <div style="display:flex;gap:6px">
+                  <button class="btn btn-ghost" style="padding:4px 8px;font-size:10px">Bar</button>
+                  <button class="btn btn-ghost" style="padding:4px 8px;font-size:10px">Line</button>
+                </div>
+              </div>
+              <div class="sc-body">
+                <div class="leg">
+                  <span style="display:flex;align-items:center;gap:4px"><span class="ld" style="background:#3b82f6"></span>Records</span>
+                  <span style="display:flex;align-items:center;gap:4px"><span class="ld" style="background:#6366f1"></span>Cleaned</span>
+                </div>
+                <div class="ch-wrap" style="height:180px"><canvas id="barC"></canvas></div>
+              </div>
+            </div>
+            <div class="sc" style="margin-bottom:0">
+              <div class="sc-hd"><div><div class="sc-title">Dataset Types</div><div class="sc-sub">Distribution by format</div></div></div>
+              <div class="sc-body">
+                <div class="ch-wrap" style="height:140px"><canvas id="donutC"></canvas></div>
+                <div class="leg" style="margin-top:10px;justify-content:center">
+                  <span style="display:flex;align-items:center;gap:4px"><span class="ld" style="background:#3b82f6"></span>CSV 52%</span>
+                  <span style="display:flex;align-items:center;gap:4px"><span class="ld" style="background:#6366f1"></span>XLSX 31%</span>
+                  <span style="display:flex;align-items:center;gap:4px"><span class="ld" style="background:#14b8a6"></span>XLS 17%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- Line + Table -->
+          <div class="row2">
+            <div class="sc" style="margin-bottom:0">
+              <div class="sc-hd"><div><div class="sc-title">Quality Score Trend</div><div class="sc-sub">Completeness · Accuracy · Consistency</div></div></div>
+              <div class="sc-body">
+                <div class="leg">
+                  <span style="display:flex;align-items:center;gap:4px"><span class="ld" style="background:#22c55e"></span>Completeness</span>
+                  <span style="display:flex;align-items:center;gap:4px"><span class="ld" style="background:#3b82f6"></span>Accuracy</span>
+                  <span style="display:flex;align-items:center;gap:4px"><span class="ld" style="background:#a855f7"></span>Consistency</span>
+                </div>
+                <div class="ch-wrap" style="height:160px"><canvas id="lineC"></canvas></div>
+              </div>
+            </div>
+            <div class="sc" style="margin-bottom:0">
+              <div class="sc-hd">
+                <div><div class="sc-title">Recent Ingestions</div><div class="sc-sub">Latest dataset activity</div></div>
+                <button class="btn btn-ghost" style="padding:4px 8px;font-size:10px">View all</button>
+              </div>
+              <div class="sc-body" style="padding:0">
+                <table class="tbl">
+                  <thead><tr><th>Dataset</th><th>Rows</th><th>Status</th></tr></thead>
+                  <tbody>
+                    <tr><td style="font-weight:600;color:var(--t1)">sales_q1.csv</td><td style="font-family:'Space Mono',monospace;font-size:10.5px">84,201</td><td><span class="bdg bdg-g">✓ Ready</span></td></tr>
+                    <tr><td style="font-weight:600;color:var(--t1)">customers.xlsx</td><td style="font-family:'Space Mono',monospace;font-size:10.5px">12,048</td><td><span class="bdg bdg-g">✓ Ready</span></td></tr>
+                    <tr><td style="font-weight:600;color:var(--t1)">inventory.xls</td><td style="font-family:'Space Mono',monospace;font-size:10.5px">5,320</td><td><span class="bdg bdg-a">⚠ Review</span></td></tr>
+                    <tr><td style="font-weight:600;color:var(--t1)">returns_2025.csv</td><td style="font-family:'Space Mono',monospace;font-size:10.5px">3,891</td><td><span class="bdg bdg-r">✗ Failed</span></td></tr>
+                    <tr><td style="font-weight:600;color:var(--t1)">products.csv</td><td style="font-family:'Space Mono',monospace;font-size:10.5px">1,204</td><td><span class="bdg bdg-b">↑ Ingesting</span></td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════
+     PAGE 2: INGESTION
+════════════════════════════════════════ -->
+<div class="browser-wrap">
+  <div class="browser-label">Page 2 — Upload & Ingest</div>
+  <div class="browser">
+    <div class="browser-bar">
+      <div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>
+      <div class="url-bar">localhost:5173 / ingestion</div>
+    </div>
+    <div class="browser-body">
+      <div class="sb">
+        <div class="sb-brand"><div class="sb-icon">BI</div><div><div class="sb-name">Analytics BI</div><div class="sb-sprint">Sprint 1</div></div></div>
+        <div class="sb-section">Main</div>
+        <div class="sb-item"><span class="sb-dot">◈</span> Dashboard</div>
+        <div class="sb-item active"><span class="sb-dot">⇪</span> Ingestion <span class="sb-badge">1</span></div>
+        <div class="sb-item"><span class="sb-dot">⊞</span> Datasets</div>
+        <div class="sb-item"><span class="sb-dot">⊡</span> Data Review</div>
+        <div class="sb-section">Tools</div>
+        <div class="sb-item"><span class="sb-dot">◧</span> Query Builder</div>
+        <div class="sb-item"><span class="sb-dot">⬡</span> Visualizations</div>
+        <div class="sb-item"><span class="sb-dot">↗</span> Export</div>
+        <div class="sb-footer"><div class="sb-user"><div class="sb-avatar">SD</div><div><div class="sb-uname">Saideep</div><div class="sb-urole">Admin · Sprint 1</div></div></div></div>
+      </div>
+      <div class="main-area">
+        <div class="topbar">
+          <div><div class="pg-title">Upload & Ingest</div><div class="pg-sub">Upload a CSV or Excel file and configure ingestion</div></div>
+          <div class="tb-actions"><button class="btn btn-ghost">View History</button></div>
+        </div>
+        <div class="content">
+          <!-- Step Bar -->
+          <div class="step-row">
+            <div class="stp"><div class="stp-circle active">1</div><div class="stp-lbl active">Select File</div></div>
+            <div class="stp-line"></div>
+            <div class="stp"><div class="stp-circle pend">2</div><div class="stp-lbl pend">Ingestion Mode</div></div>
+            <div class="stp-line"></div>
+            <div class="stp"><div class="stp-circle pend">3</div><div class="stp-lbl pend">Confirm & Upload</div></div>
+          </div>
+          <!-- Upload Card -->
+          <div class="sc">
+            <div class="sc-hd">
+              <div><div class="sc-title">Select File</div><div class="sc-sub">Drag & drop or browse from your computer</div></div>
+              <span style="font-size:11px;color:var(--t3)">Step 1 of 3</span>
+            </div>
+            <div class="sc-body">
+              <div class="dz">
+                <div class="dz-ico">⊡</div>
+                <div class="dz-t">Drag and drop your file here</div>
+                <div class="dz-s">or click to browse your computer</div>
+                <div class="fmt-chips">
+                  <span class="fmt">.csv</span>
+                  <span class="fmt">.xls</span>
+                  <span class="fmt">.xlsx</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- Mode Selection -->
+          <div class="sc">
+            <div class="sc-hd">
+              <div><div class="sc-title">Ingestion Mode</div><div class="sc-sub">Choose how your data should be processed</div></div>
+              <span style="font-size:11px;color:var(--t3)">Step 2 of 3</span>
+            </div>
+            <div class="sc-body">
+              <div class="modes">
+                <div class="mode sel"><div class="mode-ico">✦</div><div class="mode-t">Auto Clean</div><div class="mode-d">Automatically detect and fix nulls, duplicates, type mismatches</div></div>
+                <div class="mode"><div class="mode-ico">◧</div><div class="mode-t">Manual Review</div><div class="mode-d">Preview schema and manually approve each cleaning action</div></div>
+                <div class="mode"><div class="mode-ico">⇪</div><div class="mode-t">Raw Import</div><div class="mode-d">Import data as-is without any transformations applied</div></div>
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;justify-content:flex-end;gap:8px">
+            <button class="btn btn-ghost">Clear</button>
+            <button class="btn btn-primary">Next: Ingestion Mode →</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════
+     PAGE 3: DATASETS
+════════════════════════════════════════ -->
+<div class="browser-wrap">
+  <div class="browser-label">Page 3 — Datasets</div>
+  <div class="browser">
+    <div class="browser-bar">
+      <div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>
+      <div class="url-bar">localhost:5173 / datasets</div>
+    </div>
+    <div class="browser-body">
+      <div class="sb">
+        <div class="sb-brand"><div class="sb-icon">BI</div><div><div class="sb-name">Analytics BI</div><div class="sb-sprint">Sprint 1</div></div></div>
+        <div class="sb-section">Main</div>
+        <div class="sb-item"><span class="sb-dot">◈</span> Dashboard</div>
+        <div class="sb-item"><span class="sb-dot">⇪</span> Ingestion <span class="sb-badge">1</span></div>
+        <div class="sb-item active"><span class="sb-dot">⊞</span> Datasets</div>
+        <div class="sb-item"><span class="sb-dot">⊡</span> Data Review</div>
+        <div class="sb-section">Tools</div>
+        <div class="sb-item"><span class="sb-dot">◧</span> Query Builder</div>
+        <div class="sb-item"><span class="sb-dot">⬡</span> Visualizations</div>
+        <div class="sb-item"><span class="sb-dot">↗</span> Export</div>
+        <div class="sb-footer"><div class="sb-user"><div class="sb-avatar">SD</div><div><div class="sb-uname">Saideep</div><div class="sb-urole">Admin · Sprint 1</div></div></div></div>
+      </div>
+      <div class="main-area">
+        <div class="topbar">
+          <div><div class="pg-title">Datasets</div><div class="pg-sub">Browse and manage all ingested datasets</div></div>
+          <div class="tb-actions">
+            <div class="search"><span style="color:var(--t3);font-size:12px">⌕</span><input type="text" placeholder="Search datasets..."></div>
+            <button class="btn btn-ghost">⬇ Sort</button>
+            <button class="btn btn-primary">+ Add Dataset</button>
+          </div>
+        </div>
+        <div class="content">
+          <div class="sum-row">
+            <div class="sum-chip"><span style="font-size:20px">⊞</span><div><div class="sum-num" style="color:var(--blue)">18</div><div class="sum-lbl">Total Datasets</div></div></div>
+            <div class="sum-chip"><span style="font-size:20px">◈</span><div><div class="sum-num" style="color:var(--green)">2.4M</div><div class="sum-lbl">Total Records</div></div></div>
+            <div class="sum-chip"><span style="font-size:20px">⊡</span><div><div class="sum-num" style="color:var(--purple)">94.2%</div><div class="sum-lbl">Avg Quality</div></div></div>
+          </div>
+          <div class="ds-grid">
+            <div class="ds-card">
+              <div class="ds-ico">📊</div>
+              <div class="ds-name">sales_q1_2025.csv</div>
+              <div class="ds-meta">Uploaded 2 days ago · Auto Cleaned</div>
+              <div class="ds-stats">
+                <div class="ds-st">Rows <span>84,201</span></div>
+                <div class="ds-st">Cols <span>12</span></div>
+                <div class="ds-st">Quality <span>97%</span></div>
+              </div>
+              <div class="ds-foot"><span class="bdg bdg-g">✓ Ready</span><button class="btn btn-ghost" style="padding:4px 8px;font-size:10px">Review →</button></div>
+            </div>
+            <div class="ds-card">
+              <div class="ds-ico">📋</div>
+              <div class="ds-name">customers_master.xlsx</div>
+              <div class="ds-meta">Uploaded 5 days ago · Auto Cleaned</div>
+              <div class="ds-stats">
+                <div class="ds-st">Rows <span>12,048</span></div>
+                <div class="ds-st">Cols <span>18</span></div>
+                <div class="ds-st">Quality <span>92%</span></div>
+              </div>
+              <div class="ds-foot"><span class="bdg bdg-g">✓ Ready</span><button class="btn btn-ghost" style="padding:4px 8px;font-size:10px">Review →</button></div>
+            </div>
+            <div class="ds-card">
+              <div class="ds-ico">📦</div>
+              <div class="ds-name">inventory_jan.xls</div>
+              <div class="ds-meta">Uploaded 1 week ago · Manual Review</div>
+              <div class="ds-stats">
+                <div class="ds-st">Rows <span>5,320</span></div>
+                <div class="ds-st">Cols <span>9</span></div>
+                <div class="ds-st">Quality <span>88%</span></div>
+              </div>
+              <div class="ds-foot"><span class="bdg bdg-a">⚠ Review</span><button class="btn btn-ghost" style="padding:4px 8px;font-size:10px">Review →</button></div>
+            </div>
+            <div class="ds-card">
+              <div class="ds-ico">↩</div>
+              <div class="ds-name">returns_2025.csv</div>
+              <div class="ds-meta">Uploaded 1 week ago · Raw Import</div>
+              <div class="ds-stats">
+                <div class="ds-st">Rows <span>3,891</span></div>
+                <div class="ds-st">Cols <span>7</span></div>
+                <div class="ds-st">Quality <span>74%</span></div>
+              </div>
+              <div class="ds-foot"><span class="bdg bdg-r">✗ Failed</span><button class="btn btn-ghost" style="padding:4px 8px;font-size:10px">Retry →</button></div>
+            </div>
+            <div class="ds-card">
+              <div class="ds-ico">🏷</div>
+              <div class="ds-name">products_catalog.csv</div>
+              <div class="ds-meta">Uploading now · Auto Clean</div>
+              <div class="ds-stats">
+                <div class="ds-st">Rows <span>1,204</span></div>
+                <div class="ds-st">Cols <span>14</span></div>
+                <div class="ds-st">Quality <span>—</span></div>
+              </div>
+              <div class="ds-foot"><span class="bdg bdg-b">↑ Ingesting</span><button class="btn btn-ghost" style="padding:4px 8px;font-size:10px">View →</button></div>
+            </div>
+            <div class="ds-card" style="border:2px dashed var(--border);background:transparent;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:140px;gap:8px;color:var(--t3)">
+              <div style="font-size:28px;opacity:0.4">+</div>
+              <div style="font-size:12px;font-weight:500">Add new dataset</div>
+              <div style="font-size:10px">CSV, XLS, XLSX supported</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════
+     PAGE 4: DATA REVIEW
+════════════════════════════════════════ -->
+<div class="browser-wrap">
+  <div class="browser-label">Page 4 — Data Review</div>
+  <div class="browser">
+    <div class="browser-bar">
+      <div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>
+      <div class="url-bar">localhost:5173 / data-review / sales_q1_2025</div>
+    </div>
+    <div class="browser-body">
+      <div class="sb">
+        <div class="sb-brand"><div class="sb-icon">BI</div><div><div class="sb-name">Analytics BI</div><div class="sb-sprint">Sprint 1</div></div></div>
+        <div class="sb-section">Main</div>
+        <div class="sb-item"><span class="sb-dot">◈</span> Dashboard</div>
+        <div class="sb-item"><span class="sb-dot">⇪</span> Ingestion <span class="sb-badge">1</span></div>
+        <div class="sb-item"><span class="sb-dot">⊞</span> Datasets</div>
+        <div class="sb-item active"><span class="sb-dot">⊡</span> Data Review</div>
+        <div class="sb-section">Tools</div>
+        <div class="sb-item"><span class="sb-dot">◧</span> Query Builder</div>
+        <div class="sb-item"><span class="sb-dot">⬡</span> Visualizations</div>
+        <div class="sb-item"><span class="sb-dot">↗</span> Export</div>
+        <div class="sb-footer"><div class="sb-user"><div class="sb-avatar">SD</div><div><div class="sb-uname">Saideep</div><div class="sb-urole">Admin · Sprint 1</div></div></div></div>
+      </div>
+      <div class="main-area">
+        <div class="topbar">
+          <div><div class="pg-title">Data Review</div><div class="pg-sub">sales_q1_2025.csv · 84,201 rows · 12 columns</div></div>
+          <div class="tb-actions"><button class="btn btn-ghost">← Datasets</button><button class="btn btn-primary">↗ Export</button></div>
+        </div>
+        <div class="content">
+          <div class="row2">
+            <!-- Quality Panel -->
+            <div class="sc" style="margin-bottom:0">
+              <div class="sc-hd">
+                <div><div class="sc-title">Data Quality Report</div><div class="sc-sub">Automated cleaning analysis</div></div>
+                <span class="bdg bdg-g" style="font-size:12px;padding:4px 10px">97% Overall</span>
+              </div>
+              <div class="sc-body">
+                <div class="qb"><span class="qb-lbl">Completeness</span><div class="qb-track"><div class="qb-fill" style="width:98%;background:var(--green)"></div></div><span class="qb-pct">98%</span></div>
+                <div class="qb"><span class="qb-lbl">Accuracy</span><div class="qb-track"><div class="qb-fill" style="width:95%;background:var(--blue)"></div></div><span class="qb-pct">95%</span></div>
+                <div class="qb"><span class="qb-lbl">Consistency</span><div class="qb-track"><div class="qb-fill" style="width:97%;background:var(--purple)"></div></div><span class="qb-pct">97%</span></div>
+                <div class="qb"><span class="qb-lbl">Uniqueness</span><div class="qb-track"><div class="qb-fill" style="width:99%;background:var(--teal)"></div></div><span class="qb-pct">99%</span></div>
+                <div class="qb"><span class="qb-lbl">Validity</span><div class="qb-track"><div class="qb-fill" style="width:93%;background:var(--amber)"></div></div><span class="qb-pct">93%</span></div>
+                <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
+                  <div style="background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.2);border-radius:7px;padding:6px 12px;font-size:11px;color:var(--green)">✓ 812 nulls fixed</div>
+                  <div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:7px;padding:6px 12px;font-size:11px;color:var(--amber)">⚠ 24 duplicates</div>
+                  <div style="background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.2);border-radius:7px;padding:6px 12px;font-size:11px;color:var(--blue)">◈ 6 types inferred</div>
+                </div>
+              </div>
+            </div>
+            <!-- Schema Inspector -->
+            <div class="sc" style="margin-bottom:0">
+              <div class="sc-hd"><div><div class="sc-title">Schema Inspector</div><div class="sc-sub">Click a column to explore</div></div></div>
+              <div class="sc-body" style="padding-top:4px">
+                <div class="col-pills">
+                  <span class="cpill active"><span class="ctype t-str">STR</span> order_id</span>
+                  <span class="cpill"><span class="ctype t-date">DATE</span> order_date</span>
+                  <span class="cpill"><span class="ctype t-str">STR</span> customer</span>
+                  <span class="cpill"><span class="ctype t-num">NUM</span> revenue</span>
+                  <span class="cpill"><span class="ctype t-num">NUM</span> quantity</span>
+                  <span class="cpill"><span class="ctype t-str">STR</span> region</span>
+                  <span class="cpill"><span class="ctype t-num">NUM</span> discount</span>
+                  <span class="cpill"><span class="ctype t-bool">BOOL</span> returned</span>
+                  <span class="cpill"><span class="ctype t-str">STR</span> category</span>
+                  <span class="cpill"><span class="ctype t-num">NUM</span> unit_price</span>
+                  <span class="cpill"><span class="ctype t-str">STR</span> rep_name</span>
+                  <span class="cpill"><span class="ctype t-num">NUM</span> profit</span>
+                </div>
+                <div style="background:var(--navy4);border-radius:9px;padding:12px;border:1px solid var(--border);box-shadow:var(--neu-in)">
+                  <div style="font-size:10px;color:var(--t3);margin-bottom:7px;text-transform:uppercase;letter-spacing:.06em">Column: order_id</div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:11.5px">
+                    <div style="color:var(--t2)">Type: <span style="color:var(--purple);font-weight:700;font-family:'Space Mono',monospace">STRING</span></div>
+                    <div style="color:var(--t2)">Nulls: <span style="color:var(--green);font-weight:700">0.0%</span></div>
+                    <div style="color:var(--t2)">Unique: <span style="color:var(--blue);font-weight:700">100%</span></div>
+                    <div style="color:var(--t2)">Pattern: <span style="color:var(--teal);font-family:'Space Mono',monospace;font-size:10px">ORD-XXXXX</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- Preview Table -->
+          <div class="sc">
+            <div class="sc-hd">
+              <div><div class="sc-title">Data Preview</div><div class="sc-sub">Showing first 5 rows of 84,201</div></div>
+              <div style="display:flex;gap:6px;align-items:center">
+                <div class="search" style="padding:5px 10px"><span style="color:var(--t3);font-size:11px">⌕</span><input type="text" placeholder="Filter rows..." style="width:120px;font-size:11px"></div>
+                <button class="btn btn-ghost" style="padding:5px 8px;font-size:10px">⬇ Export CSV</button>
+              </div>
+            </div>
+            <div style="overflow-x:auto">
+              <table class="tbl">
+                <thead><tr><th>order_id</th><th>order_date</th><th>customer</th><th>revenue</th><th>quantity</th><th>region</th><th>returned</th></tr></thead>
+                <tbody>
+                  <tr><td style="font-family:'Space Mono',monospace;font-size:10px;color:var(--blue)">ORD-00001</td><td>2025-01-04</td><td>Acme Corp</td><td style="font-family:'Space Mono',monospace;font-size:10.5px">₹42,800</td><td style="font-family:'Space Mono',monospace">14</td><td><span class="bdg bdg-b">North</span></td><td><span class="bdg bdg-g">False</span></td></tr>
+                  <tr><td style="font-family:'Space Mono',monospace;font-size:10px;color:var(--blue)">ORD-00002</td><td>2025-01-05</td><td>GlobalTech</td><td style="font-family:'Space Mono',monospace;font-size:10.5px">₹18,200</td><td style="font-family:'Space Mono',monospace">6</td><td><span class="bdg bdg-b">South</span></td><td><span class="bdg bdg-g">False</span></td></tr>
+                  <tr><td style="font-family:'Space Mono',monospace;font-size:10px;color:var(--blue)">ORD-00003</td><td>2025-01-07</td><td>ByteWave</td><td style="font-family:'Space Mono',monospace;font-size:10.5px">₹93,400</td><td style="font-family:'Space Mono',monospace">31</td><td><span class="bdg bdg-b">East</span></td><td><span class="bdg bdg-r">True</span></td></tr>
+                  <tr><td style="font-family:'Space Mono',monospace;font-size:10px;color:var(--blue)">ORD-00004</td><td>2025-01-08</td><td>NovaSystems</td><td style="font-family:'Space Mono',monospace;font-size:10.5px">₹7,550</td><td style="font-family:'Space Mono',monospace">3</td><td><span class="bdg bdg-b">West</span></td><td><span class="bdg bdg-g">False</span></td></tr>
+                  <tr><td style="font-family:'Space Mono',monospace;font-size:10px;color:var(--blue)">ORD-00005</td><td>2025-01-09</td><td>PrimeLogic</td><td style="font-family:'Space Mono',monospace;font-size:10.5px">₹61,100</td><td style="font-family:'Space Mono',monospace">20</td><td><span class="bdg bdg-b">North</span></td><td><span class="bdg bdg-g">False</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const gCol = 'rgba(59,130,246,0.07)';
+const tCol = '#4a6090';
+const base = { responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false} } };
+
+// Bar Chart
+new Chart(document.getElementById('barC'), {
+  type:'bar',
+  data:{
+    labels:['Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar'],
+    datasets:[
+      { data:[180000,210000,195000,310000,290000,420000,380000,440000], backgroundColor:'rgba(59,130,246,0.72)', borderRadius:4, borderSkipped:false },
+      { data:[170000,200000,188000,298000,278000,408000,370000,430000], backgroundColor:'rgba(99,102,241,0.5)', borderRadius:4, borderSkipped:false }
+    ]
+  },
+  options:{
+    ...base,
+    scales:{
+      x:{ grid:{color:gCol}, ticks:{color:tCol,font:{size:10}} },
+      y:{ grid:{color:gCol}, ticks:{color:tCol,font:{size:10},callback:v=>(v/1000)+'k'} }
+    }
+  }
+});
+
+// Donut
+new Chart(document.getElementById('donutC'), {
+  type:'doughnut',
+  data:{
+    labels:['CSV','XLSX','XLS'],
+    datasets:[{
+      data:[52,31,17],
+      backgroundColor:['#3b82f6','#6366f1','#14b8a6'],
+      borderColor:'#172034', borderWidth:3, hoverOffset:5
+    }]
+  },
+  options:{ ...base, cutout:'68%' }
+});
+
+// Line
+new Chart(document.getElementById('lineC'), {
+  type:'line',
+  data:{
+    labels:['Oct','Nov','Dec','Jan','Feb','Mar'],
+    datasets:[
+      { data:[91,93,94,96,97,98], borderColor:'#22c55e', backgroundColor:'rgba(34,197,94,0.07)', tension:0.4, fill:true, pointRadius:3, borderWidth:2 },
+      { data:[88,90,92,93,94,95], borderColor:'#3b82f6', backgroundColor:'rgba(59,130,246,0.06)', tension:0.4, fill:true, pointRadius:3, borderWidth:2 },
+      { data:[90,91,93,95,96,97], borderColor:'#a855f7', backgroundColor:'rgba(168,85,247,0.06)', tension:0.4, fill:true, pointRadius:3, borderWidth:2 }
+    ]
+  },
+  options:{
+    ...base,
+    scales:{
+      x:{ grid:{color:gCol}, ticks:{color:tCol,font:{size:10}} },
+      y:{ min:85, max:100, grid:{color:gCol}, ticks:{color:tCol,font:{size:10},callback:v=>v+'%'} }
+    }
+  }
+});
+</script>
+</body>
+</html>

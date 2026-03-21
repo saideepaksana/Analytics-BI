@@ -1,9 +1,9 @@
 .panel-block {
-  border: 1px solid #ddd5c8;
+  border: 1px solid rgba(59, 130, 246, 0.18);
   border-radius: 12px;
   padding: 12px;
   margin-top: 12px;
-  background: linear-gradient(180deg, #fffefc, #f9f6ef);
+  background: linear-gradient(180deg, #131f32, #101a2b);
 }
 
 .panel-head {
@@ -17,11 +17,12 @@
 .panel-head h3 {
   margin: 0;
   font-size: 17px;
+  color: #dce9ff;
 }
 
 .warning-block {
   border-left: 4px solid #f59e0b;
-  background: linear-gradient(180deg, #fff9ea, #fff5db);
+  background: linear-gradient(180deg, rgba(245, 158, 11, 0.1), rgba(245, 158, 11, 0.06));
   padding-left: 12px;
 }
 
@@ -32,9 +33,9 @@
 }
 
 .action-btn {
-  border: 1px solid #bfccdf;
-  background: #eef4ff;
-  color: #2c4773;
+  border: 1px solid rgba(59, 130, 246, 0.24);
+  background: rgba(59, 130, 246, 0.12);
+  color: #9dc0f8;
   padding: 6px 10px;
   border-radius: 7px;
   font-size: 13px;
@@ -44,18 +45,18 @@
 
 .action-btn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 6px 12px rgba(42, 72, 122, 0.15);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
 }
 
 .action-btn.danger {
-  background: #fee2e2;
-  color: #991b1b;
-  border-color: #fca5a5;
+  background: rgba(239, 68, 68, 0.16);
+  color: #ffb4b4;
+  border-color: rgba(239, 68, 68, 0.36);
 }
 
 .quarantine-message {
   margin: 0 0 10px;
-  color: #334155;
+  color: #a9c0e8;
   font-size: 14px;
 }
 
@@ -71,14 +72,15 @@
 
 .basic-table th,
 .basic-table td {
-  border: 1px solid #e3dccf;
+  border: 1px solid rgba(59, 130, 246, 0.15);
   padding: 8px;
   text-align: left;
   font-size: 14px;
+  color: #cbdaf4;
 }
 
 .basic-table thead th {
-  background: #f4f1e9;
+  background: #152136;
   position: sticky;
   top: 0;
 }
@@ -95,13 +97,14 @@
 
 .schema-item,
 .quarantine-item {
-  border: 1px solid #e2e8f0;
+  border: 1px solid rgba(59, 130, 246, 0.18);
   border-radius: 8px;
   padding: 8px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  background: #101a2b;
 }
 
 .schema-item-main {
@@ -134,9 +137,9 @@
 }
 
 .badge-type {
-  border: 1px solid #d7e0ec;
-  background: #f1f5f9;
-  color: #334155;
+  border: 1px solid rgba(148, 163, 184, 0.32);
+  background: rgba(148, 163, 184, 0.18);
+  color: #c3d2ee;
 }
 
 .badge-type-string {
@@ -170,7 +173,7 @@
 }
 
 .muted {
-  color: #6b7280;
+  color: #8fa8d0;
 }
 
 .row-actions {
@@ -180,16 +183,16 @@
 
 .fix-form {
   margin-top: 8px;
-  border: 1px solid #d6e2f5;
+  border: 1px solid rgba(59, 130, 246, 0.22);
   border-radius: 8px;
   padding: 8px;
-  background: #f7faff;
+  background: #121d2f;
 }
 
 .fix-form-title {
   margin: 0 0 8px;
   font-size: 13px;
-  color: #355177;
+  color: #99b8e5;
 }
 
 .fix-field {
@@ -201,15 +204,17 @@
 
 .fix-field span {
   font-size: 12px;
-  color: #465c84;
+  color: #9cb6dc;
   font-weight: 600;
 }
 
 .fix-field input {
-  border: 1px solid #c9d6eb;
+  border: 1px solid rgba(59, 130, 246, 0.24);
   border-radius: 6px;
   padding: 6px 8px;
   font-size: 13px;
+  background: #0e1828;
+  color: #dce8ff;
 }
 
 .row-error-list {
