@@ -7,7 +7,6 @@ function QuarantineUI({
   onRestoreAll,
   onUpdateAndRestore
 }) {
-  const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [editingIndex, setEditingIndex] = useState(null);
@@ -99,87 +98,80 @@ function QuarantineUI({
     <div className="panel-block warning-block">
       <div className="panel-head">
         <h3>Quarantine ({quarantinedRows.length})</h3>
-        <button type="button" onClick={() => setOpen((prev) => !prev)}>
-          {open ? "Hide" : "Show"}
+      </div>
+
+      <div className="quarantine-top-actions">
+        <button type="button" className="action-btn" onClick={handleRestoreAll} disabled={busy}>
+          Restore All Valid
+        </button>
+        <button type="button" className="action-btn danger" onClick={handleDeleteAll} disabled={busy}>
+          Delete All
         </button>
       </div>
 
-      {open ? (
-        <div className="quarantine-top-actions">
-          <button type="button" className="action-btn" onClick={handleRestoreAll} disabled={busy}>
-            Restore All Valid
-          </button>
-          <button type="button" className="action-btn danger" onClick={handleDeleteAll} disabled={busy}>
-            Delete All
-          </button>
-        </div>
-      ) : null}
-
       {message ? <p className="quarantine-message">{message}</p> : null}
 
-      {open ? (
-        <ul className="quarantine-list">
-          {quarantinedRows.map((row, index) => (
-            <li key={`${row.rowNumber}-${index}`} className="quarantine-item">
-              <div>
-                <p><strong>Row:</strong> {row.rowNumber}</p>
-                <p><strong>Error:</strong> {(row.errors || []).join(", ")}</p>
+      <ul className="quarantine-list">
+        {quarantinedRows.map((row, index) => (
+          <li key={`${row.rowNumber}-${index}`} className="quarantine-item">
+            <div>
+              <p><strong>Row:</strong> {row.rowNumber}</p>
+              <p><strong>Error:</strong> {(row.errors || []).join(", ")}</p>
 
-                {editingIndex === index ? (
-                  <div className="fix-form">
-                    <p className="fix-form-title">Update row values to match validation rules:</p>
-                    {Object.keys(draft).map((field) => (
-                      <label key={`${row.rowNumber}-${field}`} className="fix-field">
-                        <span>{field}</span>
-                        <input
-                          type="text"
-                          value={draft[field] ?? ""}
-                          onChange={(event) =>
-                            setDraft((prev) => ({
-                              ...prev,
-                              [field]: event.target.value
-                            }))
-                          }
-                          disabled={busy}
-                        />
-                      </label>
-                    ))}
+              {editingIndex === index ? (
+                <div className="fix-form">
+                  <p className="fix-form-title">Update row values to match validation rules:</p>
+                  {Object.keys(draft).map((field) => (
+                    <label key={`${row.rowNumber}-${field}`} className="fix-field">
+                      <span>{field}</span>
+                      <input
+                        type="text"
+                        value={draft[field] ?? ""}
+                        onChange={(event) =>
+                          setDraft((prev) => ({
+                            ...prev,
+                            [field]: event.target.value
+                          }))
+                        }
+                        disabled={busy}
+                      />
+                    </label>
+                  ))}
 
-                    {rowErrors.length ? (
-                      <ul className="row-error-list">
-                        {rowErrors.map((err) => (
-                          <li key={`${row.rowNumber}-${err}`}>{err}</li>
-                        ))}
-                      </ul>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
-              <div className="row-actions">
-                {editingIndex === index ? (
-                  <>
-                    <button type="button" onClick={() => handleUpdateAndRestore(row, index)} disabled={busy}>
-                      Update & Restore
-                    </button>
-                    <button type="button" className="muted-action" onClick={resetEditor} disabled={busy}>
-                      Cancel
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button type="button" onClick={() => startEdit(row, index)} disabled={busy}>
-                      Fix & Restore
-                    </button>
-                    <button type="button" onClick={() => handleDeleteOne(row, index)} disabled={busy}>
-                      Delete
-                    </button>
-                  </>
-                )}
-              </div>
-            </li>
-          ))}
-        </ul>
-      ) : null}
+                  {rowErrors.length ? (
+                    <ul className="row-error-list">
+                      {rowErrors.map((err) => (
+                        <li key={`${row.rowNumber}-${err}`}>{err}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+            <div className="row-actions">
+              {editingIndex === index ? (
+                <>
+                  <button type="button" onClick={() => handleUpdateAndRestore(row, index)} disabled={busy}>
+                    Update & Restore
+                  </button>
+                  <button type="button" className="muted-action" onClick={resetEditor} disabled={busy}>
+                    Cancel
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button type="button" onClick={() => startEdit(row, index)} disabled={busy}>
+                    Fix & Restore
+                  </button>
+                  <button type="button" onClick={() => handleDeleteOne(row, index)} disabled={busy}>
+                    Delete
+                  </button>
+                </>
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
