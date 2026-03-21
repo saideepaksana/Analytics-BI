@@ -8,7 +8,6 @@ import "./App.css";
 
 function App() {
   const [activeDatasetId, setActiveDatasetId] = useState("");
-  const [uploadSummary, setUploadSummary] = useState(null);
   const [activeView, setActiveView] = useState("ingestion"); // ingestion | review | datasets
   const [reviewModalDatasetId, setReviewModalDatasetId] = useState(null);
 
@@ -87,24 +86,9 @@ function App() {
             <IngestionWizard
               onCompleted={(result) => {
                 setActiveDatasetId(result.datasetId);
-                setUploadSummary(result);
                 setReviewModalDatasetId(result.datasetId);
               }}
             />
-
-            {uploadSummary ? (
-              <section className="card">
-                <h2>Upload Summary</h2>
-                <p><strong>Dataset ID:</strong> {uploadSummary.datasetId}</p>
-                <p><strong>Rows Saved:</strong> {uploadSummary.rowCount}</p>
-                <p><strong>Quarantined:</strong> {uploadSummary.quarantinedCount}</p>
-                <div className="wizard-actions">
-                  <button type="button" className="primary-btn" onClick={() => setReviewModalDatasetId(uploadSummary.datasetId)}>
-                    Go to Data Review
-                  </button>
-                </div>
-              </section>
-            ) : null}
           </>
         ) : null}
 
