@@ -47,6 +47,13 @@ const getAppendMismatchDetails = (payload = {}) => ({
   unexpectedColumns: Array.isArray(payload.unexpectedColumns) ? payload.unexpectedColumns : []
 });
 
+const formatDate = (value) => {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleString();
+};
+
 function IngestionWizard({ onCompleted }) {
   const [currentStep, setCurrentStep] = useState(1);
   const [file, setFile] = useState(null);
@@ -59,6 +66,10 @@ function IngestionWizard({ onCompleted }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [appendMismatchDetails, setAppendMismatchDetails] = useState(null);
+  const [isDatasetPickerOpen, setIsDatasetPickerOpen] = useState(false);
+  const [datasetsLoading, setDatasetsLoading] = useState(false);
+  const [datasetsError, setDatasetsError] = useState("");
+  const [availableDatasets, setAvailableDatasets] = useState([]);
   const cancelSourceRef = useRef(null);
   const socketRef = useRef(null);
 
@@ -219,6 +230,26 @@ function IngestionWizard({ onCompleted }) {
     setError("");
   };
 
+  const openDatasetPicker = async () => {
+    setIsDatasetPickerOpen(true);
+    setDatasetsLoading(true);
+    setDatasetsError("");
+
+    try {
+      const response = await axios.get(`${API_BASE_URL}/datasets`);
+      setAvailableDatasets(response.data?.datasets || []);
+    } catch (fetchError) {
+      setDatasetsError(fetchError.response?.data?.message || fetchError.message || "Failed to load datasets");
+    } finally {
+      setDatasetsLoading(false);
+    }
+  };
+
+  const handleSelectDataset = (selectedDatasetId) => {
+    setDatasetId(selectedDatasetId);
+    setIsDatasetPickerOpen(false);
+  };
+
   return (
     <section className="card wizard-card">
       <div className="wizard-head">
@@ -308,15 +339,20 @@ function IngestionWizard({ onCompleted }) {
 
           {needsDatasetId ? (
             <div className="form-row">
-              <label htmlFor="datasetId">Target Dataset ID</label>
-              <input
-                id="datasetId"
-                type="text"
-                value={datasetId}
-                onChange={(event) => setDatasetId(event.target.value)}
-                placeholder="Enter existing dataset ID"
-                disabled={loading}
-              />
+              <label>Target Dataset</label>
+              <div className="dataset-picker-row">
+                <button
+                  type="button"
+                  className="ghost-btn"
+                  onClick={openDatasetPicker}
+                  disabled={loading}
+                >
+                  Choose Existing Dataset
+                </button>
+                <span className={datasetId ? "mono dataset-picker-value" : "muted dataset-picker-value"}>
+                  {datasetId || "No dataset selected"}
+                </span>
+              </div>
             </div>
           ) : null}
 
@@ -415,6 +451,50 @@ function IngestionWizard({ onCompleted }) {
               <div className="append-mismatch-list">
                 <strong>Unexpected columns</strong>
                 <p>{appendMismatchDetails.unexpectedColumns.join(", ")}</p>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {isDatasetPickerOpen ? (
+        <div className="ingestion-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="dataset-picker-title">
+          <div className="ingestion-modal-card dataset-picker-card">
+            <button
+              type="button"
+              className="ingestion-modal-close"
+              aria-label="Close"
+              onClick={() => setIsDatasetPickerOpen(false)}
+            >
+              x
+            </button>
+            <h3 id="dataset-picker-title">Choose Existing Dataset</h3>
+            <p>Select a dataset for {prettyMode(mode).toLowerCase()} mode.</p>
+
+            {datasetsLoading ? <p>Loading datasets...</p> : null}
+            {datasetsError ? <p className="error-text">{datasetsError}</p> : null}
+
+            {!datasetsLoading && !datasetsError && !availableDatasets.length ? (
+              <p>No datasets found. Upload a new file first.</p>
+            ) : null}
+
+            {!datasetsLoading && availableDatasets.length ? (
+              <div className="dataset-picker-list">
+                {availableDatasets.map((dataset) => (
+                  <button
+                    key={dataset.datasetId}
+                    type="button"
+                    className={`dataset-picker-item ${dataset.datasetId === datasetId ? "active" : ""}`}
+                    onClick={() => handleSelectDataset(dataset.datasetId)}
+                  >
+                    <div className="dataset-picker-item-head">
+                      <strong className="mono">{dataset.datasetId}</strong>
+                      <span className="dataset-picker-item-mode">{dataset.mode || "-"}</span>
+                    </div>
+                    <p>{dataset.fileName || "-"}</p>
+                    <small>Rows: {dataset.rowCount ?? 0} | Quarantine: {dataset.quarantinedCount ?? 0} | Created: {formatDate(dataset.createdAt)}</small>
+                  </button>
+                ))}
               </div>
             ) : null}
           </div>
