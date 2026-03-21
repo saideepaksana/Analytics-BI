@@ -2,10 +2,23 @@ import { useMemo, useState } from "react";
 
 const DEFAULT_ROW_OPTIONS = [10, 20, 50, 100, 150, 200];
 
-function DataGrid({ data = [], rowsToShow, onRowsToShowChange, rowOptions = DEFAULT_ROW_OPTIONS }) {
+function DataGrid({
+  data = [],
+  rowsToShow,
+  onRowsToShowChange,
+  rowOptions = DEFAULT_ROW_OPTIONS,
+  pagination = null
+}) {
   const [localRowsToShow, setLocalRowsToShow] = useState(10);
 
   const effectiveRowsToShow = Number.isFinite(rowsToShow) ? rowsToShow : localRowsToShow;
+  const pageOffset = Math.max(0, pagination?.offset || 0);
+  const totalRows = Math.max(0, pagination?.totalRows || data.length);
+  const displayedRows = data.slice(0, effectiveRowsToShow);
+  const rangeStart = displayedRows.length ? pageOffset + 1 : 0;
+  const rangeEnd = displayedRows.length ? pageOffset + displayedRows.length : 0;
+  const canGoPrev = Boolean(pagination?.canGoPrev);
+  const canGoNext = Boolean(pagination?.canGoNext);
 
   const handleRowsChange = (nextValue) => {
     if (typeof onRowsToShowChange === "function") {
@@ -22,7 +35,7 @@ function DataGrid({ data = [], rowsToShow, onRowsToShowChange, rowOptions = DEFA
     return Object.keys(data[0]);
   }, [data]);
 
-  if (!data.length) {
+  if (!data.length && totalRows === 0) {
     return (
       <div className="panel-block">
         <h3>Data Preview</h3>
@@ -35,17 +48,19 @@ function DataGrid({ data = [], rowsToShow, onRowsToShowChange, rowOptions = DEFA
     <div className="panel-block">
       <div className="panel-head">
         <h3>Data Preview</h3>
-        <label>
-          Rows
-          <select
-            value={effectiveRowsToShow}
-            onChange={(event) => handleRowsChange(Number(event.target.value))}
-          >
-            {rowOptions.map((count) => (
-              <option key={count} value={count}>{count}</option>
-            ))}
-          </select>
-        </label>
+        <div className="data-grid-controls">
+          <label>
+            Rows
+            <select
+              value={effectiveRowsToShow}
+              onChange={(event) => handleRowsChange(Number(event.target.value))}
+            >
+              {rowOptions.map((count) => (
+                <option key={count} value={count}>{count}</option>
+              ))}
+            </select>
+          </label>
+        </div>
       </div>
 
       <div className="table-wrap">
@@ -58,7 +73,7 @@ function DataGrid({ data = [], rowsToShow, onRowsToShowChange, rowOptions = DEFA
             </tr>
           </thead>
           <tbody>
-            {data.slice(0, effectiveRowsToShow).map((row, index) => (
+            {displayedRows.map((row, index) => (
               <tr key={`${index}-${JSON.stringify(row)}`}>
                 {columns.map((column) => (
                   <td key={`${index}-${column}`}>{String(row[column] ?? "")}</td>
@@ -68,6 +83,28 @@ function DataGrid({ data = [], rowsToShow, onRowsToShowChange, rowOptions = DEFA
           </tbody>
         </table>
       </div>
+
+      {pagination ? (
+        <div className="data-review-pagination">
+          <button
+            type="button"
+            className="pagination-btn"
+            onClick={pagination?.onPrev}
+            disabled={!canGoPrev}
+          >
+            Prev
+          </button>
+          <span className="pagination-info">Rows {rangeStart}-{rangeEnd} / {totalRows}</span>
+          <button
+            type="button"
+            className="pagination-btn"
+            onClick={pagination?.onNext}
+            disabled={!canGoNext}
+          >
+            Next
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { IngestionWizard } from "./modules/ingestion";
 import { DataReviewPage } from "./modules/data-review";
+import DataReviewModal from "./modules/data-review/DataReviewModal";
 import { DatasetsPage } from "./modules/datasets";
 import "./modules/data-review/styles/data-review.css";
 import "./App.css";
@@ -9,6 +10,7 @@ function App() {
   const [activeDatasetId, setActiveDatasetId] = useState("");
   const [uploadSummary, setUploadSummary] = useState(null);
   const [activeView, setActiveView] = useState("ingestion"); // ingestion | review | datasets
+  const [reviewModalDatasetId, setReviewModalDatasetId] = useState(null);
 
   const headerConfig = {
     ingestion: {
@@ -45,15 +47,6 @@ function App() {
             onClick={() => setActiveView("ingestion")}
           >
             Ingestion
-          </button>
-          <button
-            type="button"
-            className={`nav-item ${activeView === "review" ? "active" : ""}`}
-            onClick={() => setActiveView("review")}
-            disabled={!activeDatasetId}
-            title={!activeDatasetId ? "Upload a file first" : undefined}
-          >
-            Data Review
           </button>
           <button
             type="button"
@@ -95,7 +88,7 @@ function App() {
               onCompleted={(result) => {
                 setActiveDatasetId(result.datasetId);
                 setUploadSummary(result);
-                setActiveView("review");
+                setReviewModalDatasetId(result.datasetId);
               }}
             />
 
@@ -106,7 +99,7 @@ function App() {
                 <p><strong>Rows Saved:</strong> {uploadSummary.rowCount}</p>
                 <p><strong>Quarantined:</strong> {uploadSummary.quarantinedCount}</p>
                 <div className="wizard-actions">
-                  <button type="button" className="primary-btn" onClick={() => setActiveView("review")}>
+                  <button type="button" className="primary-btn" onClick={() => setReviewModalDatasetId(uploadSummary.datasetId)}>
                     Go to Data Review
                   </button>
                 </div>
@@ -121,11 +114,19 @@ function App() {
             activeDatasetId={activeDatasetId}
             onOpenDataset={(datasetId) => {
               setActiveDatasetId(datasetId);
-              setActiveView("review");
+              setReviewModalDatasetId(datasetId);
             }}
           />
         ) : null}
       </main>
+
+      {/* Data Review Modal - appears as full-screen popup */}
+      {reviewModalDatasetId && (
+        <DataReviewModal
+          datasetId={reviewModalDatasetId}
+          onClose={() => setReviewModalDatasetId(null)}
+        />
+      )}
     </div>
   );
 }

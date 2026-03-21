@@ -4,7 +4,7 @@ import axios from "axios";
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api";
 
 export const useMetadata = (datasetId, options = {}) => {
-  const { autoFetch = true, previewLimit = 200 } = options;
+  const { autoFetch = true, previewLimit = 200, previewOffset = 0 } = options;
 
   const [state, setState] = useState({
     metadata: null,
@@ -25,7 +25,7 @@ export const useMetadata = (datasetId, options = {}) => {
 
     try {
       const response = await axios.get(`${API_BASE_URL}/datasets/${datasetId}/metadata`, {
-        params: { limit: previewLimit }
+        params: { limit: previewLimit, offset: previewOffset }
       });
 
       setState((prev) => ({
@@ -45,7 +45,7 @@ export const useMetadata = (datasetId, options = {}) => {
         error: error.response?.data?.message || error.message || "Failed to load metadata"
       }));
     }
-  }, [datasetId, previewLimit]);
+  }, [datasetId, previewLimit, previewOffset]);
 
   const updateSchema = useCallback(
     async (columnName, updates) => {

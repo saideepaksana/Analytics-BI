@@ -35,11 +35,12 @@ exports.listDatasets = async (req, res) => {
   }
 };
 
-// GET /api/datasets/:datasetId/metadata?limit=N
+// GET /api/datasets/:datasetId/metadata?limit=N&offset=N
 exports.getDatasetMetadata = async (req, res) => {
   try {
     const { datasetId } = req.params;
     const previewLimit = Math.min(parseInt(req.query.limit) || 25, 500);
+    const previewOffset = Math.max(parseInt(req.query.offset) || 0, 0);
 
     const metadata = await Metadata.findOne({ datasetId }).lean();
     if (!metadata) {
@@ -47,7 +48,7 @@ exports.getDatasetMetadata = async (req, res) => {
     }
 
     const [previewDocs, quarantinedDocs] = await Promise.all([
-      CleanRecord.find({ datasetId }).limit(previewLimit).lean(),
+      CleanRecord.find({ datasetId }).skip(previewOffset).limit(previewLimit).lean(),
       DLQRecord.find({ datasetId }).sort({ rowNumber: 1 }).lean(),
     ]);
 

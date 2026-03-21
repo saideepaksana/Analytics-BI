@@ -5,6 +5,7 @@ import './styles/data-review.css';
 
 // Page components
 export { default as DataReviewPage } from './DataReviewPage';
+export { default as DataReviewModal } from './DataReviewModal';
 export { default as DataReviewDemo } from './DataReviewDemo';
 
 // Individual components
