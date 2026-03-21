@@ -1,14 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import axios from "axios";
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api";
-
-function formatDate(value) {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "-";
-  return date.toLocaleString();
-}
+import { formatDateTime } from "../../core/utils/formatters";
+import { deleteDataset, listDatasets } from "../../services/datasets.service";
 
 function DatasetsPage({ activeDatasetId, onOpenDataset }) {
   const [datasets, setDatasets] = useState([]);
@@ -22,8 +14,8 @@ function DatasetsPage({ activeDatasetId, onOpenDataset }) {
     setError("");
 
     try {
-      const response = await axios.get(`${API_BASE_URL}/datasets`);
-      setDatasets(response.data?.datasets || []);
+      const data = await listDatasets();
+      setDatasets(data);
     } catch (fetchError) {
       setError(fetchError.response?.data?.message || fetchError.message || "Failed to load datasets");
     } finally {
@@ -51,7 +43,7 @@ function DatasetsPage({ activeDatasetId, onOpenDataset }) {
     setDeleting(datasetId);
 
     try {
-      await axios.delete(`${API_BASE_URL}/datasets/${datasetId}`);
+      await deleteDataset(datasetId);
       // Remove the deleted dataset from the list
       setDatasets(prev => prev.filter(d => d.datasetId !== datasetId));
     } catch (deleteError) {
@@ -104,7 +96,7 @@ function DatasetsPage({ activeDatasetId, onOpenDataset }) {
                     <td>{dataset.mode || "-"}</td>
                     <td>{dataset.rowCount ?? 0}</td>
                     <td>{dataset.quarantinedCount ?? 0}</td>
-                    <td>{formatDate(dataset.createdAt)}</td>
+                    <td>{formatDateTime(dataset.createdAt)}</td>
                     <td>
                       <div style={{ display: "flex", gap: "8px" }}>
                         <button

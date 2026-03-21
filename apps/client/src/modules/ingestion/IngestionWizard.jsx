@@ -2,43 +2,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { io } from "socket.io-client";
 import FileUpload from "./FileUpload";
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api";
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:5000";
-
-const createUploadId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-
-const MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024; // keep in sync with backend multer limit
-
-const MODE_OPTIONS = [
-  {
-    value: "new",
-    title: "Create New Dataset",
-    description: "Start a brand new dataset for this upload."
-  },
-  {
-    value: "append",
-    title: "Append to Existing Data",
-    description: "Add this data as new rows to an existing dataset."
-  },
-  {
-    value: "replace",
-    title: "Replace Existing Data",
-    description: "Overwrite an existing dataset entirely with this upload."
-  }
-];
-
-const prettyMode = (mode) => {
-  if (mode === "append") return "Append";
-  if (mode === "replace") return "Replace";
-  return "New";
-};
-
-const getAxiosErrorMessage = (err) => {
-  if (!err) return "Upload failed";
-  if (axios.isCancel?.(err)) return "Upload cancelled";
-  return err.response?.data?.message || err.message || "Upload failed";
-};
+import DatasetPickerModal from "./components/DatasetPickerModal";
+import { SOCKET_URL } from "../../core/config/env";
+import { getRequestErrorMessage } from "../../core/http/apiClient";
+import { formatDateTime } from "../../core/utils/formatters";
+import { listDatasets } from "../../services/datasets.service";
+import { uploadDatasetFile } from "../../services/upload.service";
+import { createUploadId, MAX_FILE_SIZE_BYTES, MODE_OPTIONS, prettyMode } from "./constants";
 
 const getAppendMismatchDetails = (payload = {}) => ({
   expectedCount: payload.expectedCount ?? "-",
@@ -46,13 +16,6 @@ const getAppendMismatchDetails = (payload = {}) => ({
   missingColumns: Array.isArray(payload.missingColumns) ? payload.missingColumns : [],
   unexpectedColumns: Array.isArray(payload.unexpectedColumns) ? payload.unexpectedColumns : []
 });
-
-const formatDate = (value) => {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "-";
-  return date.toLocaleString();
-};
 
 function IngestionWizard({ onCompleted }) {
   const [currentStep, setCurrentStep] = useState(1);
@@ -182,18 +145,14 @@ function IngestionWizard({ onCompleted }) {
       const generatedUploadId = createUploadId();
       setUploadId(generatedUploadId);
 
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("mode", mode);
-      formData.append("uploadId", generatedUploadId);
-      if (datasetId.trim()) {
-        formData.append("datasetId", datasetId.trim());
-      }
-
       const cancelSource = axios.CancelToken?.source?.();
       cancelSourceRef.current = cancelSource;
 
-      const response = await axios.post(`${API_BASE_URL}/upload`, formData, {
+      const response = await uploadDatasetFile({
+        file,
+        mode,
+        uploadId: generatedUploadId,
+        datasetId,
         cancelToken: cancelSource?.token,
         onUploadProgress: (event) => {
           if (!event.total) return;
@@ -205,14 +164,14 @@ function IngestionWizard({ onCompleted }) {
       setProgress(100);
       setStage("done");
       setCurrentStep(3);
-      onCompleted?.(response.data);
+      onCompleted?.(response);
     } catch (uploadError) {
       console.error("Upload error details:", uploadError.response?.data || uploadError);
       const errorPayload = uploadError.response?.data;
       if (errorPayload?.code === "APPEND_SCHEMA_MISMATCH") {
         setAppendMismatchDetails(getAppendMismatchDetails(errorPayload));
       }
-      setError(getAxiosErrorMessage(uploadError));
+      setError(getRequestErrorMessage(uploadError, "Upload failed"));
       setStage("failed");
     } finally {
       setLoading(false);
@@ -236,10 +195,10 @@ function IngestionWizard({ onCompleted }) {
     setDatasetsError("");
 
     try {
-      const response = await axios.get(`${API_BASE_URL}/datasets`);
-      setAvailableDatasets(response.data?.datasets || []);
+      const datasets = await listDatasets();
+      setAvailableDatasets(datasets);
     } catch (fetchError) {
-      setDatasetsError(fetchError.response?.data?.message || fetchError.message || "Failed to load datasets");
+      setDatasetsError(getRequestErrorMessage(fetchError, "Failed to load datasets"));
     } finally {
       setDatasetsLoading(false);
     }
@@ -457,49 +416,17 @@ function IngestionWizard({ onCompleted }) {
         </div>
       ) : null}
 
-      {isDatasetPickerOpen ? (
-        <div className="ingestion-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="dataset-picker-title">
-          <div className="ingestion-modal-card dataset-picker-card">
-            <button
-              type="button"
-              className="ingestion-modal-close"
-              aria-label="Close"
-              onClick={() => setIsDatasetPickerOpen(false)}
-            >
-              x
-            </button>
-            <h3 id="dataset-picker-title">Choose Existing Dataset</h3>
-            <p>Select a dataset for {prettyMode(mode).toLowerCase()} mode.</p>
-
-            {datasetsLoading ? <p>Loading datasets...</p> : null}
-            {datasetsError ? <p className="error-text">{datasetsError}</p> : null}
-
-            {!datasetsLoading && !datasetsError && !availableDatasets.length ? (
-              <p>No datasets found. Upload a new file first.</p>
-            ) : null}
-
-            {!datasetsLoading && availableDatasets.length ? (
-              <div className="dataset-picker-list">
-                {availableDatasets.map((dataset) => (
-                  <button
-                    key={dataset.datasetId}
-                    type="button"
-                    className={`dataset-picker-item ${dataset.datasetId === datasetId ? "active" : ""}`}
-                    onClick={() => handleSelectDataset(dataset.datasetId)}
-                  >
-                    <div className="dataset-picker-item-head">
-                      <strong className="mono">{dataset.datasetId}</strong>
-                      <span className="dataset-picker-item-mode">{dataset.mode || "-"}</span>
-                    </div>
-                    <p>{dataset.fileName || "-"}</p>
-                    <small>Rows: {dataset.rowCount ?? 0} | Quarantine: {dataset.quarantinedCount ?? 0} | Created: {formatDate(dataset.createdAt)}</small>
-                  </button>
-                ))}
-              </div>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
+      <DatasetPickerModal
+        isOpen={isDatasetPickerOpen}
+        modeLabel={prettyMode(mode)}
+        loading={datasetsLoading}
+        error={datasetsError}
+        datasets={availableDatasets}
+        selectedDatasetId={datasetId}
+        onSelect={handleSelectDataset}
+        onClose={() => setIsDatasetPickerOpen(false)}
+        formatDate={formatDateTime}
+      />
     </section>
   );
 }

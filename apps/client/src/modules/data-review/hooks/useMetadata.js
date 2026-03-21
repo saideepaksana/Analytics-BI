@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
-import axios from "axios";
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api";
+import {
+  deleteAllQuarantineRows,
+  deleteQuarantineRow,
+  getDatasetMetadata,
+  restoreAllValidQuarantineRows,
+  restoreQuarantineRow,
+  updateSchemaColumn,
+  validateQuarantineRow,
+} from "../../../services/datasets.service";
 
 export const useMetadata = (datasetId, options = {}) => {
   const { autoFetch = true, previewLimit = 200, previewOffset = 0 } = options;
@@ -24,17 +30,18 @@ export const useMetadata = (datasetId, options = {}) => {
     setState((prev) => ({ ...prev, loading: true, error: "" }));
 
     try {
-      const response = await axios.get(`${API_BASE_URL}/datasets/${datasetId}/metadata`, {
-        params: { limit: previewLimit, offset: previewOffset }
+      const response = await getDatasetMetadata(datasetId, {
+        limit: previewLimit,
+        offset: previewOffset,
       });
 
       setState((prev) => ({
         ...prev,
-        metadata: response.data.metadata || null,
-        schema: response.data.schema || [],
-        relationships: response.data.relationships || [],
-        quarantinedRows: response.data.quarantinedRows || [],
-        previewData: response.data.preview || [],
+        metadata: response.metadata || null,
+        schema: response.schema || [],
+        relationships: response.relationships || [],
+        quarantinedRows: response.quarantinedRows || [],
+        previewData: response.preview || [],
         loading: false,
         error: ""
       }));
@@ -53,7 +60,7 @@ export const useMetadata = (datasetId, options = {}) => {
         return;
       }
 
-      await axios.patch(`${API_BASE_URL}/datasets/${datasetId}/schema/${columnName}`, updates);
+      await updateSchemaColumn(datasetId, columnName, updates);
       await fetchMetadata();
     },
     [datasetId]
@@ -64,7 +71,7 @@ export const useMetadata = (datasetId, options = {}) => {
       if (!datasetId) {
         return;
       }
-      const response = await axios.delete(`${API_BASE_URL}/datasets/${datasetId}/quarantine/${rowIndex}`);
+      const response = await deleteQuarantineRow(datasetId, rowIndex);
       setState((prev) => {
         const nextRows = prev.quarantinedRows.filter((_, index) => index !== rowIndex);
         return {
@@ -73,13 +80,13 @@ export const useMetadata = (datasetId, options = {}) => {
           metadata: prev.metadata
             ? {
                 ...prev.metadata,
-                rowCount: response.data?.rowCount ?? prev.metadata.rowCount,
-                quarantinedCount: response.data?.quarantinedCount ?? nextRows.length
+                  rowCount: response?.rowCount ?? prev.metadata.rowCount,
+                  quarantinedCount: response?.quarantinedCount ?? nextRows.length
               }
             : prev.metadata
         };
       });
-      return response.data;
+        return response;
     },
     [datasetId, fetchMetadata]
   );
@@ -89,19 +96,19 @@ export const useMetadata = (datasetId, options = {}) => {
       if (!datasetId) {
         return null;
       }
-      const response = await axios.delete(`${API_BASE_URL}/datasets/${datasetId}/quarantine`);
+      const response = await deleteAllQuarantineRows(datasetId);
       setState((prev) => ({
         ...prev,
         quarantinedRows: [],
         metadata: prev.metadata
           ? {
               ...prev.metadata,
-              rowCount: response.data?.rowCount ?? prev.metadata.rowCount,
-              quarantinedCount: response.data?.quarantinedCount ?? 0
+              rowCount: response?.rowCount ?? prev.metadata.rowCount,
+              quarantinedCount: response?.quarantinedCount ?? 0
             }
           : prev.metadata
       }));
-      return response.data;
+      return response;
     },
     [datasetId]
   );
@@ -113,16 +120,12 @@ export const useMetadata = (datasetId, options = {}) => {
       }
 
       // Backend-only validation pass before restore.
-      await axios.post(`${API_BASE_URL}/datasets/${datasetId}/quarantine/${rowIndex}/validate`, {
-        updatedData
-      });
+      await validateQuarantineRow(datasetId, rowIndex, updatedData);
 
-      const response = await axios.post(`${API_BASE_URL}/datasets/${datasetId}/quarantine/${rowIndex}/restore`, {
-        updatedData
-      });
+      const response = await restoreQuarantineRow(datasetId, rowIndex, updatedData);
       setState((prev) => {
         const nextRows = prev.quarantinedRows.filter((_, index) => index !== rowIndex);
-        const restoredData = response.data?.restoredData;
+        const restoredData = response?.restoredData;
         const nextPreview = restoredData
           ? [restoredData, ...prev.previewData].slice(0, previewLimit)
           : prev.previewData;
@@ -134,14 +137,14 @@ export const useMetadata = (datasetId, options = {}) => {
           metadata: prev.metadata
             ? {
                 ...prev.metadata,
-                rowCount: response.data?.rowCount ?? prev.metadata.rowCount,
-                quarantinedCount: response.data?.quarantinedCount ?? nextRows.length
+                  rowCount: response?.rowCount ?? prev.metadata.rowCount,
+                  quarantinedCount: response?.quarantinedCount ?? nextRows.length
               }
             : prev.metadata
         };
       });
       await fetchMetadata();
-      return response.data;
+        return response;
     },
     [datasetId, previewLimit, fetchMetadata]
   );
@@ -151,16 +154,16 @@ export const useMetadata = (datasetId, options = {}) => {
       if (!datasetId) {
         return null;
       }
-      const response = await axios.post(`${API_BASE_URL}/datasets/${datasetId}/quarantine/restore-all`);
+      const response = await restoreAllValidQuarantineRows(datasetId);
       setState((prev) => {
-        const failedRows = response.data?.failedRows || [];
+        const failedRows = response?.failedRows || [];
         const failedRowNumbers = new Set(failedRows.map((row) => row.rowNumber));
 
         const remainingQuarantined = prev.quarantinedRows.filter((row) =>
           failedRowNumbers.has(row.rowNumber)
         );
 
-        const restoredRows = (response.data?.restoredRows || []).map((row) => row.data);
+        const restoredRows = (response?.restoredRows || []).map((row) => row.data);
         const nextPreview = [...restoredRows, ...prev.previewData].slice(0, previewLimit);
 
         return {
@@ -170,15 +173,15 @@ export const useMetadata = (datasetId, options = {}) => {
           metadata: prev.metadata
             ? {
                 ...prev.metadata,
-                rowCount: response.data?.rowCount ?? prev.metadata.rowCount,
+                  rowCount: response?.rowCount ?? prev.metadata.rowCount,
                 quarantinedCount:
-                  response.data?.quarantinedCount ?? remainingQuarantined.length
+                    response?.quarantinedCount ?? remainingQuarantined.length
               }
             : prev.metadata
         };
       });
       await fetchMetadata();
-      return response.data;
+        return response;
     },
     [datasetId, previewLimit, fetchMetadata]
   );
