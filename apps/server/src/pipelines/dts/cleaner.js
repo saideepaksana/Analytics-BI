@@ -38,36 +38,7 @@ const sanitizeUnknown = (value) => {
     return sanitizeString(value); // fall back to string — don't guess numeric
 };
 
-// ─── Mixed Type Cleaner ───────────────────────────────────────────────────────
-// For fields with mixed inferred types, try parsing in order of probability:
-// 1. Try as number (most common for mixed numeric fields like Quantity)
-// 2. Try as boolean (for true/false/yes/no values)
-// 3. Fall back to string
-const sanitizeMixed = (value) => {
-    if (value == null || value === '') return null;
-    
-    // Already proper types - keep them
-    if (typeof value === 'number') return Number.isFinite(value) ? value : null;
-    if (typeof value === 'boolean') return value;
-    
-    // Try to parse string values intelligently
-    if (typeof value === 'string') {
-        const trimmed = value.trim();
-        
-        // Try boolean first (short-circuit if matches)
-        const boolResult = sanitizeBoolean(trimmed);
-        if (boolResult !== null) return boolResult;
-        
-        // Try number next (most common for Quantity, Count, etc.)
-        const numResult = sanitizeNumber(trimmed);
-        if (numResult !== null) return numResult;
-        
-        // Fall back to string
-        return sanitizeString(trimmed);
-    }
-    
-    return sanitizeString(value);
-};
+
 
 // ─── Type → Cleaner Map ───────────────────────────────────────────────────────
 const TYPE_CLEANER_MAP = {
@@ -86,8 +57,7 @@ const TYPE_CLEANER_MAP = {
     boolean:   sanitizeBoolean,
     bool:      sanitizeBoolean,
 
-    unknown:   sanitizeUnknown, // ← for fields Schema Inference couldn't type
-    mixed:     sanitizeMixed,   // ← for fields with mixed inferred types
+    unknown:   sanitizeUnknown // ← for fields Schema Inference couldn't type
 };
 
 module.exports = {
@@ -95,6 +65,5 @@ module.exports = {
     sanitizeNumber,
     sanitizeBoolean,
     sanitizeUnknown,
-    sanitizeMixed,
     TYPE_CLEANER_MAP
 };
