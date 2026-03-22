@@ -1,141 +1,183 @@
 /**
  * inferSchema.js
- * 
+ *
  * Main entry point for the Schema Inference Engine.
- * Called by the Parser (Role 4) after raw data is inserted into MongoDB.
- * 
+ * Called after raw data is inserted into MongoDB.
+ *
  * FLOW:
- *   1. Sample documents from the newly uploaded collection
+ *   1. Sample documents from the new collection
  *   2. Run classifyAllColumns() on the sample
- *   3. Fetch existing metadata for all other collections
- *   4. Run detectRelationships() across all known collections
- *   5. Save everything to the Metadata collection
- * 
- * USAGE (called by parser or upload controller):
- *   const { runSchemaInference } = require('./schema-inference/inferSchema');
- *   await runSchemaInference({
- *     collectionName: "sales_data_2025",
- *     uploadedBy: "user_abc123",
- *     ingestionRule: "new",
- *     totalRows: 1500,
- *   });
+ *   3. Fetch metadata for all other collections
+ *   4. Run detectRelationships() across known collections
+ *   5. Save results to the Metadata collection
  */
 
 const mongoose = require("mongoose");
 const { classifyAllColumns } = require("./classifyColumns");
 const { detectRelationships } = require("./relationshipMapper");
 const {
-  saveMetadata,
-  markInferenceFailed,
-  getAllMetadata,
+    saveMetadata,
+    markInferenceFailed,
+    getAllMetadata,
 } = require("./updateMetadata");
 
-const SAMPLE_SIZE = 100; // How many documents to sample for inference
+const SAMPLE_SIZE = 100;
 
 /**
- * Sample documents from a MongoDB collection using the Aggregation Pipeline.
- * Uses $sample for a random sample — avoids loading the entire collection.
- * 
- * @param {string} collectionName
- * @param {number} limit
- * @returns {Array<Object>}
+ * Safely sample documents from a MongoDB collection.
+ * Falls back to a normal limited find if $sample is not available or fails.
  */
 async function sampleDocuments(collectionName, limit = SAMPLE_SIZE) {
-  const collection = mongoose.connection.db.collection(collectionName);
+    if (!mongoose.connection || !mongoose.connection.db) {
+        throw new Error("MongoDB connection is not ready");
+    }
 
-  // Use aggregation pipeline with $sample for efficient random sampling
-  const docs = await collection
-    .aggregate([{ $sample: { size: limit } }])
-    .toArray();
+    const collection = mongoose.connection.db.collection(collectionName);
+    const estimatedCount = await collection.estimatedDocumentCount().catch(() => limit);
 
-  return docs;
+    if (!estimatedCount || estimatedCount <= 0) {
+        return [];
+    }
+
+    const sampleSize = Math.max(1, Math.min(limit, estimatedCount));
+
+    try {
+        return await collection.aggregate([{ $sample: { size: sampleSize } }]).toArray();
+    } catch (err) {
+        // Fallback for environments where $sample is not ideal.
+        return await collection.find({}).limit(sampleSize).toArray();
+    }
+}
+
+/**
+ * Normalize metadata records into the shape expected by detectRelationships().
+ */
+function toRelationshipInput(meta) {
+    const columns = Array.isArray(meta.schema)
+        ? meta.schema
+        : Array.isArray(meta.columns)
+            ? meta.columns
+            : [];
+
+    return {
+        collectionName: meta.collectionName || meta.datasetId,
+        rowCount: meta.rowCount ?? meta.totalRows ?? 0,
+        totalRows: meta.totalRows ?? meta.rowCount ?? 0,
+        columns: columns.map((col) => ({
+            name: col.name,
+            dataType: col.dataType || col.type,
+            role: col.role,
+            sampleValues: col.sampleValues || [],
+            uniqueCount: col.uniqueCount ?? 0,
+        })),
+    };
 }
 
 /**
  * Run the full schema inference pipeline for one collection.
- * 
- * @param {Object} options
- * @param {string} options.collectionName  - MongoDB collection that was just ingested
- * @param {string} options.uploadedBy      - User ID or name
- * @param {string} options.ingestionRule   - "new" | "append" | "replace"
- * @param {number} options.totalRows       - Total rows in the collection
  */
-async function runSchemaInference({ collectionName, uploadedBy, ingestionRule, totalRows }) {
-  console.log(`[SchemaInference] Starting inference for collection: ${collectionName}`);
+async function runSchemaInference({
+    collectionName,
+    uploadedBy = "",
+    ingestionRule = "new",
+    totalRows = 0,
+    fileName = "",
+    sourceFileId = "",
+    datasetId = collectionName,
+}) {
+    console.log(`[SchemaInference] Starting inference for collection: ${collectionName}`);
 
-  try {
-    // --- STEP 1: Sample documents from the new collection ---
-    const sampleDocs = await sampleDocuments(collectionName, SAMPLE_SIZE);
+    try {
+        if (!collectionName || typeof collectionName !== "string") {
+            throw new Error("collectionName is required");
+        }
 
-    if (sampleDocs.length === 0) {
-      throw new Error(`No documents found in collection "${collectionName}"`);
+        // Step 1: sample documents from the newly uploaded collection
+        const sampleDocs = await sampleDocuments(collectionName, SAMPLE_SIZE);
+
+        if (sampleDocs.length === 0) {
+            throw new Error(`No documents found in collection "${collectionName}"`);
+        }
+
+        console.log(`[SchemaInference] Sampled ${sampleDocs.length} documents`);
+
+        // Step 2: classify columns
+        const columns = classifyAllColumns(sampleDocs, totalRows || sampleDocs.length);
+
+        console.log(`[SchemaInference] Classified ${columns.length} columns`);
+        for (const col of columns) {
+            console.log(
+                `  → ${col.name}: ${col.role} (${col.dataType}) [confidence: ${col.confidence}]`
+            );
+        }
+
+        // Step 3: fetch metadata for other collections only
+        const existingMetadata = await getAllMetadata();
+
+        const otherCollections = existingMetadata
+            .filter((meta) => {
+                const metaCollectionName = meta.collectionName || meta.datasetId;
+                const metaDatasetId = meta.datasetId || meta.collectionName;
+                return metaCollectionName !== collectionName && metaDatasetId !== datasetId;
+            })
+            .map(toRelationshipInput);
+
+        const currentCollection = {
+            collectionName,
+            rowCount: totalRows || sampleDocs.length,
+            totalRows: totalRows || sampleDocs.length,
+            columns: columns.map((col) => ({
+                name: col.name,
+                dataType: col.dataType,
+                role: col.role,
+                sampleValues: col.sampleValues || [],
+                uniqueCount: col.uniqueCount ?? 0,
+            })),
+        };
+
+        const allCollectionsData = [currentCollection, ...otherCollections];
+
+        // Step 4: detect relationships
+        const relationships = detectRelationships(allCollectionsData);
+
+        console.log(`[SchemaInference] Detected ${relationships.length} relationships`);
+        for (const rel of relationships) {
+            console.log(
+                `  → ${rel.fromCollection}.${rel.fromColumn} -> ${rel.toCollection}.${rel.toColumn} (${rel.strategy || "unknown"}, confidence: ${rel.confidence})`
+            );
+        }
+
+        // Step 5: persist metadata
+        const savedMeta = await saveMetadata(collectionName, {
+            datasetId,
+            fileName,
+            sourceFileId,
+            columns,
+            relationships,
+            totalRows,
+            uploadedBy,
+            ingestionRule,
+        });
+
+        console.log(
+            `[SchemaInference] ✓ Metadata saved for "${collectionName}" (id: ${savedMeta._id})`
+        );
+
+        return savedMeta;
+    } catch (err) {
+        console.error(`[SchemaInference] ✗ Failed for "${collectionName}":`, err.message);
+
+        try {
+            await markInferenceFailed(collectionName, err.message, datasetId);
+        } catch (markErr) {
+            console.error(
+                `[SchemaInference] Failed to mark inference as failed:`,
+                markErr.message
+            );
+        }
+
+        throw err;
     }
-
-    console.log(`[SchemaInference] Sampled ${sampleDocs.length} documents`);
-
-    // --- STEP 2: Classify all columns ---
-    const columns = classifyAllColumns(sampleDocs, totalRows);
-    console.log(`[SchemaInference] Classified ${columns.length} columns`);
-    columns.forEach((col) => {
-      console.log(`  → ${col.name}: ${col.role} (${col.dataType}) [confidence: ${col.confidence}]`);
-    });
-
-    // --- STEP 3: Fetch metadata for all OTHER existing collections ---
-    const existingMetadata = await getAllMetadata();
-
-    // Build the format expected by detectRelationships:
-    // [{ collectionName, columns (with sampleValues), sampleDocs }]
-    const allCollectionsData = [
-      // The newly uploaded collection
-      {
-        collectionName,
-        columns: columns.map((col) => ({
-          name: col.name,
-          dataType: col.dataType,
-          role: col.role,
-          sampleValues: col.sampleValues,
-        })),
-        sampleDocs,
-      },
-      // All previously known collections
-      ...existingMetadata.map((meta) => ({
-        collectionName: meta.collectionName,
-        columns: meta.columns.map((col) => ({
-          name: col.name,
-          dataType: col.dataType,
-          role: col.role,
-          sampleValues: col.sampleValues || [],
-        })),
-        sampleDocs: [], // We don't re-sample old collections for performance
-      })),
-    ];
-
-    // --- STEP 4: Detect relationships ---
-    const relationships = detectRelationships(allCollectionsData);
-    console.log(`[SchemaInference] Detected ${relationships.length} relationships`);
-    relationships.forEach((rel) => {
-      console.log(
-        `  → ${rel.fromCollection}.${rel.fromColumn} ↔ ${rel.toCollection}.${rel.toColumn} (${rel.strategy}, confidence: ${rel.confidence})`
-      );
-    });
-
-    // --- STEP 5: Save metadata to MongoDB ---
-    const savedMeta = await saveMetadata(collectionName, {
-      columns,
-      relationships,
-      totalRows,
-      uploadedBy,
-      ingestionRule,
-    });
-
-    console.log(`[SchemaInference] ✓ Metadata saved for "${collectionName}" (id: ${savedMeta._id})`);
-    return savedMeta;
-
-  } catch (err) {
-    console.error(`[SchemaInference] ✗ Failed for "${collectionName}":`, err.message);
-    await markInferenceFailed(collectionName, err.message);
-    throw err; // Re-throw so the caller can handle it
-  }
 }
 
 module.exports = { runSchemaInference };

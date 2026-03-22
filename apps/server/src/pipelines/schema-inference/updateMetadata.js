@@ -1,88 +1,139 @@
 /**
  * updateMetadata.js
- * 
- * Handles reading from and writing to the Metadata MongoDB collection.
- * Called at the end of the inference pipeline to persist results.
+ *
+ * Persists schema inference results into MongoDB.
+ * Keeps compatibility with both the new `schema` field and the legacy `columns` field.
  */
 
 const Metadata = require("../../models/Metadata");
 
 /**
- * Create or update a metadata document for a given collection.
- * Uses upsert so re-running inference on the same collection updates the record.
- * 
- * @param {string} collectionName
- * @param {Object} inferredData
- * @param {Array}  inferredData.columns      - From classifyAllColumns()
- * @param {Array}  inferredData.relationships - From detectRelationships()
- * @param {number} inferredData.totalRows
- * @param {string} inferredData.uploadedBy
- * @param {string} inferredData.ingestionRule
+ * Remove internal-only fields and keep only what should be stored in metadata.
  */
-async function saveMetadata(collectionName, inferredData) {
-  const { columns, relationships, totalRows, uploadedBy, ingestionRule } = inferredData;
+function sanitizeColumns(columns = []) {
+    return (Array.isArray(columns) ? columns : []).map((col) => {
+        const {
+            confidence, // internal scoring only
+            ...rest
+        } = col || {};
 
-  // Strip internal-only fields (like "confidence") before saving
-  const cleanColumns = columns.map(({ confidence, ...rest }) => rest);
-
-  // Only save relationships where this collection is the "from" side
-  const relevantRelationships = (relationships || []).filter(
-    (r) => r.fromCollection === collectionName
-  ).map(({ strategy, ...rest }) => rest); // strip internal "strategy" field
-
-  const result = await Metadata.findOneAndUpdate(
-    { collectionName },
-    {
-      $set: {
-        collectionName,
-        uploadedBy,
-        ingestionRule,
-        totalRows,
-        columns: cleanColumns,
-        relationships: relevantRelationships,
-        inferenceStatus: "complete",
-        inferenceError: null,
-      },
-    },
-    { upsert: true, returnDocument: "after" }
-  );
-
-  return result;
+        return rest;
+    });
 }
 
 /**
- * Mark a collection's metadata as failed (for error handling).
+ * Remove internal-only fields from relationship objects.
  */
-async function markInferenceFailed(collectionName, errorMessage) {
-  await Metadata.findOneAndUpdate(
-    { collectionName },
-    {
-      $set: {
-        inferenceStatus: "failed",
-        inferenceError: errorMessage,
-      },
-    },
-    { upsert: true }
-  );
+function sanitizeRelationships(relationships = [], collectionName) {
+    return (Array.isArray(relationships) ? relationships : [])
+        .filter((r) => r && r.fromCollection === collectionName)
+        .map((r) => {
+            const {
+                strategy, // internal matching strategy
+                score,    // optional internal score if present
+                ...rest
+            } = r;
+
+            return rest;
+        });
 }
 
 /**
- * Fetch all metadata entries (used by the Relationship Mapper to compare all collections).
+ * Create or update a metadata document for a given collection/dataset.
+ * Uses upsert so rerunning inference updates the same record.
+ */
+async function saveMetadata(collectionName, inferredData = {}) {
+    const {
+        datasetId = collectionName, // fallback for older callers
+        columns = [],
+        relationships = [],
+        totalRows = 0,
+        uploadedBy = "",
+        ingestionRule = "new",
+        fileName = "",
+        sourceFileId = "",
+    } = inferredData;
+
+    const cleanColumns = sanitizeColumns(columns);
+    const relevantRelationships = sanitizeRelationships(relationships, collectionName);
+
+    const update = {
+        $set: {
+            datasetId,
+            collectionName,
+            fileName,
+            sourceFileId,
+            uploadedBy,
+            ingestionRule,
+            totalRows: Number(totalRows) || 0,
+            rowCount: Number(totalRows) || 0,
+
+            // Keep both fields in sync for backward compatibility.
+            schema: cleanColumns,
+            columns: cleanColumns,
+
+            relationships: relevantRelationships,
+            inferenceStatus: "complete",
+            inferenceError: null,
+        },
+    };
+
+    const result = await Metadata.findOneAndUpdate(
+        { datasetId },
+        update,
+        {
+            upsert: true,
+            new: true,
+            runValidators: true,
+            setDefaultsOnInsert: true,
+        }
+    );
+
+    return result;
+}
+
+/**
+ * Mark inference as failed for a collection/dataset.
+ */
+async function markInferenceFailed(collectionName, errorMessage, datasetId = collectionName) {
+    await Metadata.findOneAndUpdate(
+        { datasetId },
+        {
+            $set: {
+                datasetId,
+                collectionName,
+                inferenceStatus: "failed",
+                inferenceError: errorMessage || "Unknown inference error",
+            },
+        },
+        {
+            upsert: true,
+            new: true,
+            runValidators: true,
+            setDefaultsOnInsert: true,
+        }
+    );
+}
+
+/**
+ * Fetch all metadata entries.
  */
 async function getAllMetadata() {
-  return Metadata.find({}).lean();
+    return Metadata.find({}).lean();
 }
 
 /**
- * Fetch metadata for a specific collection.
+ * Fetch metadata for a specific collection/dataset.
  */
 async function getMetadataForCollection(collectionName) {
-  return Metadata.findOne({ collectionName }).lean();
+    return Metadata.findOne({
+        $or: [{ collectionName }, { datasetId: collectionName }],
+    }).lean();
 }
 
 module.exports = {
-  saveMetadata,
-  markInferenceFailed,
-  getAllMetadata,
-  getMetadataForCollection,
+    saveMetadata,
+    markInferenceFailed,
+    getAllMetadata,
+    getMetadataForCollection,
 };
