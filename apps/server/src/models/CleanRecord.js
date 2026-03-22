@@ -23,7 +23,7 @@ const CleanRecordSchema = new Schema(
     },
 
     // ── Optional flattened fields (for fast querying) ──
-    // (🔥 best-of-both-worlds addition)
+    // (best-of-both-worlds addition)
     searchable: {
       type: Map,
       of: Schema.Types.Mixed,

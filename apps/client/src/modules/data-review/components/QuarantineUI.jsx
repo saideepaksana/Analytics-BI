@@ -102,7 +102,7 @@ function QuarantineUI({
 
       <div className="quarantine-top-actions">
         <button type="button" className="action-btn" onClick={handleRestoreAll} disabled={busy}>
-          Restore All Valid
+          Restore All
         </button>
         <button type="button" className="action-btn danger" onClick={handleDeleteAll} disabled={busy}>
           Delete All
