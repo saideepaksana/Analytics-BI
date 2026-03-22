@@ -25,8 +25,48 @@ const looksNumericByName = (key) =>
 const isPositiveOnlyNumericField = (key) => hasNameToken(key, POSITIVE_ONLY_NUMERIC_TOKENS);
 
 const resolveCleanerForColumn = (schemaColumn) => {
-    const type = schemaColumn.type?.toLowerCase();
+    const type = (schemaColumn.type || schemaColumn.dataType)?.toLowerCase();
+    
+    // Handle date types
     if (DATE_TYPES.has(type)) return parseDate;
+    
+    // For "mixed" type, use the role + sample values to decide
+    if (type === 'mixed') {
+        // If classified as a measure, treat as numeric
+        const role = String(schemaColumn.role || '').toLowerCase();
+        if (role === 'measure') {
+            return TYPE_CLEANER_MAP.number;
+        }
+        
+        // Otherwise, analyze sample values to pick the best cleaner
+        const samples = schemaColumn.sampleValues || [];
+        
+        // Count types in samples
+        let numericCount = 0;
+        let booleanCount = 0;
+        let stringCount = 0;
+        
+        for (const val of samples) {
+            if (typeof val === 'number') numericCount++;
+            else if (typeof val === 'boolean') booleanCount++;
+            else if (typeof val === 'string') {
+                // Check if string represents a number or boolean
+                if (!isNaN(parseFloat(val)) && isFinite(val)) numericCount++;
+                else if (['true', 'false', '1', '0', 'yes', 'no', 'y', 'n'].includes(val.toLowerCase())) booleanCount++;
+                else stringCount++;
+            }
+        }
+        
+        // Pick cleaner based on dominant type in samples
+        if (numericCount > booleanCount && numericCount > stringCount) {
+            return TYPE_CLEANER_MAP.number;
+        } else if (booleanCount > stringCount) {
+            return TYPE_CLEANER_MAP.boolean;
+        } else {
+            return TYPE_CLEANER_MAP.string;
+        }
+    }
+    
     return TYPE_CLEANER_MAP[type] || null;
 };
 
@@ -36,7 +76,7 @@ const semanticValidateRow = (row, schemaMap) => {
 
     for (const [key, value] of Object.entries(row)) {
         const lowerKey = key.toLowerCase();
-        const meta = schemaMap[key];
+        const meta = schemaMap[lowerKey];
 
         if (!meta) continue;
 
@@ -192,10 +232,11 @@ class DTSEngineStream extends Transform {
         this.schemaMap = {};
 
         for (const col of inferredSchema) {
-            this.schemaMap[col.name] = {
+            const normalizedColName = String(col.name || '').toLowerCase();
+            this.schemaMap[normalizedColName] = {
                 cleanerFn: resolveCleanerForColumn(col),
                 nullable: col.nullable === true, // ─ Default to required (non-nullable) ─
-                type: col.type,
+                type: col.type || col.dataType,
                 role: col.role,
                 constraints: col.constraints || {} //  extensible
             };
@@ -209,7 +250,8 @@ class DTSEngineStream extends Transform {
 
         // ── 1. Cleaning + Structural Validation ───────────────
         for (const [key, rawValue] of Object.entries(chunk)) {
-            const colMeta = this.schemaMap[key];
+            const lowerKey = key.toLowerCase();
+            const colMeta = this.schemaMap[lowerKey];
 
             if (!colMeta) {
                 cleanedRow[key] = rawValue;
@@ -303,7 +345,8 @@ const transformRows = (rows, datasetId, inferredSchema = []) => {
 
         // 1. Cleaning + Structural Validation
         for (const [key, rawValue] of Object.entries(row)) {
-            const colMeta = engine.schemaMap[key];
+            const lowerKey = key.toLowerCase();
+            const colMeta = engine.schemaMap[lowerKey];
 
             if (!colMeta) {
                 cleanedRow[key] = rawValue;
@@ -443,7 +486,8 @@ const cleanAndNormalizeRow = (candidateData, schemaMap = {}) => {
         let cleanedValue = value;
 
         // Get schema info for this field if available
-        const colMeta = schemaMap[key];
+        const lowerKey = key.toLowerCase();
+        const colMeta = schemaMap[lowerKey];
         const type = colMeta?.type?.toLowerCase();
 
         // Handle null/undefined

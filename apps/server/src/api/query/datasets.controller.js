@@ -8,8 +8,9 @@ const { validateRow, cleanAndNormalizeRow, semanticValidateRow } = require("../.
 const buildSchemaMap = (metadataSchema = []) => {
   const schemaMap = {};
   for (const col of metadataSchema) {
-    schemaMap[col.name] = {
-      type: col.type || col.dataType,
+    const normalizedColName = String(col.name || '').toLowerCase();
+    schemaMap[normalizedColName] = {
+      type: (col.type || col.dataType)?.toLowerCase(),
       nullable: col.nullable === true, // ─ Respect the explicit nullable flag (default is false/required) ─
       constraints: col.constraints || {}
     };

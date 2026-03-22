@@ -99,7 +99,8 @@ const normalizeRowWithSchema = (row = {}, schemaMap = {}) => {
     const normalized = { ...row };
 
     for (const key of Object.keys(normalized)) {
-        const colMeta = schemaMap[key];
+        const lowerKey = key.toLowerCase();
+        const colMeta = schemaMap[lowerKey];
         if (!colMeta) continue;
 
         const type = colMeta.type?.toLowerCase();
