@@ -198,7 +198,7 @@ function classifyColumn(columnName, sampleValues, totalRows = 0) {
     else if (dataType === "number") {
         const lowCardinality = uniqueCount <= 12 && cardinalityRatio <= 0.2;
 
-        if (measHits >= dimHits) {
+        if (measHits > dimHits) {
             role = "measure";
             confidence = 0.9;
         } else if (lowCardinality) {
