@@ -1,3 +1,6 @@
+// API routes for file upload configuration
+
+// File upload middleware (multer)
 const express = require("express");
 const multer = require("multer");
 const path = require("path");
@@ -5,6 +8,7 @@ const { uploadFile } = require("./upload.controller");
 
 const router = express.Router();
 
+// Allowed file types
 const allowedExtensions = [".csv", ".xls", ".xlsx"];
 const allowedMimeTypes = [
   "text/csv",
@@ -14,17 +18,18 @@ const allowedMimeTypes = [
   "text/comma-separated-values",
   "text/plain",
   "application/vnd.ms-excel",
-  "application/vnd.ms-excel.sheet.macroEnabled.12",
+  "application/vnd.ms-excel.sheet_macroEnabled.12",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   "application/octet-stream",
 ];
 
+// File stored in memory (not disk)
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
     fileSize: 100 * 1024 * 1024, // 100MB
   },
-  fileFilter: (req, file, cb) => {
+  fileFilter: (req, file, cb) => { // Checks file extension
     const ext = path.extname(file.originalname).toLowerCase();
     const hasValidExtension = allowedExtensions.includes(ext);
 
@@ -40,6 +45,10 @@ const upload = multer({
   },
 });
 
+// Wraps multer middleware
+// Handles:
+// - File too large errors
+// - Invalid file errors
 const handleUpload = (req, res, next) => {
   const uploadMiddleware = upload.single("file");
 
@@ -61,6 +70,7 @@ const handleUpload = (req, res, next) => {
   });
 };
 
+// Route: Client → multer → validation → uploadFile()
 router.post("/", handleUpload, uploadFile);
 
 module.exports = router;
