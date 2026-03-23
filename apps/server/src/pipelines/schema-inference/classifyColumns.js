@@ -33,9 +33,8 @@ const MEASURE_NAME_KEYWORDS = [
 const DIMENSION_SUFFIXES = ["_id", "_code", "_key", "_no", "_num", "_ref"];
 
 
-/* =========================
-   Utility Helpers
-   ========================= */
+/* Utility Helpers */
+
 
 // Treat null / undefined / "" as missing
 function isMissingValue(v) {
@@ -109,9 +108,7 @@ function isLikelyDateString(value) {
 }
 
 
-/* =========================
-   Core: Data Type Inference
-   ========================= */
+/* Core: Data Type Inference */
 
 /**
  * Infer dominant data type from sample values
@@ -216,7 +213,7 @@ function classifyColumn(columnName, sampleValues, totalRows = 0) {
         confidence = 0.7;
     }
 
-    /* ========= AGGREGATION HINT ========= */
+    /*  AGGREGATION HINT  */
 
     if (role === "measure") {
         if (normalizedName.includes("rate") || normalizedName.includes("percent")) {
@@ -235,9 +232,7 @@ function classifyColumn(columnName, sampleValues, totalRows = 0) {
 }
 
 
-/* =========================
-   Main Driver Function
-   ========================= */
+/* Main Driver Function */
 
 /**
  * Runs classification on full dataset

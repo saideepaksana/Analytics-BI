@@ -15,11 +15,7 @@
 const mongoose = require("mongoose");
 const { classifyAllColumns } = require("./classifyColumns");
 const { detectRelationships } = require("./relationshipMapper");
-const {
-    saveMetadata,
-    markInferenceFailed,
-    getAllMetadata,
-} = require("./updateMetadata");
+const { saveMetadata, markInferenceFailed, getAllMetadata,} = require("./updateMetadata");
 
 const SAMPLE_SIZE = 100;
 
@@ -27,7 +23,7 @@ const SAMPLE_SIZE = 100;
  * Safely sample documents from a MongoDB collection.
  * Falls back to a normal limited find if $sample is not available or fails.
  */
-async function sampleDocuments(collectionName, limit = SAMPLE_SIZE) {
+async function sampleDocuments(collectionName, limit = SAMPLE_SIZE) {   // document's here mean rows
     if (!mongoose.connection || !mongoose.connection.db) {
         throw new Error("MongoDB connection is not ready");
     }
@@ -42,7 +38,7 @@ async function sampleDocuments(collectionName, limit = SAMPLE_SIZE) {
     const sampleSize = Math.max(1, Math.min(limit, estimatedCount));
 
     try {
-        return await collection.aggregate([{ $sample: { size: sampleSize } }]).toArray();
+        return await collection.aggregate([{ $sample: { size: sampleSize } }]).toArray();   // randomly samples documents.
     } catch (err) {
         // Fallback for environments where $sample is not ideal.
         return await collection.find({}).limit(sampleSize).toArray();

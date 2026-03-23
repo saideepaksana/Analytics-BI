@@ -1,9 +1,6 @@
 /**
  * relationshipMapper.js
  *
- * REQ-2.5: Automatically link related data tables so the Visualization
- * wizard has all the information it needs for complex charts.
- *
  * WHAT THIS FILE DOES:
  * Compares every column in every collection against every column in every
  * other collection, scores each pair using 4 signals, and emits only
@@ -14,17 +11,6 @@
  *   2. FK pattern match      +0.50  (column base entity matches toCollection name)
  *   3. Value overlap         +0.00 to +0.30  (actual sample values intersect)
  *   4. High cardinality      +0.10  (column has many unique values → likely a key)
- *
- * BUGS FIXED:
- *   - Early filter no longer skips same-name column pairs that lack FK suffixes.
- *     (exact name match is a valid join signal even for non-key columns like "country")
- *   - isPrimaryKey uses a multi-token approach instead of a brittle singularize()
- *     so "order_id" correctly identifies as PK in "orders_2024" collections.
- *   - Value overlap now fires for exact-name-match pairs regardless of key-likeness,
- *     enabling detection of shared dimension columns (e.g. "region", "category").
- *   - bare "id" / "_id" column pairs are still excluded to prevent false positives.
- *   - Threshold lowered from 0.60 → 0.45 so a single strong signal (exact name
- *     match + type compatibility = 0.45) can surface relationships.
  */
 
 /* ─────────────────────────────────────────────
