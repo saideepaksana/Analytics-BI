@@ -23,7 +23,7 @@ An Analytics/BI web application with:
 
 ---
 
-## Version control (recommended)
+## Version control 
 
 - GitHub repository with `main` as protected branch
 - Feature branches for functional work: `feature/*`, `fix/*`, `chore/*`
@@ -32,7 +32,7 @@ An Analytics/BI web application with:
 - Semantic version tags (e.g. `v0.1.0`)
 - `CHANGELOG.md` or release notes for published versions
 
-## Deployment & tools (current + path to deploy)
+## Tools
 
 ### Current stack in repo
 - Node.js + Express (backend)
@@ -43,21 +43,6 @@ An Analytics/BI web application with:
 - Multer for upload multipart handling
 - `fast-csv`, `exceljs` parser support
 - npm workspaces structure with root scripts
-
-### Deployment roadmap (Tentative)
-1. Local development
-   - `npm install`
-   - `npm run lint` + `npm test`
-   - `npm run dev` (client + server concurrent)
-2. Containerise (Sprint 3)
-   - Dockerfiles for client/server, `docker-compose.yml` with MongoDB
-   - `docker compose up --build`
-3. Cloud deployment (Sprint 4)
-   - Use MongoDB Atlas, set env vars securely
-   - Run health check endpoint and log monitoring
-4. Production hardening
-   - HTTPS + reverse proxy (Nginx / ALB)
-   - CI/CD (GitHub Actions pipeline), rollbacks, alerting
 
 ---
 
