@@ -53,7 +53,6 @@ An Analytics/BI web application with:
    - Dockerfiles for client/server, `docker-compose.yml` with MongoDB
    - `docker compose up --build`
 3. Cloud deployment (Sprint 4)
-   - Build and push images to AWS ECR/Render/Railway
    - Use MongoDB Atlas, set env vars securely
    - Run health check endpoint and log monitoring
 4. Production hardening
@@ -83,7 +82,7 @@ An Analytics/BI web application with:
 
 - **Node.js** (recommended: 18+)
 - **MongoDB** running locally or a connection string to a MongoDB instance
-- (Optional) `mongosh` for inspecting the DB
+- `mongosh` for inspecting the DB
 
 ---
 
