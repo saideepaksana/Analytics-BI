@@ -15,7 +15,7 @@
 const mongoose = require("mongoose");
 const { classifyAllColumns } = require("./classifyColumns");
 const { detectRelationships } = require("./relationshipMapper");
-const { saveMetadata, markInferenceFailed, getAllMetadata,} = require("./updateMetadata");
+const { saveMetadata, markInferenceFailed, getAllMetadata, } = require("./updateMetadata");
 
 const SAMPLE_SIZE = 100;
 
