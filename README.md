@@ -39,17 +39,17 @@ An Analytics/BI web application with:
 - React + Vite (frontend)
 - MongoDB (local or Atlas), Mongoose ODM
 - GridFS for file ingestion storage
-- Socket.IO for realtime updates
+- Socket.IO for real-time updates
 - Multer for upload multipart handling
 - `fast-csv`, `exceljs` parser support
 - npm workspaces structure with root scripts
 
-### Recommended deployment roadmap
+### Deployment roadmap (Tentative)
 1. Local development
    - `npm install`
    - `npm run lint` + `npm test`
    - `npm run dev` (client + server concurrent)
-2. Containerize (Sprint 3)
+2. Containerise (Sprint 3)
    - Dockerfiles for client/server, `docker-compose.yml` with MongoDB
    - `docker compose up --build`
 3. Cloud deployment (Sprint 4)
