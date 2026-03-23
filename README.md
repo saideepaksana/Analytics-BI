@@ -23,6 +23,45 @@ An Analytics/BI web application with:
 
 ---
 
+## Version control (recommended)
+
+- GitHub repository with `main` as protected branch
+- Feature branches for functional work: `feature/*`, `fix/*`, `chore/*`
+- Pull Request workflow (review + approvals before merge)
+- PR checks: lint, test, build
+- Semantic version tags (e.g. `v0.1.0`)
+- `CHANGELOG.md` or release notes for published versions
+
+## Deployment & tools (current + path to deploy)
+
+### Current stack in repo
+- Node.js + Express (backend)
+- React + Vite (frontend)
+- MongoDB (local or Atlas), Mongoose ODM
+- GridFS for file ingestion storage
+- Socket.IO for realtime updates
+- Multer for upload multipart handling
+- `fast-csv`, `exceljs` parser support
+- npm workspaces structure with root scripts
+
+### Recommended deployment roadmap
+1. Local development
+   - `npm install`
+   - `npm run lint` + `npm test`
+   - `npm run dev` (client + server concurrent)
+2. Containerize (Sprint 3)
+   - Dockerfiles for client/server, `docker-compose.yml` with MongoDB
+   - `docker compose up --build`
+3. Cloud deployment (Sprint 4)
+   - Build and push images to AWS ECR/Render/Railway
+   - Use MongoDB Atlas, set env vars securely
+   - Run health check endpoint and log monitoring
+4. Production hardening
+   - HTTPS + reverse proxy (Nginx / ALB)
+   - CI/CD (GitHub Actions pipeline), rollbacks, alerting
+
+---
+
 ## Tech stack
 
 ### Frontend (`apps/client`)
