@@ -37,7 +37,7 @@ An Analytics/BI web application with:
 ### Current stack in repo
 - Node.js + Express (backend)
 - React + Vite (frontend)
-- MongoDB (local or Atlas), Mongoose ODM
+- MongoDB (local), Mongoose ODM
 - GridFS for file ingestion storage
 - Socket.IO for real-time updates
 - Multer for upload multipart handling
