@@ -6,7 +6,7 @@
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │                           BROWSER (Port 5173)                                │
 │                                                                              │
-│  ┌────────────────────────────────────────────────────────────────────────┐  │
+│  ┌────────────────────────────────────────────────────────────────────────┐ │
 │  │ React Frontend (Vite + React)                                         │  │
 │  │ - Ingestion Wizard (file + mode + dataset picker)                     │  │
 │  │ - Live upload progress (Socket.IO)                                    │  │
@@ -14,12 +14,12 @@
 │  │ - Data Review modal (Preview / Quarantine / Relationships tabs)       │  │
 │  └─────────────────────────────┬───────────────────────────┬─────────────┘  │
 │                                │                           │                │
-│                      HTTP/Multipart (REST)         WebSocket (progress)    │
+│                      HTTP/Multipart (REST)         WebSocket (progress)     │
 │                                │                           │                │
 └────────────────────────────────┼───────────────────────────┼────────────────┘
                                  ↓                           ↓
             ┌────────────────────────────────────────────────────────────────┐
-            │                    EXPRESS SERVER (Port 5000)                 │
+            │                    EXPRESS SERVER (Port 5000)                  │
             │                                                                │
             │   Routes:                                                      │
             │   - POST   /api/upload                                         │
@@ -30,7 +30,7 @@
             │   - DELETE /api/datasets/:datasetId...                         │
             │                                                                │
             │   Middleware: CORS, express.json(), multer(memoryStorage)      │
-            │   Upload limits: 100MB, extension validation (.csv/.xls/.xlsx) │
+            │   Upload limits: 15MB, extension validation (.csv/.xls/.xlsx) │
             └───────────────────────────┬────────────────────────────────────┘
                                         │
                                         ↓
@@ -83,7 +83,7 @@
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │ 2) User clicks Upload                                                       │
 │    Frontend sends POST /api/upload (multipart form-data)                    │
-│    payload: file, mode, uploadId, datasetId(optional for append/replace)    │
+│    payload: file, mode, uploadId, datasetId  │
 └──────────────────────────────────────────────────────────────────────────────┘
                 │
                 ↓
@@ -93,7 +93,7 @@
 │    - mode in [new, append, replace]                                         │
 │    - append/replace requires datasetId                                       │
 │    - extension valid (.csv/.xls/.xlsx)                                      │
-│    - size <= 100MB                                                           │
+│    - size <= 15MB                                                           │
 └──────────────────────────────────────────────────────────────────────────────┘
                 │
         ┌───────┴────────────────────────────────────────────────────────────┐
@@ -168,7 +168,7 @@ User opens Data Review modal
         │      -> POST /quarantine/:rowIndex/restore
         │      -> refetch metadata
         │
-        ├─ User restores all valid quarantined rows
+        ├─ User restores all quarantined rows
         │      -> POST /quarantine/restore-all
         │      -> refetch metadata
         │
