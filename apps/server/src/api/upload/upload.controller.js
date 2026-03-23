@@ -1,18 +1,26 @@
-const { getBucket } = require("../../core/storage");
-const { Readable } = require("stream");
-const XLSX = require("xlsx");
-const { parse } = require("fast-csv");
-const Metadata = require("../../models/Metadata");
-const CleanRecord = require("../../models/CleanRecord");
-const DLQRecord = require("../../models/DLQRecord");
-const { processGridFsFile } = require("../../pipelines/parser/streamParser");
-const { classifyAllColumns } = require("../../pipelines/schema-inference/classifyColumns");
-const { detectRelationships } = require("../../pipelines/schema-inference/relationshipMapper");
-const { transformRows } = require("../../pipelines/dts/index");
-const { getIO } = require("../../core/socket");
+const { getBucket } = require("../../core/storage"); //Gets GridFS storage bucket
+const { Readable } = require("stream"); //Converts buffer → stream 
+const XLSX = require("xlsx"); //Reads Excel files
+const { parse } = require("fast-csv"); //Reads CSV files
+const Metadata = require("../../models/Metadata"); 
+const CleanRecord = require("../../models/CleanRecord"); 
+const DLQRecord = require("../../models/DLQRecord"); 
+//MongoDB models:
+//Metadata → dataset info
+//CleanRecord → valid rows
+//DLQRecord → invalid rows (Dead Letter Queue)
+const { processGridFsFile } = require("../../pipelines/parser/streamParser"); //Parses file from GridFS → gives rows.
+const { classifyAllColumns } = require("../../pipelines/schema-inference/classifyColumns");  //Detects column types (number, string..etc)
+const { detectRelationships } = require("../../pipelines/schema-inference/relationshipMapper"); //Finds relationships between datasets.
+const { transformRows } = require("../../pipelines/dts/index"); //Validates + transforms rows.
+const { getIO } = require("../../core/socket"); //for real-time progress updates
 
+//Some numeric fields can be negative
 const SIGNED_NUMERIC_FIELDS = new Set(["base_excess"]);
 
+
+//Sends progress updates to frontend like 50% or 90%
+//If no uploadId → skip.
 const emitProgress = (uploadId, payload) => {
   if (!uploadId) {
     return;
@@ -21,23 +29,30 @@ const emitProgress = (uploadId, payload) => {
   if (!io) {
     return;
   }
+  //If socket not ready → skip.
   io.to(`upload:${uploadId}`).emit("upload:progress", { uploadId, ...payload });
 };
 
+//"eg : Total Amount ($)" → "total_amount"
+//Used for matching columns.
 const normalizeColumnName = (name) => String(name || "").toLowerCase().replace(/[^a-z0-9]+/g, "_");
 
+//Checks if column contains words like "price" or "amount".
 const hasToken = (name, tokens = []) => {
   const normalized = normalizeColumnName(name);
   return tokens.some((token) => {
     const safe = String(token).toLowerCase();
-    const pattern = new RegExp(`(^|_)${safe}(_|$)`);
+    const pattern = new RegExp(`(^|_)${safe}(_|$)`); //Ensures exact match
     return pattern.test(normalized);
   });
 };
 
+//These fields must be ≥ 0 for business semantics (price, amount, cost etc.)
 const isPositiveOnlyNumericField = (name) =>
   hasToken(name, ["price", "amount", "cost", "quantity", "count", "total"]);
 
+//Derives schema constraints (min=0) for non-signed numeric fields with financial/quantity tokens.
+//No constraints are added for non-numeric columns or fields in the signed exception list.
 const inferConstraints = (column) => {
   const normalized = normalizeColumnName(column.name);
   const constraints = {};
@@ -51,16 +66,19 @@ const inferConstraints = (column) => {
   return constraints;
 };
 
+//Finds last row number → used for appending new rows with correct rowNumber.
 const getNextRowBase = async (datasetId) => {
   const latest = await CleanRecord.findOne({ datasetId }).sort({ rowNumber: -1 }).select("rowNumber").lean();
   return latest?.rowNumber || 0;
 };
 
+//If column name missing → assign default like "column_1", "column_2"..etc based on position.
 const normalizeHeader = (value, index) => {
   const label = String(value ?? "").trim();
   return label || `column_${index + 1}`;
 };
 
+//Reads first row of CSV → returns column names
 const extractHeadersFromCsvBuffer = async (buffer) => {
   const csvStream = parse({ headers: false, ignoreEmpty: true, trim: true });
   Readable.from(buffer).pipe(csvStream);
@@ -73,6 +91,7 @@ const extractHeadersFromCsvBuffer = async (buffer) => {
   return [];
 };
 
+//Detects file type → calls correct function
 const extractHeadersFromWorkbookBuffer = async (buffer) => {
   const workbook = XLSX.read(buffer, { type: "buffer", raw: true });
   const firstSheetName = workbook.SheetNames[0];
@@ -107,6 +126,10 @@ const extractIncomingHeaders = async (buffer, originalName) => {
   throw new Error("Unsupported file format");
 };
 
+//Used in append mode
+//Compare existing dataset schema column names against incoming file headers
+//after normalization. Ensures count and normalized names match exactly.
+//Returns boolean and details for missing/unexpected names.
 const compareAppendColumns = ({ existingSchema = [], incomingHeaders = [] }) => {
   const existingNames = existingSchema
     .map((column) => column?.name)
@@ -138,6 +161,8 @@ const compareAppendColumns = ({ existingSchema = [], incomingHeaders = [] }) => 
   };
 };
 
+//Computes cross-dataset relationships from each dataset schema and writes
+//relationship lists back to each Metadata record for query/dashboard use.
 const refreshDatasetRelationships = async () => {
   const metadataDocs = await Metadata.find({})
     .select("datasetId schema")
@@ -185,6 +210,7 @@ const refreshDatasetRelationships = async () => {
   );
 };
 
+//This is the API handler(MAIN)
 exports.uploadFile = async (req, res) => {
   try {
     //File check
@@ -247,7 +273,7 @@ exports.uploadFile = async (req, res) => {
       }
     }
 
-    // GridFS bucket
+    //Obtain GridFS bucket handle from storage core. If unavailable, return service unavailable.
     let bucket;
     try {
       bucket = getBucket();
@@ -257,7 +283,7 @@ exports.uploadFile = async (req, res) => {
       });
     }
 
-    // Basic safety check for file name.
+    //Basic safety check for file name.
     const safeFileName = req.file.originalname.replace(/[^a-zA-Z0-9.\-_]/g, "_");
 
     console.log(`Uploading file: ${safeFileName}, mode: ${mode}`);
@@ -289,6 +315,8 @@ exports.uploadFile = async (req, res) => {
     const sourceFileId = String(uploadStream.id);
     emitProgress(uploadId, { stage: "stored", progress: 20, datasetId, fileId: sourceFileId });
 
+
+    //Deletes old data
     if (mode === "replace") {
       await Promise.all([
         CleanRecord.deleteMany({ datasetId }),
@@ -298,6 +326,7 @@ exports.uploadFile = async (req, res) => {
 
     const rowBase = mode === "append" ? await getNextRowBase(datasetId) : 0;
 
+    // /Extracts rows
     const parsedRows = [];
     emitProgress(uploadId, { stage: "parsing", progress: 35, datasetId });
     const { parseQuarantineRows = [] } = await processGridFsFile({
@@ -391,7 +420,7 @@ exports.uploadFile = async (req, res) => {
 
     emitProgress(uploadId, { stage: "done", progress: 100, datasetId });
     return res.status(200).json({
-      message: "File uploaded and processed successfully",
+      message: "File uploaded and processed successfully", //Sends success
       datasetId,
       fileId: sourceFileId,
       fileName: safeFileName,
@@ -400,7 +429,10 @@ exports.uploadFile = async (req, res) => {
       quarantinedCount: mode === "append" ? updatedQuarantineCount : dlqDocs.length,
       uploadId: uploadId || undefined
     });
-
+      //Error handling:
+//Handles:
+//corrupted Excel
+//internal errors
   } catch (error) {
     console.error("Upload Controller Error:", error);
     const uploadId = typeof req.body?.uploadId === "string" ? req.body.uploadId.trim() : "";
