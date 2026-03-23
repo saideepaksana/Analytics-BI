@@ -63,7 +63,9 @@ function QuarantineUI({
     setMessage("");
     try {
       const result = await onRestoreAll();
-      setMessage(`Restored ${result?.restoredCount || 0} rows. ${result?.failedCount || 0} still need updates.`);
+      const restoredCount = result?.restoredCount ?? result?.restoredRows?.length ?? 0;
+      const failedCount = result?.failedCount ?? result?.failedRows?.length ?? 0;
+      setMessage(`Restored ${restoredCount} rows. ${failedCount} still need updates.`);
     } catch (error) {
       setMessage(error.response?.data?.message || error.message || "Failed to restore quarantined rows");
     } finally {

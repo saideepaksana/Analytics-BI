@@ -295,23 +295,24 @@ exports.restoreAllValidQuarantinedRows = async (req, res) => {
       Metadata.findOne({ datasetId }).lean(),
     ]);
 
-    // ─ Build schemaMap from metadata ─
     const schemaMap = buildSchemaMap(metaDoc?.schema || []);
-
     const restoredRows = [];
     const failedRows = [];
 
+    // Force-restore all quarantined rows without validation.
+    // We still normalize values (dates, numbers, booleans, trimming) using schema context.
     for (const row of rows) {
-      // ─ FIRST: Clean/convert to proper types ─
-      const cleanedData = cleanAndNormalizeRow(row.rawData, schemaMap);
-      
-      // ─ THEN: Validate against full schema (ALL fields) ─
-      const semanticErrors = semanticValidateRow(cleanedData, schemaMap);
-      if (semanticErrors.length === 0) {
-        restoredRows.push({ _id: row._id, data: cleanedData, rowNumber: row.rowNumber });
-      } else {
-        failedRows.push({ rowNumber: row.rowNumber, errors: semanticErrors });
-      }
+      const sourceData =
+        row.rawData && typeof row.rawData === "object" && !Array.isArray(row.rawData)
+          ? row.rawData
+          : {};
+      const normalizedData = cleanAndNormalizeRow(sourceData, schemaMap);
+
+      restoredRows.push({
+        _id: row._id,
+        data: normalizedData,
+        rowNumber: row.rowNumber,
+      });
     }
 
     if (restoredRows.length > 0) {
@@ -337,6 +338,8 @@ exports.restoreAllValidQuarantinedRows = async (req, res) => {
 
     return res.json({
       message: `Restored ${restoredRows.length} rows`,
+      restoredCount: restoredRows.length,
+      failedCount: failedRows.length,
       restoredRows: restoredRows.map((r) => ({ rowNumber: r.rowNumber, data: r.data })),
       failedRows,
       rowCount: newRowCount,
