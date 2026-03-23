@@ -54,6 +54,7 @@ export const useMetadata = (datasetId, options = {}) => {
     }
   }, [datasetId, previewLimit, previewOffset]);
 
+  // Schema edits are persisted first, then metadata is refreshed for consistency.
   const updateSchema = useCallback(
     async (columnName, updates) => {
       if (!datasetId) {
@@ -72,6 +73,7 @@ export const useMetadata = (datasetId, options = {}) => {
         return;
       }
       const response = await deleteQuarantineRow(datasetId, rowIndex);
+      // Update local state immediately so row actions feel responsive.
       setState((prev) => {
         const nextRows = prev.quarantinedRows.filter((_, index) => index !== rowIndex);
         return {
@@ -119,7 +121,7 @@ export const useMetadata = (datasetId, options = {}) => {
         return;
       }
 
-      // Backend-only validation pass before restore.
+      // Single-row restore enforces backend validation before moving data back to clean records.
       await validateQuarantineRow(datasetId, rowIndex, updatedData);
 
       const response = await restoreQuarantineRow(datasetId, rowIndex, updatedData);
@@ -155,6 +157,7 @@ export const useMetadata = (datasetId, options = {}) => {
         return null;
       }
       const response = await restoreAllValidQuarantineRows(datasetId);
+      // Merge restored rows into preview, keep only rows that backend reports as failed.
       setState((prev) => {
         const failedRows = response?.failedRows || [];
         const failedRowNumbers = new Set(failedRows.map((row) => row.rowNumber));

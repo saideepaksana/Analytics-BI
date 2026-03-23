@@ -44,7 +44,7 @@ function DatasetsPage({ activeDatasetId, onOpenDataset }) {
 
     try {
       await deleteDataset(datasetId);
-      // Remove the deleted dataset from the list
+      // Optimistic local removal avoids a full refetch after a successful delete.
       setDatasets(prev => prev.filter(d => d.datasetId !== datasetId));
     } catch (deleteError) {
       setError(deleteError.response?.data?.message || deleteError.message || "Failed to delete dataset");

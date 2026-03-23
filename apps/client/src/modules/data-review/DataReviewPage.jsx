@@ -10,6 +10,7 @@ const PREVIEW_ROW_OPTIONS = [10, 20, 50, 100, 150, 200];
 function DataReviewPage({ datasetId }) {
   const [previewLimit, setPreviewLimit] = useState(50);
 
+  // Centralized metadata/actions hook used by all review sub-sections.
   const {
     schema,
     relationships,
@@ -27,6 +28,7 @@ function DataReviewPage({ datasetId }) {
     previewLimit
   });
 
+  // Keep render branches simple by precomputing whether any review content exists.
   const hasData = useMemo(() => {
     return Boolean(datasetId) && (
       schema.length ||
@@ -55,6 +57,7 @@ function DataReviewPage({ datasetId }) {
 
       {hasData ? (
         <>
+          {/* All quarantine actions call backend endpoints via useMetadata service methods. */}
           <QuarantineUI
             quarantinedRows={quarantinedRows}
             onUpdateAndRestore={(_, index, updatedData) => restoreQuarantinedRow(index, updatedData)}
