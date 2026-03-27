@@ -8,6 +8,7 @@ const connectDB = require("./core/db");
 const { initStorage } = require("./core/storage");
 const uploadRoutes = require("./api/upload/upload.routes");
 const datasetsRoutes = require("./api/query/datasets.routes");
+const exportRoutes = require("./api/export/exportRoutes");
 const { setIO } = require("./core/socket");
 const app = express();
 const server = http.createServer(app);
@@ -56,6 +57,9 @@ io.on("connection", (socket) => {
 //Routes
 app.use("/api/upload", uploadRoutes);
 app.use("/api/datasets", datasetsRoutes);
+
+// ...
+app.use("/api/export", exportRoutes);
 
 //check server status
 app.get("/", (req, res) => {
