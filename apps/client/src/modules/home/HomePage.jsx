@@ -116,7 +116,7 @@ function HomePage({ onNavigate }) {
               <h3>Upload New Dataset</h3>
               <p>Ingest a CSV or Excel file through the upload wizard</p>
             </div>
-            <ArrowRight size={16} style={{ color: "#4a6fa5", flexShrink: 0 }} />
+            <ArrowRight size={16} style={{ color: "var(--muted)", flexShrink: 0 }} />
           </button>
           <button
             type="button"
@@ -130,7 +130,7 @@ function HomePage({ onNavigate }) {
               <h3>Browse Datasets</h3>
               <p>View, review, and manage all your ingested datasets</p>
             </div>
-            <ArrowRight size={16} style={{ color: "#4a6fa5", flexShrink: 0 }} />
+            <ArrowRight size={16} style={{ color: "var(--muted)", flexShrink: 0 }} />
           </button>
         </div>
       </section>
