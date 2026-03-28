@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { Home, Upload, Database, Sparkles } from "lucide-react";
+import HomePage from "./modules/home/HomePage";
 import { IngestionWizard } from "./modules/ingestion";
 import { DataReviewPage } from "./modules/data-review";
 import DataReviewModal from "./modules/data-review/DataReviewModal";
@@ -8,7 +10,7 @@ import "./App.css";
 
 function App() {
   const [activeDatasetId, setActiveDatasetId] = useState("");
-  const [activeView, setActiveView] = useState("ingestion"); // ingestion | review | datasets
+  const [activeView, setActiveView] = useState("home"); // home | ingestion | review | datasets
   const [reviewModalDatasetId, setReviewModalDatasetId] = useState(null);
 
   const headerConfig = {
@@ -26,60 +28,60 @@ function App() {
     }
   };
 
-  const activeHeader = headerConfig[activeView] || headerConfig.ingestion;
+  const activeHeader = headerConfig[activeView] || null;
+
+  const navItems = [
+    { id: "home", label: "Home", icon: Home },
+    { id: "ingestion", label: "Ingestion", icon: Upload },
+    { id: "datasets", label: "Datasets", icon: Database },
+  ];
 
   return (
     <div className="app-frame">
       <aside className="app-sidebar" aria-label="Primary navigation">
         <div className="sidebar-brand">
-          <div className="sidebar-mark" aria-hidden="true">BI</div>
+          <div className="sidebar-mark" aria-hidden="true">
+            <Sparkles size={18} />
+          </div>
           <div>
             <div className="sidebar-title">Analytics BI</div>
-            <div className="sidebar-subtitle">Sprint 1</div>
+            <div className="sidebar-subtitle">Data Intelligence Platform</div>
           </div>
         </div>
 
         <nav className="sidebar-nav">
-          <button
-            type="button"
-            className={`nav-item ${activeView === "ingestion" ? "active" : ""}`}
-            onClick={() => setActiveView("ingestion")}
-          >
-            Ingestion
-          </button>
-          <button
-            type="button"
-            className={`nav-item ${activeView === "datasets" ? "active" : ""}`}
-            onClick={() => setActiveView("datasets")}
-          >
-            Datasets
-          </button>
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                className={`nav-item ${activeView === item.id ? "active" : ""}`}
+                onClick={() => setActiveView(item.id)}
+              >
+                <Icon size={17} className="nav-item-icon" />
+                <span>{item.label}</span>
+              </button>
+            );
+          })}
         </nav>
 
-        {/* {uploadSummary ? (
-          <section className="sidebar-summary">
-            <div className="sidebar-summary-title">Last Upload</div>
-            <div className="sidebar-summary-row">
-              <span className="muted">Dataset</span>
-              <span className="mono">{uploadSummary.datasetId}</span>
-            </div>
-            <div className="sidebar-summary-row">
-              <span className="muted">Rows</span>
-              <span>{uploadSummary.rowCount}</span>
-            </div>
-            <div className="sidebar-summary-row">
-              <span className="muted">Quarantine</span>
-              <span>{uploadSummary.quarantinedCount}</span>
-            </div>
-          </section>
-        ) : null} */}
+        <div className="sidebar-footer">
+          <div className="sidebar-footer-badge">v1.0 • Sprint 1</div>
+        </div>
       </aside>
 
       <main className="app-shell">
-        <header className="app-header">
-          <h1>{activeHeader.title}</h1>
-          <p>{activeHeader.subtitle}</p>
-        </header>
+        {activeHeader && (
+          <header className="app-header">
+            <h1>{activeHeader.title}</h1>
+            <p>{activeHeader.subtitle}</p>
+          </header>
+        )}
+
+        {activeView === "home" ? (
+          <HomePage onNavigate={setActiveView} />
+        ) : null}
 
         {activeView === "ingestion" ? (
           <>

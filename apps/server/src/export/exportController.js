@@ -1,6 +1,6 @@
-const { ExportLog } = require("../../models/exportLog");
-const { CleanRecord } = require("../../models/CleanRecord");
-const { Metadata } = require("../../models/Metadata");
+const { ExportLog } = require("../models/exportLog");
+const { CleanRecord } = require("../models/CleanRecord");
+const { Metadata } = require("../models/Metadata");
 const ExcelJS = require("exceljs");
 const { Parser: CsvParser } = require("json2csv");
 const PDFDocument = require("pdfkit");
