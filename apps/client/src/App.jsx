@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Home, Upload, Database, Sparkles } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Home, Upload, Database, Sparkles, Sun, Moon } from "lucide-react";
 import HomePage from "./modules/home/HomePage";
 import { IngestionWizard } from "./modules/ingestion";
 import { DataReviewPage } from "./modules/data-review";
@@ -12,6 +12,9 @@ function App() {
   const [activeDatasetId, setActiveDatasetId] = useState("");
   const [activeView, setActiveView] = useState("home"); // home | ingestion | review | datasets
   const [reviewModalDatasetId, setReviewModalDatasetId] = useState(null);
+  
+  // defaulting to white mode (Zoho-like clean theme)
+  const [theme, setTheme] = useState("light");
 
   const headerConfig = {
     ingestion: {
@@ -37,7 +40,16 @@ function App() {
   ];
 
   return (
-    <div className="app-frame">
+    <div className="app-frame" data-theme={theme} style={{ position: "relative" }}>
+      <button 
+        className="theme-toggle" 
+        onClick={() => setTheme(theme === "light" ? "dark" : "light")}
+        aria-label="Toggle theme"
+        title="Toggle Light/Dark Mode"
+      >
+        {theme === "light" ? <Moon size={18} /> : <Sun size={18} />}
+      </button>
+
       <aside className="app-sidebar" aria-label="Primary navigation">
         <div className="sidebar-brand">
           <div className="sidebar-mark" aria-hidden="true">
