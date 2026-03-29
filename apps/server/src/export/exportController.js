@@ -7,7 +7,8 @@ const PDFDocument = require("pdfkit");
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
 async function getRecords(datasetId) {
-  return CleanRecord.find({ datasetId }).lean();
+  const records = await CleanRecord.find({ datasetId }).lean();
+  return records.map(r => r.data || {});
 }
 
 // ─── CSV ──────────────────────────────────────────────────────────────────────
@@ -17,7 +18,11 @@ async function exportCSV(req, res) {
     const records = await getRecords(datasetId);
     if (!records.length) return res.status(404).json({ error: "No records found." });
 
-    const fields = Object.keys(records[0]).filter((k) => k !== "_id" && k !== "__v");
+    const meta = await Metadata.findOne({ datasetId }).lean();
+    const fields = meta?.schema?.length 
+      ? meta.schema.map(c => c.name) 
+      : Object.keys(records[0]);
+
     const csv = new CsvParser({ fields }).parse(records);
 
     await ExportLog.create({ datasetId, format: "csv", exportedBy: req.user?.id || "anonymous", recordCount: records.length });
@@ -43,7 +48,10 @@ async function exportExcel(req, res) {
     workbook.creator = "Analytics BI";
     const sheet = workbook.addWorksheet("Data", { views: [{ state: "frozen", ySplit: 1 }] });
 
-    const fields = Object.keys(records[0]).filter((k) => k !== "_id" && k !== "__v");
+    const fields = meta?.schema?.length 
+      ? meta.schema.map(c => c.name) 
+      : Object.keys(records[0]);
+
     sheet.columns = fields.map((f) => ({ header: f, key: f, width: Math.max(f.length + 4, 16) }));
 
     sheet.getRow(1).eachCell((cell) => {
@@ -101,7 +109,11 @@ async function exportPDF(req, res) {
     doc.fillColor("#94B8D8").fontSize(10).text(`Dataset: ${datasetId}  |  ${new Date().toLocaleString()}`, 40, 40);
     doc.moveDown(3);
 
-    const fields = Object.keys(records[0]).filter((k) => k !== "_id" && k !== "__v");
+    const meta = await Metadata.findOne({ datasetId }).lean();
+    const fields = meta?.schema?.length 
+      ? meta.schema.map(c => c.name) 
+      : Object.keys(records[0]);
+
     const colWidth = Math.min(120, (doc.page.width - 80) / fields.length);
     let y = 80;
     const rowH = 20;

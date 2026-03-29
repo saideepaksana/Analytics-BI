@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { formatDateTime } from "../../core/utils/formatters";
 import { deleteDataset, listDatasets } from "../../services/datasets.service";
+import { downloadDatasetExport } from "../../services/export.service";
+import { Download, FileText, FileSpreadsheet, FileJson, ChevronDown } from "lucide-react";
 
 function DatasetsPage({ activeDatasetId, onOpenDataset }) {
   const [datasets, setDatasets] = useState([]);
@@ -8,6 +10,27 @@ function DatasetsPage({ activeDatasetId, onOpenDataset }) {
   const [error, setError] = useState("");
   const [deleting, setDeleting] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
+  
+  // Track which dataset's export dropdown is open:
+  const [openExportDropdown, setOpenExportDropdown] = useState(null);
+  const dropdownRef = useRef(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setOpenExportDropdown(null);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleExport = (datasetId, format) => {
+    downloadDatasetExport(datasetId, format);
+    setOpenExportDropdown(null);
+  };
+
 
   const fetchDatasets = useCallback(async () => {
     setLoading(true);
@@ -98,7 +121,7 @@ function DatasetsPage({ activeDatasetId, onOpenDataset }) {
                     <td>{dataset.quarantinedCount ?? 0}</td>
                     <td>{formatDateTime(dataset.createdAt)}</td>
                     <td>
-                      <div style={{ display: "flex", gap: "8px" }}>
+                      <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
                         <button
                           type="button"
                           className="action-btn"
@@ -106,6 +129,31 @@ function DatasetsPage({ activeDatasetId, onOpenDataset }) {
                         >
                           Open in Review
                         </button>
+                        
+                        <div className="export-dropdown-wrapper" ref={openExportDropdown === dataset.datasetId ? dropdownRef : null}>
+                          <button 
+                            type="button" 
+                            className="action-btn secondary-btn"
+                            onClick={() => setOpenExportDropdown(openExportDropdown === dataset.datasetId ? null : dataset.datasetId)}
+                          >
+                            <Download size={14} className="icon-left" /> Export <ChevronDown size={14} className="icon-right" />
+                          </button>
+                          
+                          {openExportDropdown === dataset.datasetId && (
+                            <div className="export-dropdown-menu">
+                              <button type="button" onClick={() => handleExport(dataset.datasetId, "csv")}>
+                                <FileText size={14} /> Export CSV
+                              </button>
+                              <button type="button" onClick={() => handleExport(dataset.datasetId, "xlsx")}>
+                                <FileSpreadsheet size={14} /> Export Excel
+                              </button>
+                              <button type="button" onClick={() => handleExport(dataset.datasetId, "pdf")}>
+                                <FileJson size={14} /> Export PDF
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
                         <button
                           type="button"
                           className="action-btn delete-btn"
