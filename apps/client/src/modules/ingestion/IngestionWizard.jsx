@@ -33,6 +33,7 @@ function IngestionWizard({ onCompleted }) {
   const [datasetsLoading, setDatasetsLoading] = useState(false);
   const [datasetsError, setDatasetsError] = useState("");
   const [availableDatasets, setAvailableDatasets] = useState([]);
+  const [relatedDatasets, setRelatedDatasets] = useState([]);
   const cancelSourceRef = useRef(null);
   const socketRef = useRef(null);
 
@@ -53,7 +54,7 @@ function IngestionWizard({ onCompleted }) {
 
   const canGoStep2 = Boolean(file) && !loading;
   const canGoStep3 = canGoStep2 && (!needsDatasetId || Boolean(datasetId.trim()));
-  const shouldShowProgress = currentStep === 3 && hasUploadStarted && stage !== "idle";
+  const shouldShowProgress = currentStep === 4 && hasUploadStarted && stage !== "idle";
 
   const resetProgressState = () => {
     setHasUploadStarted(false);
@@ -94,6 +95,23 @@ function IngestionWizard({ onCompleted }) {
   }, [file]);
 
   useEffect(() => () => cancelSourceRef.current?.cancel?.("Component unmounted"), []);
+
+  useEffect(() => {
+    if (currentStep === 3 && availableDatasets.length === 0 && !datasetsLoading) {
+      setDatasetsLoading(true);
+      setDatasetsError("");
+      listDatasets()
+        .then((data) => {
+          if (needsDatasetId && datasetId) {
+            setAvailableDatasets(data.filter(d => d.datasetId !== datasetId));
+          } else {
+            setAvailableDatasets(data);
+          }
+        })
+        .catch((err) => setDatasetsError(getRequestErrorMessage(err, "Failed to load datasets for linking")))
+        .finally(() => setDatasetsLoading(false));
+    }
+  }, [currentStep, availableDatasets.length, needsDatasetId, datasetId, datasetsLoading]);
 
   useEffect(() => {
     if (!uploadId) {
@@ -153,6 +171,7 @@ function IngestionWizard({ onCompleted }) {
         mode,
         uploadId: generatedUploadId,
         datasetId,
+        relatedDatasets,
         cancelToken: cancelSource?.token,
         onUploadProgress: (event) => {
           if (!event.total) return;
@@ -163,7 +182,7 @@ function IngestionWizard({ onCompleted }) {
 
       setProgress(100);
       setStage("done");
-      setCurrentStep(3);
+      setCurrentStep(4);
       onCompleted?.(response);
     } catch (uploadError) {
       console.error("Upload error details:", uploadError.response?.data || uploadError);
@@ -213,7 +232,7 @@ function IngestionWizard({ onCompleted }) {
     <section className="card wizard-card">
       <div className="wizard-head">
         <h2>Upload Data File</h2>
-        <p>Step {currentStep} of 3</p>
+        <p>Step {currentStep} of 4</p>
       </div>
 
       <div className="wizard-steps" aria-label="Upload wizard progress">
@@ -239,7 +258,15 @@ function IngestionWizard({ onCompleted }) {
           onClick={() => canGoStep3 && setCurrentStep(3)}
           disabled={!canGoStep3 || loading}
         >
-          3. Confirm & Upload
+          3. Dataset Linking
+        </button>
+        <button
+          type="button"
+          className={`step-pill ${currentStep === 4 ? "active" : ""}`}
+          onClick={() => canGoStep3 && setCurrentStep(4)}
+          disabled={!canGoStep3 || loading}
+        >
+          4. Confirm & Upload
         </button>
       </div>
 
@@ -322,11 +349,72 @@ function IngestionWizard({ onCompleted }) {
             <button
               type="button"
               className="primary-btn"
+              onClick={() => setCurrentStep(3)}
+              disabled={!canGoStep3}
+            >
+              Next: Dataset Linking
+            </button>
+          </div>
+        </>
+      ) : null}
+
+      {currentStep === 3 ? (
+        <>
+          <div className="mode-grid" style={{ display: 'block' }}>
+            <h3>Link Relationships (Optional)</h3>
+            <p className="muted" style={{ marginBottom: "1rem" }}>
+              Select existing datasets to auto-detect joins with this upload. 
+              Skipping this will improve import speed for large files.
+            </p>
+            {datasetsLoading ? <p>Loading available datasets...</p> : null}
+            {datasetsError ? <p className="error-text">{datasetsError}</p> : null}
+            {!datasetsLoading && !datasetsError && availableDatasets.length === 0 ? (
+               <p>No other datasets available to link.</p>
+            ) : null}
+            {!datasetsLoading && availableDatasets.length > 0 ? (
+               <div className="dataset-picker-list" style={{ maxHeight: "300px", overflowY: "auto" }}>
+                   {availableDatasets.map((dataset) => {
+                       const isSelected = relatedDatasets.includes(dataset.datasetId);
+                       return (
+                           <button
+                             key={dataset.datasetId}
+                             type="button"
+                             className={`dataset-picker-item ${isSelected ? "active" : ""}`}
+                             onClick={() => {
+                                 if (isSelected) {
+                                     setRelatedDatasets(relatedDatasets.filter(id => id !== dataset.datasetId));
+                                 } else {
+                                     setRelatedDatasets([...relatedDatasets, dataset.datasetId]);
+                                 }
+                             }}
+                             disabled={loading}
+                             style={{ textAlign: "left" }}
+                           >
+                             <div className="dataset-picker-item-head">
+                               <strong className="mono">{dataset.datasetId}</strong>
+                               <span className="dataset-picker-item-mode">
+                                  {isSelected ? "Selected" : "Select"}
+                               </span>
+                             </div>
+                             <p>{dataset.fileName || "-"}</p>
+                           </button>
+                       );
+                   })}
+               </div>
+            ) : null}
+          </div>
+          <div className="wizard-actions">
+            <button type="button" className="ghost-btn" onClick={() => setCurrentStep(2)} disabled={loading}>
+              Back
+            </button>
+            <button
+              type="button"
+              className="primary-btn"
               onClick={() => {
                 resetProgressState();
-                setCurrentStep(3);
+                setCurrentStep(4);
               }}
-              disabled={!canGoStep3}
+              disabled={loading}
             >
               Next: Confirm Upload
             </button>
@@ -334,7 +422,7 @@ function IngestionWizard({ onCompleted }) {
         </>
       ) : null}
 
-      {currentStep === 3 ? (
+      {currentStep === 4 ? (
         <>
           <div className="confirm-card">
             <h3>Review Upload Details</h3>
@@ -360,7 +448,7 @@ function IngestionWizard({ onCompleted }) {
               className="ghost-btn"
               onClick={() => {
                 resetProgressState();
-                setCurrentStep(2);
+                setCurrentStep(3);
               }}
               disabled={loading}
             >

@@ -161,12 +161,17 @@ const compareAppendColumns = ({ existingSchema = [], incomingHeaders = [] }) => 
   };
 };
 
-//Computes cross-dataset relationships from each dataset schema and writes
-//relationship lists back to each Metadata record for query/dashboard use.
-const refreshDatasetRelationships = async () => {
-  const metadataDocs = await Metadata.find({})
-    .select("datasetId schema")
+const refreshDatasetRelationships = async (targetDatasetId, explicitlyRelatedDatasetIds = []) => {
+  if (!Array.isArray(explicitlyRelatedDatasetIds) || explicitlyRelatedDatasetIds.length === 0) {
+    return; // Opt-in relationship mapping: skip evaluating relationships if user didn't select any.
+  }
+
+  const datasetsToLink = [targetDatasetId, ...explicitlyRelatedDatasetIds];
+  const metadataDocs = await Metadata.find({ datasetId: { $in: datasetsToLink } })
+    .select("datasetId schema relationships")
     .lean();
+
+  if (metadataDocs.length < 2) return;
 
   const relationshipInputs = metadataDocs
     .filter((doc) => typeof doc.datasetId === "string" && doc.datasetId.trim().length > 0)
@@ -179,29 +184,30 @@ const refreshDatasetRelationships = async () => {
       }))
     }));
 
-  const detectedRelationships = relationshipInputs.length >= 2
-    ? detectRelationships(relationshipInputs)
-    : [];
+  const detectedRelationships = detectRelationships(relationshipInputs);
 
-  const byDataset = new Map(metadataDocs.map((doc) => [doc.datasetId, []]));
+  // Safely merge edges so we don't accidentally overwrite non-intersecting edges matching third-party collections
+  const docsToUpdate = metadataDocs.map((doc) => {
+    const retainedOldEdges = (doc.relationships || []).filter((edge) => {
+      const otherSide = edge.fromCollection === doc.datasetId ? edge.toCollection : edge.fromCollection;
+      return !datasetsToLink.includes(otherSide);
+    });
 
-  for (const relationship of detectedRelationships) {
-    const { strategy, ...safeRelationship } = relationship;
+    const newEdgesForDoc = detectedRelationships
+      .filter((rel) => rel.fromCollection === doc.datasetId || rel.toCollection === doc.datasetId)
+      .map((rel) => {
+        const { strategy, ...safeRelationship } = rel;
+        return safeRelationship;
+      });
 
-    if (byDataset.has(safeRelationship.fromCollection)) {
-      byDataset.get(safeRelationship.fromCollection).push(safeRelationship);
-    }
-
-    if (
-      safeRelationship.toCollection !== safeRelationship.fromCollection &&
-      byDataset.has(safeRelationship.toCollection)
-    ) {
-      byDataset.get(safeRelationship.toCollection).push(safeRelationship);
-    }
-  }
+    return {
+      datasetId: doc.datasetId,
+      relationships: [...retainedOldEdges, ...newEdgesForDoc]
+    };
+  });
 
   await Promise.all(
-    Array.from(byDataset.entries()).map(([datasetId, relationships]) =>
+    docsToUpdate.map(({ datasetId, relationships }) =>
       Metadata.updateOne(
         { datasetId },
         { $set: { relationships } }
@@ -224,6 +230,13 @@ exports.uploadFile = async (req, res) => {
     const uploadId = typeof req.body.uploadId === "string" ? req.body.uploadId.trim() : "";
     const requestedDatasetId =
       typeof req.body.datasetId === "string" ? req.body.datasetId.trim() : "";
+      
+    let explicitlyRelatedDatasets = [];
+    if (req.body.relatedDatasets) {
+       try {
+           explicitlyRelatedDatasets = JSON.parse(req.body.relatedDatasets);
+       } catch(e) { }
+    }
 
     let existingMeta = null;
 
@@ -413,7 +426,7 @@ exports.uploadFile = async (req, res) => {
 
     emitProgress(uploadId, { stage: "relationships", progress: 96, datasetId });
     try {
-      await refreshDatasetRelationships();
+      await refreshDatasetRelationships(datasetId, explicitlyRelatedDatasets);
     } catch (relationshipError) {
       console.warn("[Upload] Relationship mapping refresh failed:", relationshipError.message);
     }

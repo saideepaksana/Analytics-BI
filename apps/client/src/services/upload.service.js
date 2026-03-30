@@ -5,6 +5,7 @@ export const uploadDatasetFile = async ({
   mode,
   uploadId,
   datasetId,
+  relatedDatasets,
   cancelToken,
   onUploadProgress,
 }) => {
@@ -14,6 +15,9 @@ export const uploadDatasetFile = async ({
   formData.append("uploadId", uploadId);
   if (datasetId?.trim()) {
     formData.append("datasetId", datasetId.trim());
+  }
+  if (Array.isArray(relatedDatasets) && relatedDatasets.length > 0) {
+    formData.append("relatedDatasets", JSON.stringify(relatedDatasets));
   }
 
   const response = await apiClient.post("/upload", formData, {
