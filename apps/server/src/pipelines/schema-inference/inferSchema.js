@@ -159,6 +159,29 @@ async function runSchemaInference({
             `[SchemaInference] ✓ Metadata saved for "${collectionName}" (id: ${savedMeta._id})`
         );
 
+        // Step 6: Update cross-collection edges for previously existing datasets
+        for (const meta of existingMetadata) {
+            const mCollName = meta.collectionName || meta.datasetId;
+            const isRelatedToNew = relationships.some(r =>
+                (r.fromCollection === collectionName && r.toCollection === mCollName) ||
+                (r.toCollection === collectionName && r.fromCollection === mCollName)
+            );
+
+            if (isRelatedToNew) {
+                await saveMetadata(mCollName, {
+                    datasetId: meta.datasetId || mCollName,
+                    fileName: meta.fileName,
+                    sourceFileId: meta.sourceFileId,
+                    columns: meta.schema || meta.columns || [],
+                    relationships: relationships,
+                    totalRows: meta.totalRows ?? meta.rowCount ?? 0,
+                    uploadedBy: meta.uploadedBy,
+                    ingestionRule: meta.ingestionRule,
+                });
+                console.log(`[SchemaInference] ✓ Cross-collection links updated for "${mCollName}"`);
+            }
+        }
+
         return savedMeta;
     } catch (err) {
         console.error(`[SchemaInference] ✗ Failed for "${collectionName}":`, err.message);

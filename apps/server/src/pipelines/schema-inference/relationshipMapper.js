@@ -92,6 +92,9 @@ function isKeyLike(columnName) {
  * "customer_id" in "customer_orders" → base="customer", collTokens=["customer","order"] → PK ✓ (ambiguous but acceptable)
  */
 function isPrimaryKey(columnName, collectionName) {
+    const n = normalizeName(columnName);
+    if (n === "id" || n === "_id") return true;
+
     if (!isKeyLike(columnName)) return false;
     const base = extractBaseEntity(columnName);
     const baseTokens = tokenize(base);

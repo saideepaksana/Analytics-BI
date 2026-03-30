@@ -164,7 +164,7 @@ function classifyColumn(columnName, sampleValues, totalRows = 0) {
     const nonNull = sampleValues.filter((v) => !isMissingValue(v));
     const uniqueCount = new Set(nonNull.map((v) => String(v))).size;
 
-    const rowBase = Math.max(totalRows, nonNull.length, 1);
+    const rowBase = Math.max(nonNull.length, 1);
     const cardinalityRatio = uniqueCount / rowBase;
 
     // Heuristics
