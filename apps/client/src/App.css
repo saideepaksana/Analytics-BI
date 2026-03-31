@@ -164,12 +164,30 @@
   margin-bottom: 14px;
 }
 
+.datasets-page-card {
+  display: flex;
+  flex-direction: column;
+  min-height: clamp(420px, calc(100vh - 240px), 680px);
+}
+
+.datasets-page-card .table-wrap {
+  flex: 1;
+  max-height: calc(100vh - 330px);
+}
+
 .datasets-head h2 {
   margin: 0;
 }
 
 .datasets-head .muted {
   margin: 6px 0 0;
+}
+
+.dataset-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
 .dataset-row-active {

@@ -38,6 +38,10 @@ function IngestionWizard({ onCompleted }) {
   const socketRef = useRef(null);
 
   const needsDatasetId = mode === "append" || mode === "replace";
+  const selectedDataset = useMemo(
+    () => availableDatasets.find((dataset) => dataset.datasetId === datasetId) || null,
+    [availableDatasets, datasetId]
+  );
 
   const canSubmit = useMemo(() => {
     if (!file || loading) {
@@ -293,7 +297,7 @@ function IngestionWizard({ onCompleted }) {
               onClick={() => setCurrentStep(2)}
               disabled={!canGoStep2}
             >
-              Next: Ingestion Mode
+              Next
             </button>
           </div>
         </>
@@ -335,8 +339,8 @@ function IngestionWizard({ onCompleted }) {
                 >
                   Choose Existing Dataset
                 </button>
-                <span className={datasetId ? "mono dataset-picker-value" : "muted dataset-picker-value"}>
-                  {datasetId || "No dataset selected"}
+                <span className={datasetId ? "dataset-picker-value" : "muted dataset-picker-value"}>
+                  {selectedDataset?.fileName || "No dataset selected"}
                 </span>
               </div>
             </div>
@@ -352,7 +356,7 @@ function IngestionWizard({ onCompleted }) {
               onClick={() => setCurrentStep(3)}
               disabled={!canGoStep3}
             >
-              Next: Dataset Linking
+              Next
             </button>
           </div>
         </>
@@ -416,7 +420,7 @@ function IngestionWizard({ onCompleted }) {
               }}
               disabled={loading}
             >
-              Next: Confirm Upload
+              Next
             </button>
           </div>
         </>

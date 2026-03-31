@@ -21,6 +21,17 @@
   color: var(--text);
 }
 
+.panel-block h3 {
+  margin: 0 0 16px;
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+[data-theme='light'] .panel-block h3 {
+  color: #0b172a;
+}
+
 .warning-block {
   border-left: 3px solid var(--warning);
   background: rgba(245, 158, 11, 0.05);
@@ -145,10 +156,105 @@
   transition: all 150ms ease;
 }
 
+.quarantine-item {
+  align-items: flex-start;
+  gap: 16px;
+  background: var(--surface);
+}
+
 .schema-item:hover,
 .quarantine-item:hover {
   border-color: var(--border-strong);
   background: var(--surface-raised);
+}
+
+.quarantine-item-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.quarantine-row-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.quarantine-row-badge,
+.quarantine-row-issues {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.quarantine-row-badge {
+  background: var(--brand-glow);
+  color: var(--brand);
+  border: 1px solid var(--border-accent);
+}
+
+.quarantine-row-issues {
+  background: rgba(245, 158, 11, 0.12);
+  color: #d97706;
+  border: 1px solid rgba(245, 158, 11, 0.25);
+}
+
+.quarantine-item p {
+  margin: 0 0 8px;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.quarantine-error-text {
+  color: var(--text-secondary);
+}
+
+.quarantine-field-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.quarantine-field-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-soft);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.quarantine-field-chip strong {
+  color: var(--text);
+}
+
+[data-theme='light'] .warning-block {
+  background: #fffaf1;
+}
+
+[data-theme='light'] .quarantine-item {
+  background: #ffffff;
+  border-color: #d7e1ea;
+}
+
+[data-theme='light'] .quarantine-item:hover {
+  background: #f8fbff;
+}
+
+[data-theme='light'] .quarantine-field-chip {
+  background: #f8fafc;
+  color: #0f172a;
 }
 
 .schema-item-main {
@@ -232,6 +338,8 @@
 .row-actions {
   display: flex;
   gap: 6px;
+  flex-shrink: 0;
+  align-self: center;
 }
 
 /* ── Fix Form ── */

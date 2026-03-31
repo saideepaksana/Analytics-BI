@@ -168,6 +168,7 @@ body {
   box-shadow: var(--shadow-card);
   border-radius: 14px;
   padding: 20px;
+  color: var(--text);
   animation: rise-in 300ms ease-out;
   transition: all 300ms cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -175,14 +176,31 @@ body {
 .card:hover {
   border-color: var(--border-accent);
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
-  transform: translateY(-4px);
 }
 
 .card h2 {
   margin: 0 0 14px;
   font-size: 22px;
-  font-weight: 700;
+  font-weight: 800;
   letter-spacing: -0.3px;
+  color: var(--text);
+}
+
+.wizard-head h2,
+.datasets-head h2,
+.confirm-card h3,
+.modal-content h3,
+.ingestion-modal-card h3 {
+  color: var(--text);
+}
+
+[data-theme='light'] .card h2,
+[data-theme='light'] .wizard-head h2,
+[data-theme='light'] .datasets-head h2,
+[data-theme='light'] .confirm-card h3,
+[data-theme='light'] .modal-content h3,
+[data-theme='light'] .ingestion-modal-card h3 {
+  color: #0b172a;
 }
 
 /* ── Wizard ── */
@@ -230,7 +248,7 @@ body {
 
 .wizard-steps {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 6px;
   margin-bottom: 20px;
 }
@@ -245,6 +263,7 @@ body {
   font-size: 13px;
   font-weight: 600;
   transition: all 200ms ease;
+  min-width: 0;
 }
 
 .step-pill:not(:disabled):not(.active):hover {
@@ -541,13 +560,18 @@ button {
 .ingestion-modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: rgba(0, 0, 0, 0.24);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   display: grid;
   place-items: center;
-  padding: 18px;
+  padding: 24px;
   z-index: 1200;
+  overflow: hidden;
+}
+
+[data-theme='light'] .ingestion-modal-overlay {
+  background: rgba(15, 23, 42, 0.18);
 }
 
 .ingestion-modal-card {
@@ -647,15 +671,19 @@ button {
 
 .dataset-picker-card {
   width: min(820px, 100%);
+  max-height: min(80vh, 720px);
+  display: flex;
+  flex-direction: column;
 }
 
 .dataset-picker-list {
   margin-top: 10px;
-  max-height: 360px;
-  overflow: auto;
+  max-height: min(55vh, 420px);
+  overflow-y: auto;
   display: grid;
   grid-template-columns: 1fr;
   gap: 6px;
+  overscroll-behavior: contain;
 }
 
 .dataset-picker-item {
@@ -733,14 +761,19 @@ button:disabled {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: rgba(0, 0, 0, 0.24);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
+  padding: 18px;
   animation: fade-in 200ms ease-out;
+}
+
+[data-theme='light'] .modal-overlay {
+  background: rgba(15, 23, 42, 0.18);
 }
 
 .modal-dialog {
@@ -913,10 +946,10 @@ button:disabled {
 /* ── Review Tabs ── */
 .data-review-modal-tabs {
   display: flex;
-  gap: 4px;
+  gap: 8px;
   border-bottom: 1px solid var(--border);
-  padding: 8px 24px;
-  background: rgba(24, 24, 27, 0.5);
+  padding: 10px 24px;
+  background: var(--surface-soft);
   flex-shrink: 0;
   overflow-x: auto;
 }
@@ -925,7 +958,7 @@ button:disabled {
   appearance: none;
   background: transparent;
   border: 1px solid transparent;
-  color: var(--muted);
+  color: var(--text-secondary);
   font-size: 13px;
   font-weight: 600;
   padding: 8px 16px;
@@ -939,19 +972,30 @@ button:disabled {
 }
 
 .data-review-tab:hover:not(:disabled) {
-  color: var(--text-secondary);
-  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  background: var(--surface);
+  border-color: var(--border);
+}
+
+.data-review-tab:focus-visible {
+  outline: none;
+  border-color: var(--border-accent);
+  box-shadow: 0 0 0 3px var(--brand-glow);
 }
 
 .data-review-tab.active {
   color: var(--brand);
   background: var(--brand-glow);
-  border-color: rgba(6, 182, 212, 0.2);
+  border-color: var(--border-accent);
+  box-shadow: inset 0 0 0 1px rgba(6, 182, 212, 0.12);
 }
 
 .data-review-tab:disabled {
-  opacity: 0.35;
+  opacity: 0.8;
   cursor: not-allowed;
+  color: var(--text-secondary);
+  background: var(--surface);
+  border-color: var(--border);
 }
 
 .data-review-tab-badge {

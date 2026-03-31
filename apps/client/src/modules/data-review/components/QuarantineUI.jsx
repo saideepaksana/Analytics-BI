@@ -114,11 +114,30 @@ function QuarantineUI({
       {message ? <p className="quarantine-message">{message}</p> : null}
 
       <ul className="quarantine-list">
-        {quarantinedRows.map((row, index) => (
+        {quarantinedRows.map((row, index) => {
+          const previewEntries = Object.entries(row.rawData || {}).slice(0, 6);
+
+          return (
           <li key={`${row.rowNumber}-${index}`} className="quarantine-item">
-            <div>
-              <p><strong>Row:</strong> {row.rowNumber}</p>
-              <p><strong>Error:</strong> {(row.errors || []).join(", ")}</p>
+            <div className="quarantine-item-content">
+              <div className="quarantine-row-meta">
+                <span className="quarantine-row-badge">Row {row.rowNumber ?? index + 1}</span>
+                <span className="quarantine-row-issues">{(row.errors || []).length || 1} issue(s)</span>
+              </div>
+
+              <p className="quarantine-error-text">
+                <strong>Error:</strong> {(row.errors || []).join(", ") || "Validation issue detected"}
+              </p>
+
+              {previewEntries.length ? (
+                <div className="quarantine-field-list">
+                  {previewEntries.map(([field, value]) => (
+                    <span key={`${row.rowNumber}-${field}`} className="quarantine-field-chip" title={`${field}: ${value ?? ""}`}>
+                      <strong>{field}:</strong> {String(value ?? "—")}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
 
               {editingIndex === index ? (
                 <div className="fix-form">
@@ -172,7 +191,8 @@ function QuarantineUI({
               )}
             </div>
           </li>
-        ))}
+          );
+        })}
       </ul>
     </div>
   );

@@ -51,6 +51,10 @@ function DatasetsPage({ activeDatasetId, onOpenDataset }) {
   }, [fetchDatasets]);
 
   const hasDatasets = useMemo(() => datasets.length > 0, [datasets]);
+  const datasetToDelete = useMemo(
+    () => datasets.find((dataset) => dataset.datasetId === confirmDelete) || null,
+    [datasets, confirmDelete]
+  );
 
   const handleShowDeleteConfirm = useCallback((datasetId) => {
     setConfirmDelete(datasetId);
@@ -77,7 +81,7 @@ function DatasetsPage({ activeDatasetId, onOpenDataset }) {
   }, [confirmDelete]);
 
   return (
-    <section className="card">
+    <section className="card datasets-page-card">
       <div className="panel-head datasets-head">
         <div>
           <h2>Datasets</h2>
@@ -121,7 +125,7 @@ function DatasetsPage({ activeDatasetId, onOpenDataset }) {
                     <td>{dataset.quarantinedCount ?? 0}</td>
                     <td>{formatDateTime(dataset.createdAt)}</td>
                     <td>
-                      <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                      <div className="dataset-actions">
                         <button
                           type="button"
                           className="action-btn"
@@ -177,7 +181,10 @@ function DatasetsPage({ activeDatasetId, onOpenDataset }) {
           <div className="modal-dialog">
             <div className="modal-content">
               <h3>Delete Dataset?</h3>
-              <p>Are you sure you want to delete this dataset? This action cannot be undone and all associated data will be permanently removed.</p>
+              <p>
+                Are you sure you want to delete <strong>{datasetToDelete?.fileName || "this file"}</strong>?
+                This action cannot be undone and all associated data will be permanently removed.
+              </p>
               <div className="modal-actions">
                 <button
                   type="button"
