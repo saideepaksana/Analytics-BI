@@ -57,6 +57,7 @@ function toRelationshipInput(meta) {
 
     return {
         collectionName: meta.collectionName || meta.datasetId,
+        datasetId: meta.datasetId || meta.collectionName,
         rowCount: meta.rowCount ?? meta.totalRows ?? 0,
         totalRows: meta.totalRows ?? meta.rowCount ?? 0,
         columns: columns.map((col) => ({

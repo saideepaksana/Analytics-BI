@@ -168,21 +168,28 @@ const refreshDatasetRelationships = async (targetDatasetId, explicitlyRelatedDat
 
   const datasetsToLink = [targetDatasetId, ...explicitlyRelatedDatasetIds];
   const metadataDocs = await Metadata.find({ datasetId: { $in: datasetsToLink } })
-    .select("datasetId schema relationships")
+    .select("datasetId fileName schema relationships")
     .lean();
 
   if (metadataDocs.length < 2) return;
 
   const relationshipInputs = metadataDocs
     .filter((doc) => typeof doc.datasetId === "string" && doc.datasetId.trim().length > 0)
-    .map((doc) => ({
-      collectionName: doc.datasetId,
-      columns: (doc.schema || []).map((column) => ({
-        name: column.name,
-        dataType: column.dataType || column.type || "string",
-        sampleValues: column.sampleValues || []
-      }))
-    }));
+    .map((doc) => {
+      let readableName = doc.datasetId;
+      if (doc.fileName && typeof doc.fileName === "string") {
+        readableName = doc.fileName.replace(/\.[^/.]+$/, "");
+      }
+      return {
+        collectionName: readableName,
+        datasetId: doc.datasetId,
+        columns: (doc.schema || []).map((column) => ({
+          name: column.name,
+          dataType: column.dataType || column.type || "string",
+          sampleValues: column.sampleValues || []
+        }))
+      };
+    });
 
   const detectedRelationships = detectRelationships(relationshipInputs);
 

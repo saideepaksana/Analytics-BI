@@ -287,18 +287,18 @@ function detectRelationships(allMetadata) {
                     let best;
                     if (ab.score >= ba.score && ab.score > 0) {
                         best = {
-                            fromCollection: metaA.collectionName,
+                            fromCollection: metaA.datasetId || metaA.collectionName,
                             fromColumn: colA.name,
-                            toCollection: metaB.collectionName,
+                            toCollection: metaB.datasetId || metaB.collectionName,
                             toColumn: colB.name,
                             confidence: ab.score,
                             strategy: ab.strategy,
                         };
                     } else if (ba.score > 0) {
                         best = {
-                            fromCollection: metaB.collectionName,
+                            fromCollection: metaB.datasetId || metaB.collectionName,
                             fromColumn: colB.name,
-                            toCollection: metaA.collectionName,
+                            toCollection: metaA.datasetId || metaA.collectionName,
                             toColumn: colA.name,
                             confidence: ba.score,
                             strategy: ba.strategy,
