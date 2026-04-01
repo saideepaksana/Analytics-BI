@@ -132,6 +132,34 @@ function HomePage({ onNavigate }) {
             </div>
             <ArrowRight size={16} style={{ color: "var(--muted)", flexShrink: 0 }} />
           </button>
+          <button
+            type="button"
+            className="action-card"
+            onClick={() => onNavigate?.("charts")}
+          >
+            <div className="action-card-icon purple">
+              <BarChart3 size={22} />
+            </div>
+            <div className="action-card-text">
+              <h3>Create Chart</h3>
+              <p>Build visualizations from datasets with the chart wizard</p>
+            </div>
+            <ArrowRight size={16} style={{ color: "var(--muted)", flexShrink: 0 }} />
+          </button>
+          <button
+            type="button"
+            className="action-card"
+            onClick={() => onNavigate?.("dashboard")}
+          >
+            <div className="action-card-icon orange">
+              <LayoutDashboard size={22} />
+            </div>
+            <div className="action-card-text">
+              <h3>Open Dashboard</h3>
+              <p>Combine your saved charts into interactive dashboards</p>
+            </div>
+            <ArrowRight size={16} style={{ color: "var(--muted)", flexShrink: 0 }} />
+          </button>
         </div>
       </section>
 
@@ -148,15 +176,15 @@ function HomePage({ onNavigate }) {
             </div>
             <h4>Dashboards</h4>
             <p>Build interactive dashboards with drag-and-drop visualizations</p>
-            <span className="coming-soon-badge">Coming Soon</span>
+            <span className="active-badge" style={{ display: "inline-block", fontSize: "10px", fontWeight: "700", letterSpacing: "0.8px", padding: "4px 12px", borderRadius: "999px", border: "1px solid rgba(6, 182, 212, 0.3)", color: "var(--brand)", textTransform: "uppercase", background: "var(--brand-glow)" }}>Active</span>
           </div>
           <div className="feature-card">
             <div className="feature-card-icon cyan">
               <BarChart3 size={22} />
             </div>
-            <h4>Query Builder</h4>
-            <p>Create complex queries with a visual no-code interface</p>
-            <span className="coming-soon-badge">Coming Soon</span>
+            <h4>Charts Wizard</h4>
+            <p>Create various visual charts from datasets without coding</p>
+            <span className="active-badge" style={{ display: "inline-block", fontSize: "10px", fontWeight: "700", letterSpacing: "0.8px", padding: "4px 12px", borderRadius: "999px", border: "1px solid rgba(6, 182, 212, 0.3)", color: "var(--brand)", textTransform: "uppercase", background: "var(--brand-glow)" }}>Active</span>
           </div>
           <div className="feature-card">
             <div className="feature-card-icon orange">

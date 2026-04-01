@@ -54,9 +54,14 @@ io.on("connection", (socket) => {
   });
 });
 
+const chartsRoutes = require("./api/charts/charts.routes");
+const dashboardsRoutes = require("./api/dashboards/dashboards.routes");
+
 //Routes
 app.use("/api/upload", uploadRoutes);
 app.use("/api/datasets", datasetsRoutes);
+app.use("/api/charts", chartsRoutes);
+app.use("/api/dashboards", dashboardsRoutes);
 
 // ...
 app.use("/api/export", exportRoutes);
