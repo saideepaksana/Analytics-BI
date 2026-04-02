@@ -66,7 +66,7 @@ function ChartWizard({ onClose, onSaved, editingChart }) {
       const schema = meta.schema || [];
       const colNames = schema.map(s => s.name || s.columnName || s.column);
       setColumns(colNames.filter(Boolean));
-      setRows(meta.rows || []);
+      setRows(meta.preview || meta.rows || []);
     } catch {
       setColumns([]);
       setRows([]);

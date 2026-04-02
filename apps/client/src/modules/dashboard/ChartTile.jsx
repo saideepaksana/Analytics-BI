@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import { MessageSquare, X, MoreVertical, Trash2 } from 'lucide-react';
 import ChartPreview from '../charts/ChartPreview';
 import { buildChartOption, applyGlobalFilters } from '../charts/chartBuilder';
+import { getDatasetMetadata } from '../../services/datasets.service';
 
 function ChartTile({ chart, annotation, globalFilters, onAnnotationChange, onRemove }) {
   const [showMenu, setShowMenu] = useState(false);
@@ -18,11 +19,23 @@ function ChartTile({ chart, annotation, globalFilters, onAnnotationChange, onRem
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
+  const [liveData, setLiveData] = useState(chart.data || []);
+
+  useEffect(() => {
+    if (chart.data && chart.data.length > 0) {
+      setLiveData(chart.data);
+    } else if (chart.datasetId) {
+      getDatasetMetadata(chart.datasetId, { limit: 500 }).then((meta) => {
+        setLiveData(meta.preview || meta.rows || []);
+      }).catch(console.error);
+    }
+  }, [chart]);
+
   // Apply global filters
   const filteredData = useMemo(() => {
-    if (!chart.data) return [];
-    return applyGlobalFilters(chart.data, globalFilters || {}, chart.columns || []);
-  }, [chart.data, globalFilters, chart.columns]);
+    if (!liveData.length) return [];
+    return applyGlobalFilters(liveData, globalFilters || {}, chart.columns || []);
+  }, [liveData, globalFilters, chart.columns]);
 
   const option = useMemo(() => buildChartOption({
     chartType: chart.chartType,

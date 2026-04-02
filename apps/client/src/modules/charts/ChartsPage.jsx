@@ -4,7 +4,63 @@ import ChartWizard from './ChartWizard';
 import ChartPreview from './ChartPreview';
 import { loadCharts, deleteChart } from './chartStorage';
 import { buildChartOption } from './chartBuilder';
+import { getDatasetMetadata } from '../../services/datasets.service';
 import './charts.css';
+
+const CHART_TYPE_LABELS = {
+  bar: 'Bar', line: 'Line', pie: 'Pie', scatter: 'Scatter',
+  area: 'Area', radar: 'Radar', gauge: 'Gauge', bar3d: '3D Bar',
+};
+
+function ChartGalleryItem({ chart, onPreview, onEdit, onDelete }) {
+  const [liveData, setLiveData] = useState(chart.data || []);
+
+  useEffect(() => {
+    if (chart.data && chart.data.length > 0) {
+      setLiveData(chart.data);
+    } else if (chart.datasetId) {
+      getDatasetMetadata(chart.datasetId, { limit: 500 }).then(meta => {
+        setLiveData(meta.preview || meta.rows || []);
+      }).catch(console.error);
+    }
+  }, [chart]);
+
+  const option = buildChartOption({
+    chartType: chart.chartType,
+    dimensions: chart.dimensions,
+    measures: chart.measures,
+    data: liveData,
+    customization: chart.customization || {},
+  });
+
+  return (
+    <div className="chart-gallery-card">
+      <div className="chart-gallery-preview">
+        <ChartPreview option={option} style={{ height: '200px' }} />
+      </div>
+      <div className="chart-gallery-info">
+        <div className="chart-gallery-name">{chart.name || 'Untitled'}</div>
+        <div className="chart-gallery-meta">
+          <span className="chart-type-badge">{CHART_TYPE_LABELS[chart.chartType] || chart.chartType}</span>
+          <span className="chart-gallery-date">
+            {new Date(chart.updatedAt || chart.createdAt).toLocaleDateString()}
+          </span>
+        </div>
+      </div>
+      <div className="chart-gallery-actions">
+        <button type="button" className="chart-action-btn" title="Preview" onClick={() => onPreview(chart, liveData)}>
+          <Eye size={14} />
+        </button>
+        <button type="button" className="chart-action-btn" title="Edit" onClick={() => onEdit(chart)}>
+          <Edit3 size={14} />
+        </button>
+        <button type="button" className="chart-action-btn chart-action-delete" title="Delete" onClick={() => onDelete(chart.id)}>
+          <Trash2 size={14} />
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function ChartsPage() {
   const [savedCharts, setSavedCharts] = useState([]);
@@ -53,6 +109,10 @@ function ChartsPage() {
   const CHART_TYPE_LABELS = {
     bar: 'Bar', line: 'Line', pie: 'Pie', scatter: 'Scatter',
     area: 'Area', radar: 'Radar', gauge: 'Gauge', bar3d: '3D Bar',
+  };
+
+  const handlePreview = (chart, liveData) => {
+    setPreviewChart({ ...chart, data: liveData });
   };
 
   return (
@@ -109,43 +169,15 @@ function ChartsPage() {
             </div>
           ) : (
             <div className="charts-gallery">
-              {savedCharts.map(chart => {
-                const option = buildChartOption({
-                  chartType: chart.chartType,
-                  dimensions: chart.dimensions,
-                  measures: chart.measures,
-                  data: chart.data || [],
-                  customization: chart.customization || {},
-                });
-
-                return (
-                  <div key={chart.id} className="chart-gallery-card">
-                    <div className="chart-gallery-preview">
-                      <ChartPreview option={option} style={{ height: '200px' }} />
-                    </div>
-                    <div className="chart-gallery-info">
-                      <div className="chart-gallery-name">{chart.name || 'Untitled'}</div>
-                      <div className="chart-gallery-meta">
-                        <span className="chart-type-badge">{CHART_TYPE_LABELS[chart.chartType] || chart.chartType}</span>
-                        <span className="chart-gallery-date">
-                          {new Date(chart.updatedAt || chart.createdAt).toLocaleDateString()}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="chart-gallery-actions">
-                      <button type="button" className="chart-action-btn" title="Preview" onClick={() => setPreviewChart(chart)}>
-                        <Eye size={14} />
-                      </button>
-                      <button type="button" className="chart-action-btn" title="Edit" onClick={() => handleEdit(chart)}>
-                        <Edit3 size={14} />
-                      </button>
-                      <button type="button" className="chart-action-btn chart-action-delete" title="Delete" onClick={() => setConfirmDelete(chart.id)}>
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
+              {savedCharts.map(chart => (
+                <ChartGalleryItem
+                  key={chart.id}
+                  chart={chart}
+                  onPreview={handlePreview}
+                  onEdit={handleEdit}
+                  onDelete={setConfirmDelete}
+                />
+              ))}
             </div>
           )}
         </>
