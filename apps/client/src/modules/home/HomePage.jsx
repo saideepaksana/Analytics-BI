@@ -11,6 +11,7 @@ import {
   MessageSquare,
   Layers,
   ArrowRight,
+  PieChart,
 } from "lucide-react";
 import { listDatasets } from "../../services/datasets.service";
 import { formatDateTime } from "../../core/utils/formatters";
@@ -132,6 +133,34 @@ function HomePage({ onNavigate }) {
             </div>
             <ArrowRight size={16} style={{ color: "var(--muted)", flexShrink: 0 }} />
           </button>
+          <button
+            type="button"
+            className="action-card"
+            onClick={() => onNavigate?.("charts")}
+          >
+            <div className="action-card-icon purple">
+              <PieChart size={22} />
+            </div>
+            <div className="action-card-text">
+              <h3>Create Charts</h3>
+              <p>Visualize your ingested data seamlessly</p>
+            </div>
+            <ArrowRight size={16} style={{ color: "var(--muted)", flexShrink: 0 }} />
+          </button>
+          <button
+            type="button"
+            className="action-card"
+            onClick={() => onNavigate?.("dashboards")}
+          >
+            <div className="action-card-icon cyan">
+              <LayoutDashboard size={22} />
+            </div>
+            <div className="action-card-text">
+              <h3>Build Dashboards</h3>
+              <p>Organize charts into interactive dashboards</p>
+            </div>
+            <ArrowRight size={16} style={{ color: "var(--muted)", flexShrink: 0 }} />
+          </button>
         </div>
       </section>
 
@@ -142,14 +171,7 @@ function HomePage({ onNavigate }) {
           Platform Capabilities
         </h2>
         <div className="home-features-grid">
-          <div className="feature-card">
-            <div className="feature-card-icon purple">
-              <LayoutDashboard size={22} />
-            </div>
-            <h4>Dashboards</h4>
-            <p>Build interactive dashboards with drag-and-drop visualizations</p>
-            <span className="coming-soon-badge">Coming Soon</span>
-          </div>
+
           <div className="feature-card">
             <div className="feature-card-icon cyan">
               <BarChart3 size={22} />

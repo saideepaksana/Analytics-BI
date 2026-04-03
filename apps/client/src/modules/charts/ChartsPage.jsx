@@ -25,9 +25,7 @@ export default function ChartsPage() {
             <BarChart3 size={64} opacity={0.8} />
           </div>
           <h2>No charts created yet</h2>
-          <p>
-            Create your first chart to start analyzing your data and visualizing insights. Saved charts will appear here.
-          </p>
+
           <button className="create-chart-btn" onClick={handleCreateChart}>
             <PlusCircle size={20} />
             Create your first chart

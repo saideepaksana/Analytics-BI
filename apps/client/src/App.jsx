@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
-import { Home, Upload, Database, Sparkles, Sun, Moon, PieChart } from "lucide-react";
+import { Home, Upload, Database, Sparkles, Sun, Moon, PieChart, LayoutDashboard } from "lucide-react";
 import HomePage from "./modules/home/HomePage";
 import { IngestionWizard } from "./modules/ingestion";
 import { DataReviewPage } from "./modules/data-review";
 import DataReviewModal from "./modules/data-review/DataReviewModal";
 import { DatasetsPage } from "./modules/datasets";
 import ChartsPage from "./modules/charts/ChartsPage";
+import DashboardsPage from "./modules/dashboard/DashboardsPage";
 import "./modules/data-review/styles/data-review.css";
 import "./App.css";
 
@@ -39,6 +40,10 @@ function App() {
     charts: {
       title: "Saved Charts",
       subtitle: "View and manage all your visualized data charts."
+    },
+    dashboards: {
+      title: "Saved Dashboards",
+      subtitle: "View and organize your analytics dashboards."
     }
   };
 
@@ -49,6 +54,7 @@ function App() {
     { id: "ingestion", label: "Ingestion", icon: Upload },
     { id: "datasets", label: "Datasets", icon: Database },
     { id: "charts", label: "Charts", icon: PieChart },
+    { id: "dashboards", label: "Dashboards", icon: LayoutDashboard },
   ];
 
   return (
@@ -91,7 +97,7 @@ function App() {
         </nav>
 
         <div className="sidebar-footer">
-          <div className="sidebar-footer-badge">v1.0 • Sprint 1</div>
+          <div className="sidebar-footer-badge">v2.0 • Sprint 2</div>
         </div>
       </aside>
 
@@ -130,6 +136,8 @@ function App() {
         ) : null}
 
         {activeView === "charts" ? <ChartsPage /> : null}
+
+        {activeView === "dashboards" ? <DashboardsPage /> : null}
       </main>
 
       {/* Data Review Modal - appears as full-screen popup */}
