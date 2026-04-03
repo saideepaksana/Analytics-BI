@@ -13,8 +13,14 @@ function App() {
   const [activeView, setActiveView] = useState("home"); // home | ingestion | review | datasets
   const [reviewModalDatasetId, setReviewModalDatasetId] = useState(null);
   
-  // defaulting to white mode (Zoho-like clean theme)
-  const [theme, setTheme] = useState("light");
+  // defaulting to dark mode for Midnight Aurora aesthetic, persisting in localStorage
+  const [theme, setTheme] = useState(() => {
+    return localStorage.getItem("analytics-theme") || "dark";
+  });
+
+  useEffect(() => {
+    localStorage.setItem("analytics-theme", theme);
+  }, [theme]);
 
   const headerConfig = {
     ingestion: {
