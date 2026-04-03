@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
-import { Home, Upload, Database, Sparkles, Sun, Moon } from "lucide-react";
+import { Home, Upload, Database, Sparkles, Sun, Moon, PieChart } from "lucide-react";
 import HomePage from "./modules/home/HomePage";
 import { IngestionWizard } from "./modules/ingestion";
 import { DataReviewPage } from "./modules/data-review";
 import DataReviewModal from "./modules/data-review/DataReviewModal";
 import { DatasetsPage } from "./modules/datasets";
+import ChartsPage from "./modules/charts/ChartsPage";
 import "./modules/data-review/styles/data-review.css";
 import "./App.css";
 
@@ -34,6 +35,10 @@ function App() {
     datasets: {
       title: "Datasets",
       subtitle: "Browse all inserted datasets and open them in Data Review."
+    },
+    charts: {
+      title: "Saved Charts",
+      subtitle: "View and manage all your visualized data charts."
     }
   };
 
@@ -43,6 +48,7 @@ function App() {
     { id: "home", label: "Home", icon: Home },
     { id: "ingestion", label: "Ingestion", icon: Upload },
     { id: "datasets", label: "Datasets", icon: Database },
+    { id: "charts", label: "Charts", icon: PieChart },
   ];
 
   return (
@@ -122,6 +128,8 @@ function App() {
             }}
           />
         ) : null}
+
+        {activeView === "charts" ? <ChartsPage /> : null}
       </main>
 
       {/* Data Review Modal - appears as full-screen popup */}
