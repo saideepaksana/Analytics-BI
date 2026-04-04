@@ -67,6 +67,7 @@ An Analytics/BI web application with:
 
 - **Node.js** (recommended: 18+)
 - **MongoDB** running locally or a connection string to a MongoDB instance
+- **Redis** running locally (required for background tasks and BullMQ)
 - `mongosh` for inspecting the DB
 
 ---
@@ -99,7 +100,14 @@ If using local MongoDB (Linux example):
 sudo systemctl start mongodb
 ```
 
-### 4) Run the app (client + server)
+### 4) Start Redis
+If using local Redis:
+
+```bash
+sudo systemctl start redis
+```
+
+### 5) Run the app (client + server)
 From the repo root:
 
 ```bash
