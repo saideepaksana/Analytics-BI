@@ -240,10 +240,19 @@ function classifyColumn(columnName, sampleValues, totalRows = 0) {
 function classifyAllColumns(documents, totalRows = documents.length) {
     if (!Array.isArray(documents) || documents.length === 0) return [];
 
-    // Collect all column names across documents
-    const columnNames = [...new Set(
-        documents.flatMap(doc => Object.keys(doc || {}))
-    )].filter(k => k !== "_id" && k !== "__v");
+    // Collect all column names across documents (optimized for large batches)
+    const columnNameSet = new Set();
+    // Usually the first and last row are enough for standard CSVs, but we'll check first few for safety
+    const probeCount = Math.min(documents.length, 10);
+    for (let i = 0; i < probeCount; i++) {
+        const keys = Object.keys(documents[i] || {});
+        for (const k of keys) {
+            if (k !== "_id" && k !== "__v") {
+                columnNameSet.add(k);
+            }
+        }
+    }
+    const columnNames = Array.from(columnNameSet);
 
     const results = [];
 

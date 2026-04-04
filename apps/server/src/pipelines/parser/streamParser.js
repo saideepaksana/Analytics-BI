@@ -8,7 +8,7 @@ const { getBucket } = require("../../core/storage");
 
 const WORKER_FILE = path.join(__dirname, "structuralWorker.js");
 const DEFAULT_BATCH_SIZE = Number(process.env.PARSER_BATCH_SIZE || 500);
-const DEFAULT_WORKERS = Number(process.env.PARSER_WORKERS || Math.max(1, Math.min(os.cpus().length, 8)));
+const DEFAULT_WORKERS = Number(process.env.PARSER_WORKERS || Math.max(1, Math.min(os.cpus().length, 2)));
 
 const toObjectId = (value) => {
   if (value instanceof ObjectId) {
@@ -57,7 +57,8 @@ const createWorkerPool = (workerCount, headers) => {
       taskId: task.taskId,
       batchId: task.batchId,
       headers,
-      rows: task.rows
+      rows: task.rows,
+      schema: task.schema // Pass schema to worker
     });
   };
 
@@ -75,31 +76,32 @@ const createWorkerPool = (workerCount, headers) => {
 
       callbacks.delete(message.taskId);
       callback.workerState.busy = false;
-      callback.resolve(message);
+      
+      if (message.error) {
+        callback.reject(new Error(message.error));
+      } else {
+        callback.resolve(message);
+      }
+      
       assignTask(callback.workerState);
     });
 
     workerState.worker.on("error", (error) => {
-      callbacks.forEach((callback) => {
-        if (callback.workerState === workerState) {
-          callback.reject(error);
-        }
-      });
-      callbacks.forEach((value, key) => {
-        if (value.workerState === workerState) {
-          callbacks.delete(key);
-        }
-      });
+      const pendingCallback = Array.from(callbacks.values()).find(cb => cb.workerState === workerState);
+      if (pendingCallback) {
+        pendingCallback.reject(error);
+        callbacks.delete(Array.from(callbacks.keys()).find(k => callbacks.get(k) === pendingCallback));
+      }
       workerState.busy = false;
     });
 
     workers.push(workerState);
   }
 
-  const executeBatch = (batchId, rows) =>
+  const executeBatch = (batchId, rows, schema = null) =>
     new Promise((resolve, reject) => {
       const taskId = ++taskSeq;
-      queue.push({ taskId, batchId, rows, resolve, reject });
+      queue.push({ taskId, batchId, rows, schema, resolve, reject });
       workers.forEach(assignTask);
     });
 
@@ -119,7 +121,8 @@ const processWithWorkers = async ({
   batchSize,
   workerCount,
   onBatch,
-  onProgress
+  onProgress,
+  getSchema = () => null // New: dynamic schema getter
 }) => {
   const pool = createWorkerPool(workerCount, headers);
 
@@ -141,10 +144,12 @@ const processWithWorkers = async ({
       pendingResults.delete(nextBatchToEmit);
       nextBatchToEmit += 1;
 
-      parseQuarantineRows.push(...ordered.quarantineRows);
-      rowsValid += ordered.validRows.length;
+      // Handle transformed results from worker
+      parseQuarantineRows.push(...(ordered.quarantineRows || []));
+      rowsValid += (ordered.validRows || []).length;
 
-      if (ordered.validRows.length > 0) {
+      if (ordered.validRows && ordered.validRows.length > 0) {
+        // Some rows might be transformed, some might not (first batch)
         await onBatch(ordered.validRows);
       }
 
@@ -166,8 +171,11 @@ const processWithWorkers = async ({
     currentBatch = [];
     batchSeq += 1;
 
+    // Get current schema to pass to worker
+    const schema = getSchema();
+
     const promise = pool
-      .executeBatch(batchSeq, outgoing)
+      .executeBatch(batchSeq, outgoing, schema)
       .then(emitResultInOrder);
 
     inFlight.add(promise);
@@ -178,18 +186,21 @@ const processWithWorkers = async ({
     }
   };
 
-  for await (const row of rowIterator) {
-    rowsSeen += 1;
-    currentBatch.push(row);
+  try {
+    for await (const row of rowIterator) {
+      rowsSeen += 1;
+      currentBatch.push(row);
 
-    if (currentBatch.length >= batchSize) {
-      await dispatchBatch();
+      if (currentBatch.length >= batchSize) {
+        await dispatchBatch();
+      }
     }
-  }
 
-  await dispatchBatch();
-  await Promise.all(inFlight);
-  await pool.close();
+    await dispatchBatch();
+    await Promise.all(inFlight);
+  } finally {
+    await pool.close();
+  }
 
   return {
     parseQuarantineRows,
@@ -299,7 +310,8 @@ const processGridFsFile = async ({
   batchSize = DEFAULT_BATCH_SIZE,
   workerCount = DEFAULT_WORKERS,
   onBatch = async () => {},
-  onProgress = () => {}
+  onProgress = () => {},
+  getSchema = () => null // Pass through
 }) => {
   const lowerName = String(originalFileName || "").toLowerCase();
 
@@ -326,7 +338,8 @@ const processGridFsFile = async ({
       batchSize,
       workerCount,
       onBatch,
-      onProgress
+      onProgress,
+      getSchema
     });
 
     return {
@@ -346,7 +359,8 @@ const processGridFsFile = async ({
       batchSize,
       workerCount,
       onBatch,
-      onProgress
+      onProgress,
+      getSchema
     });
 
     return {

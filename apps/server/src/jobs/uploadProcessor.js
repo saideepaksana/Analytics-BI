@@ -120,6 +120,7 @@ exports.runUploadProcessor = async (jobData) => {
     let totalCleanCount = 0;
     let totalDlqCount = 0;
     let currentRowOffset = rowBase;
+    let currentSchema = null;
     let totalParsedCount = 0;
 
     let parseQuarantineRows = [];
@@ -127,10 +128,14 @@ exports.runUploadProcessor = async (jobData) => {
       const result = await processGridFsFile({
         gridFsFileId: sourceFileId,
         originalFileName: safeFileName,
-        onBatch: async (batchRows) => {
-          const rawBatch = batchRows.map((row) => row.data || {});
+        getSchema: () => currentSchema, // Pass schema to workers for parallel transformation
+        onBatch: async (batchWrappers) => {
+          const allTransformed = batchWrappers.every(w => w.transformed);
+          const rawBatch = batchWrappers.map(w => w.data);
+
           totalParsedCount += rawBatch.length;
 
+          // 1. Initial Schema Inference (if not yet done)
           if (!schema || schema.length === 0) {
             emitProgress(uploadId, { stage: "schema", progress: 55, datasetId });
             const inferredColumns = classifyAllColumns(rawBatch, rawBatch.length);
@@ -146,34 +151,51 @@ exports.runUploadProcessor = async (jobData) => {
               nullCount: column.nullCount || 0,
               uniqueCount: column.uniqueCount || 0
             }));
+            
+            // Set currentSchema to activate parallel transformation in workers for remaining batches
+            currentSchema = schema;
           }
 
-          const { validRows, invalidRows } = transformRows(rawBatch, datasetId, schema);
+          // 2. Data Insertion
+          let cleanDocs = [];
+          if (allTransformed) {
+            // Already cleaned and validated in worker threads!
+            cleanDocs = rawBatch.map((data, index) => ({
+              datasetId,
+              rowNumber: currentRowOffset + index + 1,
+              data,
+              sourceFileName: safeFileName,
+              status: "VALID"
+            }));
+          } else {
+            // Manual transformation (usually only for the first batch)
+            const { validRows, invalidRows } = transformRows(rawBatch, datasetId, schema);
+            
+            cleanDocs = validRows.map((data, index) => ({
+              datasetId,
+              rowNumber: currentRowOffset + index + 1,
+              data,
+              sourceFileName: safeFileName,
+              status: "VALID"
+            }));
 
-          const cleanDocs = validRows.map((data, index) => ({
-            datasetId,
-            rowNumber: currentRowOffset + index + 1,
-            data,
-            sourceFileName: safeFileName,
-            status: "VALID"
-          }));
+            const dlqDocs = invalidRows.map((row, index) => ({
+              datasetId,
+              rowNumber: currentRowOffset + validRows.length + index + 1,
+              rawData: row.rawData,
+              errorMessages: row.errors || ["Validation failed"],
+              status: "QUARANTINED"
+            }));
+
+            if (dlqDocs.length > 0) {
+              await DLQRecord.insertMany(dlqDocs);
+              totalDlqCount += dlqDocs.length;
+            }
+          }
 
           if (cleanDocs.length > 0) {
             await CleanRecord.insertMany(cleanDocs);
             totalCleanCount += cleanDocs.length;
-          }
-
-          const dlqDocs = invalidRows.map((row, index) => ({
-            datasetId,
-            rowNumber: currentRowOffset + validRows.length + index + 1,
-            rawData: row.rawData,
-            errorMessages: row.errors || ["Validation failed"],
-            status: "QUARANTINED"
-          }));
-
-          if (dlqDocs.length > 0) {
-            await DLQRecord.insertMany(dlqDocs);
-            totalDlqCount += dlqDocs.length;
           }
 
           currentRowOffset += rawBatch.length;
@@ -217,7 +239,9 @@ exports.runUploadProcessor = async (jobData) => {
           schema: finalSchema,
           rowCount: mode === "append" ? updatedRowCount : totalCleanCount,
           quarantinedCount: mode === "append" ? updatedQuarantineCount : totalDlqCount,
-          sourceFileId
+          sourceFileId,
+          inferenceStatus: "complete",
+          inferenceError: null
         }
       },
       { upsert: true }
@@ -240,6 +264,22 @@ exports.runUploadProcessor = async (jobData) => {
     };
   } catch (error) {
     emitProgress(uploadId, { stage: "failed", progress: 100, detail: error.message });
+    
+    // Finalize Metadata with failure status
+    try {
+      await Metadata.updateOne(
+        { datasetId },
+        { 
+          $set: { 
+            inferenceStatus: "failed", 
+            inferenceError: error.message 
+          } 
+        }
+      );
+    } catch (metaErr) {
+      console.error("[Upload] Failed to update error status in Metadata:", metaErr.message);
+    }
+
     throw error;
   }
 };

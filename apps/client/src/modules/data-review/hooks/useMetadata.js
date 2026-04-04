@@ -199,6 +199,17 @@ export const useMetadata = (datasetId, options = {}) => {
     }
   }, [autoFetch, datasetId, fetchMetadata]);
 
+  // Special case: if processing is ongoing, poll every 3 seconds
+  useEffect(() => {
+    let timer;
+    if (state.metadata?.inferenceStatus === "pending" && !state.loading && datasetId) {
+       timer = setTimeout(() => {
+           fetchMetadata();
+       }, 3000);
+    }
+    return () => clearTimeout(timer);
+  }, [state.metadata?.inferenceStatus, state.loading, datasetId, fetchMetadata]);
+
   return {
     ...state,
     refetch: fetchMetadata,

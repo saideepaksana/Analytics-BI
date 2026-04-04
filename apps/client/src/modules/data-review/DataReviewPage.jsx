@@ -55,10 +55,19 @@ function DataReviewPage({ datasetId }) {
       <h2>Step 2: Data Review</h2>
       <p><strong>Dataset:</strong> {datasetId}</p>
 
-      {loading ? <p>Loading metadata...</p> : null}
+      {loading && !metadata ? <p>Loading metadata...</p> : null}
       {error ? <p className="error-text">{error}</p> : null}
 
-      {hasData ? (
+      {metadata?.inferenceStatus === "pending" ? (
+        <div className="processing-state card" style={{ textAlign: 'center', padding: '3rem' }}>
+          <div className="spinner" style={{ marginBottom: '1rem' }} />
+          <h3>Processing your data...</h3>
+          <p className="muted">
+            We are analyzing your file, inferring schema, and validating rows in the background. 
+            This page will automatically refresh once it's ready.
+          </p>
+        </div>
+      ) : hasData ? (
         <>
           {/* All quarantine actions call backend endpoints via useMetadata service methods. */}
           <QuarantineUI
@@ -88,9 +97,9 @@ function DataReviewPage({ datasetId }) {
             rowOptions={PREVIEW_ROW_OPTIONS}
           />
         </>
-      ) : (
+      ) : !loading && metadata?.inferenceStatus !== "pending" ? (
         <p>No preview/schema is available for this dataset yet.</p>
-      )}
+      ) : null}
     </section>
   );
 }

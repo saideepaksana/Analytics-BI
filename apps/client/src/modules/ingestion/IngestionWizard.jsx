@@ -184,10 +184,17 @@ function IngestionWizard({ onCompleted }) {
         },
       });
 
-      setProgress(100);
-      setStage("done");
-      setCurrentStep(4);
-      onCompleted?.(response);
+      // HTTP Upload complete, but job is likely still processing in background.
+      if (response.processing) {
+          setStage("processing");
+          // We don't call onCompleted(response) immediately here 
+          // because we want to let the user see the socket progress if they stay.
+          // However, we enable the "Done" action.
+      } else {
+          setProgress(100);
+          setStage("done");
+          onCompleted?.(response);
+      }
     } catch (uploadError) {
       console.error("Upload error details:", uploadError.response?.data || uploadError);
       const errorPayload = uploadError.response?.data;
@@ -441,6 +448,12 @@ function IngestionWizard({ onCompleted }) {
                 <div className="progress-bar" style={{ width: `${progress}%` }} />
               </div>
               <p className="progress-text">Progress: {progress}% ({stage})</p>
+              {stage === "processing" || stage === "parsing" || stage === "schema" || stage === "saving" ? (
+                <p className="info-text" style={{ marginTop: '0.5rem', color: 'var(--primary)' }}>
+                  <strong>Note:</strong> Your file is being processed in the background. 
+                  You can safely navigate to other pages now.
+                </p>
+              ) : null}
             </>
           ) : null}
 
@@ -463,9 +476,24 @@ function IngestionWizard({ onCompleted }) {
                 Cancel Upload
               </button>
             ) : null}
-            <button type="button" className="primary-btn" onClick={handleUpload} disabled={!canSubmit}>
-              {loading ? "Uploading..." : "Upload"}
+            <button 
+                type="button" 
+                className="primary-btn" 
+                onClick={handleUpload} 
+                disabled={!canSubmit || (loading && stage === "uploading")}
+            >
+              {loading && stage === "uploading" ? "Uploading..." : (stage === "done" ? "Finish" : "Upload")}
             </button>
+            {(stage === "processing" || stage === "parsing" || stage === "schema" || stage === "done") && !loading ? (
+                <button 
+                    type="button" 
+                    className="primary-btn" 
+                    style={{ backgroundColor: 'var(--success)' }}
+                    onClick={() => onCompleted?.({ datasetId, status: 'processing' })}
+                >
+                    Return to Review
+                </button>
+            ) : null}
           </div>
         </>
       ) : null}

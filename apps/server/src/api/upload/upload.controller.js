@@ -335,12 +335,11 @@ exports.uploadFile = async (req, res) => {
     const sourceFileId = String(uploadStream.id);
     emitProgress(uploadId, { stage: "stored", progress: 20, datasetId, fileId: sourceFileId });
 
-    // ── Delegate processing to the background worker, then WAIT for it ──── //
-    // We use waitUntilFinished() so the HTTP response is only sent once the   //
-    // worker has fully parsed, validated, and stored the data. This restores  //
-    // the original UX: Data Review is populated the moment the upload returns.//
-    // BullMQ still handles retries, DLQ routing, and concurrency — the only  //
-    // difference is that the client waits synchronously for the result.       //
+    // ── Delegate processing to the background worker ──────────────── //
+    // We queue the job and return immediately to the client.          //
+    // The worker will handle parsing, schema inference, and storage   //
+    // in the background. The client can track progress via Socket.io  //
+    // or by polling the dataset metadata status.                     //
     const { addBackgroundTask, getQueueEvents, QUEUE_NAMES } = require("../../jobs/queue");
 
     const job = await addBackgroundTask("process-upload", {
@@ -352,33 +351,30 @@ exports.uploadFile = async (req, res) => {
       explicitlyRelatedDatasets
     });
 
-    // Wait for the worker to finish (success or final failure)
-    const queueEvents = getQueueEvents(QUEUE_NAMES.BACKGROUND_TASKS);
-    let jobResult;
+    // Initialize/Update Metadata status to 'pending'
+    await Metadata.findOneAndUpdate(
+      { datasetId },
+      {
+        $set: {
+          datasetId,
+          fileName: safeFileName,
+          mode,
+          sourceFileId,
+          inferenceStatus: "pending"
+        }
+      },
+      { upsert: true }
+    );
 
-    try {
-      jobResult = await job.waitUntilFinished(queueEvents, 120_000); // 2 min timeout
-    } catch (jobErr) {
-      // The job itself failed (exhausted retries or permanent error)
-      emitProgress(uploadId, { stage: "failed", progress: 100, detail: jobErr.message });
-      return res.status(500).json({
-        message: "File processing failed.",
-        detail: jobErr.message,
-        datasetId,
-        fileId: sourceFileId,
-      });
-    }
-
-    return res.status(200).json({
-      message: "File uploaded and processed successfully.",
+    return res.status(202).json({
+      message: "File uploaded and queued for processing.",
       datasetId,
       fileId: sourceFileId,
       fileName: safeFileName,
       mode,
-      rowCount: jobResult?.rowCount ?? 0,
-      quarantinedCount: jobResult?.quarantinedCount ?? 0,
       uploadId: uploadId || undefined,
-      jobId: job.id
+      jobId: job.id,
+      processing: true
     });
       //Error handling:
 //Handles:
