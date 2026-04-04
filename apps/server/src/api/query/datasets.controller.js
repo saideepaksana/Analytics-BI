@@ -50,7 +50,7 @@ exports.getDatasetMetadata = async (req, res) => {
 
     const [previewDocs, quarantinedDocs] = await Promise.all([
       CleanRecord.find({ datasetId }).skip(previewOffset).limit(previewLimit).lean(),
-      DLQRecord.find({ datasetId }).sort({ rowNumber: 1 }).lean(),
+      DLQRecord.find({ datasetId }).sort({ rowNumber: 1 }).limit(previewLimit).lean(),
     ]);
 
     return res.json({
@@ -116,12 +116,15 @@ exports.deleteQuarantinedRow = async (req, res) => {
     const { datasetId } = req.params;
     const idx = parseInt(req.params.rowIndex);
 
-    const rows = await DLQRecord.find({ datasetId }).sort({ rowNumber: 1 }).lean();
-    if (isNaN(idx) || idx < 0 || idx >= rows.length) {
+    if (isNaN(idx) || idx < 0) {
+      return res.status(404).json({ message: "Row not found" });
+    }
+    const row = await DLQRecord.findOne({ datasetId }).sort({ rowNumber: 1 }).skip(idx).lean();
+    if (!row) {
       return res.status(404).json({ message: "Row not found" });
     }
 
-    await DLQRecord.deleteOne({ _id: rows[idx]._id });
+    await DLQRecord.deleteOne({ _id: row._id });
     const meta = await Metadata.findOneAndUpdate(
       { datasetId },
       { $inc: { quarantinedCount: -1 } },
@@ -169,23 +172,27 @@ exports.validateQuarantinedRow = async (req, res) => {
     const idx = parseInt(req.params.rowIndex);
     const { updatedData } = req.body;
 
-    const [rows, metaDoc] = await Promise.all([
-      DLQRecord.find({ datasetId }).sort({ rowNumber: 1 }).lean(),
-      Metadata.findOne({ datasetId }).lean()
-    ]);
-
-    if (isNaN(idx) || idx < 0 || idx >= rows.length) {
+    if (isNaN(idx) || idx < 0) {
       return res.status(404).json({ message: "Row not found" });
     }
 
-    const dataToRestore = updatedData || rows[idx].rawData;
-    
+    const [row, metaDoc] = await Promise.all([
+      DLQRecord.findOne({ datasetId }).sort({ rowNumber: 1 }).skip(idx).lean(),
+      Metadata.findOne({ datasetId }).lean()
+    ]);
+
+    if (!row) {
+      return res.status(404).json({ message: "Row not found" });
+    }
+
+    const dataToRestore = updatedData || row.rawData;
+
     // ─ Build schemaMap from metadata ─
     const schemaMap = buildSchemaMap(metaDoc?.schema || []);
-    
+
     // ─ FIRST: Clean/convert the data to proper types ─
     const cleanedData = cleanAndNormalizeRow(dataToRestore, schemaMap);
-    
+
     // ─ THEN: Validate against full schema (all fields) ─
     const semanticErrors = semanticValidateRow(cleanedData, schemaMap);
 
@@ -207,16 +214,19 @@ exports.restoreQuarantinedRow = async (req, res) => {
     const idx = parseInt(req.params.rowIndex);
     const { updatedData } = req.body;
 
-    const [rows, metaDoc] = await Promise.all([
-      DLQRecord.find({ datasetId }).sort({ rowNumber: 1 }).lean(),
-      Metadata.findOne({ datasetId }).lean()
-    ]);
-
-    if (isNaN(idx) || idx < 0 || idx >= rows.length) {
+    if (isNaN(idx) || idx < 0) {
       return res.status(404).json({ message: "Row not found" });
     }
 
-    const row = rows[idx];
+    const [row, metaDoc] = await Promise.all([
+      DLQRecord.findOne({ datasetId }).sort({ rowNumber: 1 }).skip(idx).lean(),
+      Metadata.findOne({ datasetId }).lean()
+    ]);
+
+    if (!row) {
+      return res.status(404).json({ message: "Row not found" });
+    }
+
     const dataToRestore = updatedData || row.rawData;
 
     // ─ Build schemaMap from metadata ─
@@ -290,34 +300,20 @@ exports.restoreAllValidQuarantinedRows = async (req, res) => {
   try {
     const { datasetId } = req.params;
 
-    const [rows, metaDoc] = await Promise.all([
-      DLQRecord.find({ datasetId }).sort({ rowNumber: 1 }).lean(),
-      Metadata.findOne({ datasetId }).lean(),
-    ]);
-
+    const metaDoc = await Metadata.findOne({ datasetId }).lean();
     const schemaMap = buildSchemaMap(metaDoc?.schema || []);
-    const restoredRows = [];
+
+    let restoredCount = 0;
     const failedRows = [];
 
-    // Force-restore all quarantined rows without validation.
-    // We still normalize values (dates, numbers, booleans, trimming) using schema context.
-    for (const row of rows) {
-      const sourceData =
-        row.rawData && typeof row.rawData === "object" && !Array.isArray(row.rawData)
-          ? row.rawData
-          : {};
-      const normalizedData = cleanAndNormalizeRow(sourceData, schemaMap);
+    const BATCH_SIZE = 500;
+    let batchRestored = [];
+    let batchIds = [];
 
-      restoredRows.push({
-        _id: row._id,
-        data: normalizedData,
-        rowNumber: row.rowNumber,
-      });
-    }
-
-    if (restoredRows.length > 0) {
+    const flushBatch = async () => {
+      if (batchRestored.length === 0) return;
       await CleanRecord.insertMany(
-        restoredRows.map((r) => ({
+        batchRestored.map((r) => ({
           datasetId,
           rowNumber: r.rowNumber,
           data: r.data,
@@ -325,11 +321,36 @@ exports.restoreAllValidQuarantinedRows = async (req, res) => {
           status: "VALID",
         }))
       );
-      await DLQRecord.deleteMany({ _id: { $in: restoredRows.map((r) => r._id) } });
+      await DLQRecord.deleteMany({ _id: { $in: batchIds } });
+      restoredCount += batchRestored.length;
+      batchRestored = [];
+      batchIds = [];
+    };
+
+    const cursor = DLQRecord.find({ datasetId }).sort({ rowNumber: 1 }).lean().cursor();
+
+    for await (const row of cursor) {
+      const sourceData =
+        row.rawData && typeof row.rawData === "object" && !Array.isArray(row.rawData)
+          ? row.rawData
+          : {};
+      const normalizedData = cleanAndNormalizeRow(sourceData, schemaMap);
+
+      batchRestored.push({
+        data: normalizedData,
+        rowNumber: row.rowNumber,
+      });
+      batchIds.push(row._id);
+
+      if (batchRestored.length >= BATCH_SIZE) {
+        await flushBatch();
+      }
     }
 
-    const newRowCount = (metaDoc?.rowCount ?? 0) + restoredRows.length;
-    const newQuarantinedCount = Math.max(0, (metaDoc?.quarantinedCount ?? 0) - restoredRows.length);
+    await flushBatch();
+
+    const newRowCount = (metaDoc?.rowCount ?? 0) + restoredCount;
+    const newQuarantinedCount = Math.max(0, (metaDoc?.quarantinedCount ?? 0) - restoredCount);
 
     await Metadata.updateOne(
       { datasetId },
@@ -337,10 +358,10 @@ exports.restoreAllValidQuarantinedRows = async (req, res) => {
     );
 
     return res.json({
-      message: `Restored ${restoredRows.length} rows`,
-      restoredCount: restoredRows.length,
+      message: `Restored ${restoredCount} rows`,
+      restoredCount: restoredCount,
       failedCount: failedRows.length,
-      restoredRows: restoredRows.map((r) => ({ rowNumber: r.rowNumber, data: r.data })),
+      restoredRows: [],
       failedRows,
       rowCount: newRowCount,
       quarantinedCount: newQuarantinedCount,

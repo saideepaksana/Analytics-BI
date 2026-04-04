@@ -12,6 +12,7 @@ function DataReviewPage({ datasetId }) {
 
   // Centralized metadata/actions hook used by all review sub-sections.
   const {
+    metadata,
     schema,
     relationships,
     previewData,
@@ -22,7 +23,9 @@ function DataReviewPage({ datasetId }) {
     restoreQuarantinedRow,
     restoreAllValidQuarantinedRows,
     deleteQuarantinedRow,
-    deleteAllQuarantinedRows
+    deleteAllQuarantinedRows,
+    qOffset,
+    setQOffset
   } = useMetadata(datasetId, {
     autoFetch: Boolean(datasetId),
     previewLimit
@@ -60,6 +63,10 @@ function DataReviewPage({ datasetId }) {
           {/* All quarantine actions call backend endpoints via useMetadata service methods. */}
           <QuarantineUI
             quarantinedRows={quarantinedRows}
+            totalCount={metadata?.quarantinedCount || quarantinedRows.length}
+            qOffset={qOffset}
+            onNextPage={() => setQOffset(qOffset + 50)}
+            onPrevPage={() => setQOffset(Math.max(0, qOffset - 50))}
             onUpdateAndRestore={(_, index, updatedData) => restoreQuarantinedRow(index, updatedData)}
             onRestoreAll={restoreAllValidQuarantinedRows}
             onDelete={(_, index) => deleteQuarantinedRow(index)}

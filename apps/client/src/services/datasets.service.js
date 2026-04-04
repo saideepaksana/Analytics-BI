@@ -10,9 +10,9 @@ export const deleteDataset = async (datasetId) => {
   return response.data;
 };
 
-export const getDatasetMetadata = async (datasetId, { limit = 200, offset = 0 } = {}) => {
+export const getDatasetMetadata = async (datasetId, { limit = 200, offset = 0, qLimit, qOffset } = {}) => {
   const response = await apiClient.get(`/datasets/${datasetId}/metadata`, {
-    params: { limit, offset },
+    params: { limit, offset, qLimit, qOffset },
   });
   return response.data;
 };

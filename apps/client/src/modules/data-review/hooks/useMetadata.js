@@ -22,6 +22,8 @@ export const useMetadata = (datasetId, options = {}) => {
     error: ""
   });
 
+  const [qOffset, setQOffset] = useState(0);
+
   const fetchMetadata = useCallback(async () => {
     if (!datasetId) {
       return;
@@ -33,6 +35,8 @@ export const useMetadata = (datasetId, options = {}) => {
       const response = await getDatasetMetadata(datasetId, {
         limit: previewLimit,
         offset: previewOffset,
+        qLimit: 50,
+        qOffset
       });
 
       setState((prev) => ({
@@ -52,7 +56,7 @@ export const useMetadata = (datasetId, options = {}) => {
         error: error.response?.data?.message || error.message || "Failed to load metadata"
       }));
     }
-  }, [datasetId, previewLimit, previewOffset]);
+  }, [datasetId, previewLimit, previewOffset, qOffset]);
 
   // Schema edits are persisted first, then metadata is refreshed for consistency.
   const updateSchema = useCallback(
@@ -72,7 +76,7 @@ export const useMetadata = (datasetId, options = {}) => {
       if (!datasetId) {
         return;
       }
-      const response = await deleteQuarantineRow(datasetId, rowIndex);
+      const response = await deleteQuarantineRow(datasetId, qOffset + rowIndex);
       // Update local state immediately so row actions feel responsive.
       setState((prev) => {
         const nextRows = prev.quarantinedRows.filter((_, index) => index !== rowIndex);
@@ -81,14 +85,14 @@ export const useMetadata = (datasetId, options = {}) => {
           quarantinedRows: nextRows,
           metadata: prev.metadata
             ? {
-                ...prev.metadata,
-                  rowCount: response?.rowCount ?? prev.metadata.rowCount,
-                  quarantinedCount: response?.quarantinedCount ?? nextRows.length
-              }
+              ...prev.metadata,
+              rowCount: response?.rowCount ?? prev.metadata.rowCount,
+              quarantinedCount: response?.quarantinedCount ?? nextRows.length
+            }
             : prev.metadata
         };
       });
-        return response;
+      return response;
     },
     [datasetId, fetchMetadata]
   );
@@ -104,10 +108,10 @@ export const useMetadata = (datasetId, options = {}) => {
         quarantinedRows: [],
         metadata: prev.metadata
           ? {
-              ...prev.metadata,
-              rowCount: response?.rowCount ?? prev.metadata.rowCount,
-              quarantinedCount: response?.quarantinedCount ?? 0
-            }
+            ...prev.metadata,
+            rowCount: response?.rowCount ?? prev.metadata.rowCount,
+            quarantinedCount: response?.quarantinedCount ?? 0
+          }
           : prev.metadata
       }));
       return response;
@@ -122,9 +126,9 @@ export const useMetadata = (datasetId, options = {}) => {
       }
 
       // Single-row restore enforces backend validation before moving data back to clean records.
-      await validateQuarantineRow(datasetId, rowIndex, updatedData);
+      await validateQuarantineRow(datasetId, qOffset + rowIndex, updatedData);
 
-      const response = await restoreQuarantineRow(datasetId, rowIndex, updatedData);
+      const response = await restoreQuarantineRow(datasetId, qOffset + rowIndex, updatedData);
       setState((prev) => {
         const nextRows = prev.quarantinedRows.filter((_, index) => index !== rowIndex);
         const restoredData = response?.restoredData;
@@ -138,15 +142,15 @@ export const useMetadata = (datasetId, options = {}) => {
           previewData: nextPreview,
           metadata: prev.metadata
             ? {
-                ...prev.metadata,
-                  rowCount: response?.rowCount ?? prev.metadata.rowCount,
-                  quarantinedCount: response?.quarantinedCount ?? nextRows.length
-              }
+              ...prev.metadata,
+              rowCount: response?.rowCount ?? prev.metadata.rowCount,
+              quarantinedCount: response?.quarantinedCount ?? nextRows.length
+            }
             : prev.metadata
         };
       });
       await fetchMetadata();
-        return response;
+      return response;
     },
     [datasetId, previewLimit, fetchMetadata]
   );
@@ -175,16 +179,16 @@ export const useMetadata = (datasetId, options = {}) => {
           previewData: nextPreview,
           metadata: prev.metadata
             ? {
-                ...prev.metadata,
-                  rowCount: response?.rowCount ?? prev.metadata.rowCount,
-                quarantinedCount:
-                    response?.quarantinedCount ?? remainingQuarantined.length
-              }
+              ...prev.metadata,
+              rowCount: response?.rowCount ?? prev.metadata.rowCount,
+              quarantinedCount:
+                response?.quarantinedCount ?? remainingQuarantined.length
+            }
             : prev.metadata
         };
       });
       await fetchMetadata();
-        return response;
+      return response;
     },
     [datasetId, previewLimit, fetchMetadata]
   );
@@ -202,7 +206,9 @@ export const useMetadata = (datasetId, options = {}) => {
     deleteQuarantinedRow,
     deleteAllQuarantinedRows,
     restoreQuarantinedRow,
-    restoreAllValidQuarantinedRows
+    restoreAllValidQuarantinedRows,
+    qOffset,
+    setQOffset
   };
 };
 

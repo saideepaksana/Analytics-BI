@@ -2,6 +2,10 @@ import { useState } from "react";
 
 function QuarantineUI({
   quarantinedRows = [],
+  totalCount = 0,
+  qOffset = 0,
+  onNextPage,
+  onPrevPage,
   onDelete,
   onDeleteAll,
   onRestoreAll,
@@ -99,7 +103,12 @@ function QuarantineUI({
   return (
     <div className="panel-block warning-block">
       <div className="panel-head">
-        <h3>Quarantine ({quarantinedRows.length})</h3>
+        <h3>Quarantine</h3>
+        {totalCount > 50 && (
+          <p className="quarantine-subtitle" style={{ fontSize: "0.85em", color: "var(--text-muted)", marginTop: "4px" }}>
+            Viewing rows {qOffset + 1}-{Math.min(qOffset + quarantinedRows.length, totalCount)} of {totalCount} total issues
+          </p>
+        )}
       </div>
 
       <div className="quarantine-top-actions">
@@ -194,6 +203,30 @@ function QuarantineUI({
           );
         })}
       </ul>
+
+      {totalCount > 50 && (
+        <div className="data-review-pagination" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1rem', marginTop: '1rem' }}>
+          <button
+            type="button"
+            className="pagination-btn"
+            onClick={onPrevPage}
+            disabled={qOffset === 0 || busy}
+          >
+            Prev
+          </button>
+          <span className="pagination-info">
+            Rows {qOffset + 1}-{Math.min(qOffset + quarantinedRows.length, totalCount)} / {totalCount}
+          </span>
+          <button
+            type="button"
+            className="pagination-btn"
+            onClick={onNextPage}
+            disabled={qOffset + quarantinedRows.length >= totalCount || busy}
+          >
+            Next
+          </button>
+        </div>
+      )}
     </div>
   );
 }
