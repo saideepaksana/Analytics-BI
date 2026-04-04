@@ -1,0 +1,37 @@
+import React from "react";
+import { BarChart3, LineChart, PieChart, AreaChart, ScatterChart } from "lucide-react";
+
+const CHART_TYPES = [
+  { id: "bar", label: "Bar Chart", icon: BarChart3, description: "Compare categorical data using rectangular bars." },
+  { id: "line", label: "Line Chart", icon: LineChart, description: "Display trends over time or continuous categories." },
+  { id: "pie", label: "Pie Chart", icon: PieChart, description: "Show proportions of a whole across categories." },
+  { id: "area", label: "Area Chart", icon: AreaChart, description: "Similar to line charts but with filled areas." },
+  { id: "scatter", label: "Scatter Plot", icon: ScatterChart, description: "Identify relationships between two numeric variables." },
+];
+
+export default function ChartTypeSelector({ selectedType, onSelect }) {
+  return (
+    <div className="chart-type-grid">
+      {CHART_TYPES.map((type) => {
+        const Icon = type.icon;
+        const isSelected = selectedType === type.id;
+        return (
+          <button
+            key={type.id}
+            type="button"
+            className={`chart-type-card ${isSelected ? "selected" : ""}`}
+            onClick={() => onSelect(type.id)}
+          >
+            <div className="chart-type-icon">
+              <Icon size={32} />
+            </div>
+            <div className="chart-type-info">
+              <h4>{type.label}</h4>
+              <p>{type.description}</p>
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}

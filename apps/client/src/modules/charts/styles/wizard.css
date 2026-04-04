@@ -267,23 +267,279 @@
     cursor: not-allowed;
 }
 
-/* Placeholder step 2 */
-.wizard-placeholder {
+/* Step Info */
+.wizard-step-info {
+    margin-bottom: 24px;
+    animation: fadeIn 0.4s ease;
+}
+
+.wizard-step-info .step-number {
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--primary-color, #3b82f6);
+    letter-spacing: 0.05em;
+}
+
+.wizard-step-info h3 {
+    margin: 4px 0 0;
+    font-size: 1.25rem;
+    color: var(--text-primary, #ffffff);
+}
+
+/* Chart Type Selector */
+.chart-type-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 16px;
+    animation: slideUp 0.4s ease;
+}
+
+.chart-type-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.05));
+    border-radius: 16px;
+    padding: 20px;
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
     text-align: center;
-    height: 100%;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     color: var(--text-secondary, #94a3b8);
 }
 
-.wizard-placeholder-icon {
-    margin-bottom: 24px;
+[data-theme="light"] .chart-type-card {
+    background: #f8fafc;
+    border-color: #e2e8f0;
+}
+
+.chart-type-card:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(59, 130, 246, 0.3);
+    transform: translateY(-4px);
+    color: var(--text-primary, #ffffff);
+}
+
+.chart-type-card.selected {
+    background: rgba(59, 130, 246, 0.1);
+    border-color: var(--primary-color, #3b82f6);
+    color: var(--text-primary, #ffffff);
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.2);
+}
+
+.chart-type-icon {
+    margin-bottom: 16px;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
     color: var(--primary-color, #3b82f6);
+}
+
+.chart-type-info h4 {
+    margin: 0 0 8px;
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.chart-type-info p {
+    margin: 0;
+    font-size: 0.85rem;
+    line-height: 1.4;
+    opacity: 0.8;
 }
 
 @keyframes fadeIn {
     from { opacity: 0; }
     to { opacity: 1; }
+}
+
+@keyframes slideUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Step 3: Dimension/Measure Selector */
+.selector-container {
+    display: flex;
+    gap: 32px;
+    height: 100%;
+    min-height: 400px;
+    animation: fadeIn 0.5s ease;
+}
+
+.selector-column {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.05));
+    border-radius: 16px;
+    overflow: hidden;
+}
+
+.selector-column h4 {
+    padding: 16px 20px;
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--text-secondary, #94a3b8);
+    border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.05));
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.fields-pool {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.field-pill {
+    padding: 10px 14px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.05));
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: all 0.2s ease;
+}
+
+.field-pill.assigned {
+    opacity: 0.5;
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.field-icon {
+    color: var(--primary-color, #3b82f6);
+    display: flex;
+    align-items: center;
+}
+
+.field-name {
+    flex: 1;
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+.field-actions {
+    display: flex;
+    gap: 6px;
+}
+
+.field-actions button {
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-secondary, #94a3b8);
+    font-size: 0.7rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.field-actions button:hover {
+    background: var(--primary-color, #3b82f6);
+    color: white;
+    border-color: var(--primary-color, #3b82f6);
+}
+
+.assigned-check {
+    color: #10b981;
+}
+
+.role-assignments {
+    background: transparent !important;
+    border: none !important;
+    gap: 20px;
+}
+
+.role-group {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.05));
+    border-radius: 16px;
+    overflow: hidden;
+}
+
+.role-pool {
+    padding: 16px;
+    flex: 1;
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    gap: 10px;
+    min-height: 120px;
+}
+
+.role-pool.blue-zone { background: rgba(59, 130, 246, 0.03); }
+.role-pool.green-zone { background: rgba(16, 185, 129, 0.03); }
+
+.placeholder {
+    font-size: 0.85rem;
+    color: var(--text-secondary, #94a3b8);
+    width: 100%;
+    text-align: center;
+    margin: auto;
+    opacity: 0.6;
+}
+
+.assigned-pill {
+    padding: 8px 12px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    animation: scaleIn 0.2s ease;
+}
+
+.assigned-pill.dimension {
+    background: rgba(59, 130, 246, 0.15);
+    color: #93c5fd;
+    border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.assigned-pill.measure {
+    background: rgba(16, 185, 129, 0.15);
+    color: #6ee7b7;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.assigned-pill button {
+    background: transparent;
+    border: none;
+    color: inherit;
+    font-size: 1.2rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    opacity: 0.6;
+}
+
+.assigned-pill button:hover {
+    opacity: 1;
+}
+
+.loading-schema {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-secondary, #94a3b8);
+    font-size: 1.1rem;
+}
+
+@keyframes scaleIn {
+    from { transform: scale(0.9); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
 }

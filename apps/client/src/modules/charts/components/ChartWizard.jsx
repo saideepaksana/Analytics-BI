@@ -1,21 +1,65 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { X, ChevronRight, ChevronLeft, BarChart3, Settings2 } from "lucide-react";
 import DatasetExplorer from "./DatasetExplorer";
+import ChartTypeSelector from "./ChartTypeSelector";
+import DimensionMeasureSelector from "./DimensionMeasureSelector";
+import { getDatasetMetadata } from "../../../services/datasets.service";
 import "../styles/wizard.css";
 
 export default function ChartWizard({ isOpen, onClose, onComplete }) {
   const [step, setStep] = useState(1);
   const [selectedDatasetId, setSelectedDatasetId] = useState("");
+  const [selectedChartType, setSelectedChartType] = useState("");
+  const [availableColumns, setAvailableColumns] = useState([]);
+  const [dimensions, setDimensions] = useState([]);
+  const [measures, setMeasures] = useState([]);
+  const [loadingSchema, setLoadingSchema] = useState(false);
 
   if (!isOpen) return null;
 
+  const fetchSchema = useCallback(async (datasetId) => {
+    setLoadingSchema(true);
+    try {
+      const data = await getDatasetMetadata(datasetId);
+      const schema = data.schema || [];
+      setAvailableColumns(schema);
+      
+      // Auto-categorize
+      const initialMeasures = schema
+        .filter(col => {
+          const t = (col.type || "").toLowerCase();
+          return t.includes("int") || t.includes("float") || t.includes("number") || t.includes("decimal");
+        })
+        .map(col => col.name);
+      
+      const initialDimensions = schema
+        .filter(col => !initialMeasures.includes(col.name))
+        .map(col => col.name)
+        .slice(0, 2); // Pick first 2 as safety default
+
+      setMeasures(initialMeasures);
+      setDimensions(initialDimensions);
+    } catch (err) {
+      console.error("Failed to fetch dataset schema", err);
+    } finally {
+      setLoadingSchema(false);
+    }
+  }, []);
+
   const handleNext = () => {
-    if (step < 2) setStep(step + 1);
-    else {
-      // Finalize creation (placeholder for now)
+    if (step === 1) {
+      setStep(2);
+    } else if (step === 2) {
+      fetchSchema(selectedDatasetId);
+      setStep(3);
+    } else {
+      // Finalize creation
       onComplete?.({
         datasetId: selectedDatasetId,
-        title: "New Chart (Configured)",
+        type: selectedChartType,
+        dimensions,
+        measures,
+        title: `New ${selectedChartType.charAt(0).toUpperCase() + selectedChartType.slice(1)} Chart`,
       });
       handleClose();
     }
@@ -28,8 +72,16 @@ export default function ChartWizard({ isOpen, onClose, onComplete }) {
   const handleClose = () => {
     setStep(1);
     setSelectedDatasetId("");
+    setSelectedChartType("");
+    setDimensions([]);
+    setMeasures([]);
     onClose();
   };
+
+  const isNextDisabled = 
+    (step === 1 && !selectedDatasetId) || 
+    (step === 2 && !selectedChartType) ||
+    (step === 3 && (dimensions.length === 0 && measures.length === 0));
 
   return (
     <div className="wizard-overlay">
@@ -43,10 +95,20 @@ export default function ChartWizard({ isOpen, onClose, onComplete }) {
 
         <nav className="wizard-progress">
           <div className={`wizard-step-pill ${step >= 1 ? "active" : ""} ${step > 1 ? "completed" : ""}`} />
-          <div className={`wizard-step-pill ${step >= 2 ? "active" : ""}`} />
+          <div className={`wizard-step-pill ${step >= 2 ? "active" : ""} ${step > 2 ? "completed" : ""}`} />
+          <div className={`wizard-step-pill ${step >= 3 ? "active" : ""}`} />
         </nav>
 
         <main className="wizard-content">
+          <div className="wizard-step-info">
+            <span className="step-number">Step {step} of 3</span>
+            <h3>
+              {step === 1 && "Select Data Source"}
+              {step === 2 && "Choose Chart Type"}
+              {step === 3 && "Assign Dimensions & Measures"}
+            </h3>
+          </div>
+
           {step === 1 && (
             <DatasetExplorer
               selectedId={selectedDatasetId}
@@ -55,18 +117,34 @@ export default function ChartWizard({ isOpen, onClose, onComplete }) {
           )}
 
           {step === 2 && (
-            <div className="wizard-placeholder">
-              <div className="wizard-placeholder-icon">
-                <Settings2 size={64} strokeWidth={1.5} />
-              </div>
-              <h3>Step 2: Configure Chart</h3>
-              <p>
-                Visualizing data for dataset: <strong className="mono">{selectedDatasetId}</strong>
-              </p>
-              <div className="alert-info" style={{ marginTop: "24px", padding: "16px", borderRadius: "12px", background: "rgba(59, 130, 246, 0.1)", color: "#60a5fa", fontSize: "0.9rem" }}>
-                Chart configuration UI (AXIS, SERIES, COLORS) is coming soon.
-              </div>
-            </div>
+            <ChartTypeSelector
+              selectedType={selectedChartType}
+              onSelect={setSelectedChartType}
+            />
+          )}
+
+          {step === 3 && (
+            loadingSchema ? (
+              <div className="loading-schema">Fetching dataset structure...</div>
+            ) : (
+              <DimensionMeasureSelector
+                availableColumns={availableColumns}
+                dimensions={dimensions}
+                measures={measures}
+                onMoveToDimension={(name) => {
+                  setDimensions([...dimensions, name]);
+                  setMeasures(measures.filter(m => m !== name));
+                }}
+                onMoveToMeasure={(name) => {
+                  setMeasures([...measures, name]);
+                  setDimensions(dimensions.filter(d => d !== name));
+                }}
+                onRemove={(name) => {
+                  setDimensions(dimensions.filter(d => d !== name));
+                  setMeasures(measures.filter(m => m !== name));
+                }}
+              />
+            )
           )}
         </main>
 
@@ -87,9 +165,9 @@ export default function ChartWizard({ isOpen, onClose, onComplete }) {
             <button 
               className="wizard-footer-btn primary" 
               onClick={handleNext}
-              disabled={step === 1 && !selectedDatasetId}
+              disabled={isNextDisabled || loadingSchema}
             >
-              {step === 2 ? "Create Chart" : "Next"}
+              {step === 3 ? "Create Chart" : "Next"}
               <ChevronRight size={18} />
             </button>
           </div>
