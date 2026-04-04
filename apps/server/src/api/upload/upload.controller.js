@@ -483,16 +483,13 @@ exports.uploadFile = async (req, res) => {
       fileId: sourceFileId,
       fileName: safeFileName,
       mode,
-<<<<<<< HEAD
       rowCount: jobResult?.rowCount ?? 0,
       quarantinedCount: jobResult?.quarantinedCount ?? 0,
       uploadId: uploadId || undefined,
       jobId: job.id,
-=======
       rowCount: mode === "append" ? updatedRowCount : totalCleanCount,
       quarantinedCount: mode === "append" ? updatedQuarantineCount : totalDlqCount,
       uploadId: uploadId || undefined
->>>>>>> 5854a3a (fixed crashing quarantine UI)
     });
       //Error handling:
 //Handles:
