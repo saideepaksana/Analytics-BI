@@ -1,0 +1,289 @@
+/* Chart Wizard Styles - Midnight Aurora Theme */
+
+.wizard-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(8px);
+    z-index: 1000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    animation: fadeIn 0.3s ease;
+}
+
+.wizard-container {
+    width: 90%;
+    max-width: 800px;
+    height: 600px;
+    background: var(--surface-bg, rgba(255, 255, 255, 0.05));
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+    border-radius: 20px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+}
+
+[data-theme="light"] .wizard-container {
+    background: #ffffff;
+    border-color: #e2e8f0;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+}
+
+.wizard-header {
+    padding: 24px 32px;
+    border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.wizard-header h2 {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 600;
+    background: linear-gradient(135deg, #60a5fa, #c084fc);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.wizard-close-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary, #94a3b8);
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 50%;
+    transition: all 0.2s ease;
+}
+
+.wizard-close-btn:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-primary, #ffffff);
+}
+
+/* Progress Steps */
+.wizard-progress {
+    padding: 16px 32px;
+    display: flex;
+    gap: 12px;
+    border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.05));
+}
+
+.wizard-step-pill {
+    flex: 1;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.1);
+    position: relative;
+}
+
+.wizard-step-pill.active {
+    background: var(--primary-color, #3b82f6);
+    box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+}
+
+.wizard-step-pill.completed {
+    background: #10b981;
+}
+
+/* Content Area */
+.wizard-content {
+    flex: 1;
+    padding: 32px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Dataset Explorer */
+.dataset-explorer {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    height: 100%;
+}
+
+.explorer-search {
+    position: relative;
+    margin-bottom: 16px;
+}
+
+.explorer-search input {
+    width: 100%;
+    padding: 12px 16px 12px 44px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+    border-radius: 12px;
+    color: var(--text-primary, #ffffff);
+    font-size: 0.95rem;
+    transition: all 0.2s ease;
+}
+
+.explorer-search input:focus {
+    outline: none;
+    border-color: var(--primary-color, #3b82f6);
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+}
+
+.explorer-search-icon {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-secondary, #94a3b8);
+}
+
+.explorer-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    flex: 1;
+    overflow-y: auto;
+    padding-right: 8px;
+}
+
+/* Custom Scrollbar */
+.explorer-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.explorer-list::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+}
+
+.dataset-item {
+    padding: 16px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.05));
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.dataset-item:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(59, 130, 246, 0.3);
+}
+
+.dataset-item.selected {
+    background: rgba(59, 130, 246, 0.1);
+    border-color: var(--primary-color, #3b82f6);
+    box-shadow: 0 0 15px rgba(59, 130, 246, 0.2);
+}
+
+.dataset-item-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.dataset-item-title {
+    font-weight: 600;
+    color: var(--text-primary, #ffffff);
+}
+
+.dataset-item-meta {
+    font-size: 0.85rem;
+    color: var(--text-secondary, #94a3b8);
+    display: flex;
+    gap: 12px;
+}
+
+.dataset-item-check {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--primary-color, #3b82f6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    opacity: 0;
+    transform: scale(0);
+    transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.dataset-item.selected .dataset-item-check {
+    opacity: 1;
+    transform: scale(1);
+}
+
+/* Footer Section */
+.wizard-footer {
+    padding: 24px 32px;
+    border-top: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.wizard-footer-btn {
+    padding: 10px 24px;
+    border-radius: 10px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.wizard-footer-btn.primary {
+    background: var(--primary-color, #3b82f6);
+    color: white;
+    border: none;
+    box-shadow: 0 4px 6px rgba(59, 130, 246, 0.2);
+}
+
+.wizard-footer-btn.primary:hover:not(:disabled) {
+    background: #2563eb;
+    transform: translateX(2px);
+}
+
+.wizard-footer-btn.secondary {
+    background: transparent;
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+    color: var(--text-secondary, #94a3b8);
+}
+
+.wizard-footer-btn.secondary:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-primary, #ffffff);
+}
+
+.wizard-footer-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Placeholder step 2 */
+.wizard-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    height: 100%;
+    color: var(--text-secondary, #94a3b8);
+}
+
+.wizard-placeholder-icon {
+    margin-bottom: 24px;
+    color: var(--primary-color, #3b82f6);
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
