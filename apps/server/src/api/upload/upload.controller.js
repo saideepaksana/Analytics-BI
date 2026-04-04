@@ -335,119 +335,49 @@ exports.uploadFile = async (req, res) => {
     const sourceFileId = String(uploadStream.id);
     emitProgress(uploadId, { stage: "stored", progress: 20, datasetId, fileId: sourceFileId });
 
+    // ── Delegate processing to the background worker, then WAIT for it ──── //
+    // We use waitUntilFinished() so the HTTP response is only sent once the   //
+    // worker has fully parsed, validated, and stored the data. This restores  //
+    // the original UX: Data Review is populated the moment the upload returns.//
+    // BullMQ still handles retries, DLQ routing, and concurrency — the only  //
+    // difference is that the client waits synchronously for the result.       //
+    const { addBackgroundTask, getQueueEvents, QUEUE_NAMES } = require("../../jobs/queue");
 
-    //Deletes old data
-    if (mode === "replace") {
-      await Promise.all([
-        CleanRecord.deleteMany({ datasetId }),
-        DLQRecord.deleteMany({ datasetId })
-      ]);
-    }
-
-    const rowBase = mode === "append" ? await getNextRowBase(datasetId) : 0;
-
-    // /Extracts rows
-    const parsedRows = [];
-    emitProgress(uploadId, { stage: "parsing", progress: 35, datasetId });
-    const { parseQuarantineRows = [] } = await processGridFsFile({
-      gridFsFileId: sourceFileId,
-      originalFileName: safeFileName,
-      onBatch: async (batchRows) => {
-        parsedRows.push(...batchRows);
-      }
+    const job = await addBackgroundTask("process-upload", {
+      uploadId,
+      datasetId,
+      sourceFileId,
+      mode,
+      safeFileName,
+      explicitlyRelatedDatasets
     });
 
-    const rawRows = parsedRows.map((row) => row.data || {});
-    emitProgress(uploadId, { stage: "schema", progress: 55, datasetId });
-    const inferredColumns = classifyAllColumns(rawRows, rawRows.length);
-    const schema = inferredColumns.map((column) => ({
-      name: column.name,
-      type: column.dataType,
-      dataType: column.dataType,
-      role: column.role,
-      nullable: false, // ─ Fields are required (non-nullable) by default ─
-      constraints: inferConstraints(column),
-      suggestedAggregation: column.suggestedAggregation || null,
-      sampleValues: column.sampleValues || [],
-      nullCount: column.nullCount || 0,
-      uniqueCount: column.uniqueCount || 0
-    }));
-
-    emitProgress(uploadId, { stage: "transforming", progress: 70, datasetId });
-    const { validRows, invalidRows } = transformRows(rawRows, datasetId, schema);
-
-    const cleanDocs = validRows.map((data, index) => ({
-      datasetId,
-      rowNumber: rowBase + index + 1,
-      data,
-      sourceFileName: safeFileName,
-      status: "VALID"
-    }));
-
-    if (cleanDocs.length > 0) {
-      await CleanRecord.insertMany(cleanDocs);
-    }
-
-    emitProgress(uploadId, { stage: "quarantine", progress: 82, datasetId });
-    const dlqDocs = [
-      ...parseQuarantineRows.map((row, index) => ({
-        datasetId,
-        rowNumber: rowBase + parsedRows.length + index + 1,
-        rawData: row.rawData,
-        errorMessages: row.errors || ["Structural parse error"],
-        status: "QUARANTINED"
-      })),
-      ...invalidRows.map((row, index) => ({
-        datasetId,
-        rowNumber: rowBase + cleanDocs.length + parseQuarantineRows.length + index + 1,
-        rawData: row.rawData,
-        errorMessages: row.errors || ["Validation failed"],
-        status: "QUARANTINED"
-      }))
-    ];
-
-    if (dlqDocs.length > 0) {
-      await DLQRecord.insertMany(dlqDocs);
-    }
-
-    const updatedRowCount = (existingMeta?.rowCount || 0) + cleanDocs.length;
-    const updatedQuarantineCount = (existingMeta?.quarantinedCount || 0) + dlqDocs.length;
-    const finalSchema = schema.length > 0 ? schema : existingMeta?.schema || [];
-
-    emitProgress(uploadId, { stage: "saving", progress: 92, datasetId });
-    await Metadata.findOneAndUpdate(
-      { datasetId },
-      {
-        $set: {
-          datasetId,
-          fileName: safeFileName,
-          mode,
-          schema: finalSchema,
-          rowCount: mode === "append" ? updatedRowCount : cleanDocs.length,
-          quarantinedCount: mode === "append" ? updatedQuarantineCount : dlqDocs.length,
-          sourceFileId
-        }
-      },
-      { upsert: true }
-    );
-
-    emitProgress(uploadId, { stage: "relationships", progress: 96, datasetId });
+    // Wait for the worker to finish (success or final failure)
+    const queueEvents = getQueueEvents(QUEUE_NAMES.BACKGROUND_TASKS);
+    let jobResult;
     try {
-      await refreshDatasetRelationships(datasetId, explicitlyRelatedDatasets);
-    } catch (relationshipError) {
-      console.warn("[Upload] Relationship mapping refresh failed:", relationshipError.message);
+      jobResult = await job.waitUntilFinished(queueEvents, 120_000); // 2 min timeout
+    } catch (jobErr) {
+      // The job itself failed (exhausted retries or permanent error)
+      emitProgress(uploadId, { stage: "failed", progress: 100, detail: jobErr.message });
+      return res.status(500).json({
+        message: "File processing failed.",
+        detail: jobErr.message,
+        datasetId,
+        fileId: sourceFileId,
+      });
     }
 
-    emitProgress(uploadId, { stage: "done", progress: 100, datasetId });
     return res.status(200).json({
-      message: "File uploaded and processed successfully", //Sends success
+      message: "File uploaded and processed successfully.",
       datasetId,
       fileId: sourceFileId,
       fileName: safeFileName,
       mode,
-      rowCount: mode === "append" ? updatedRowCount : cleanDocs.length,
-      quarantinedCount: mode === "append" ? updatedQuarantineCount : dlqDocs.length,
-      uploadId: uploadId || undefined
+      rowCount: jobResult?.rowCount ?? 0,
+      quarantinedCount: jobResult?.quarantinedCount ?? 0,
+      uploadId: uploadId || undefined,
+      jobId: job.id,
     });
       //Error handling:
 //Handles:
