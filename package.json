@@ -28,5 +28,9 @@
   "homepage": "https://github.com/saideepaksana/Analytics-BI#readme",
   "devDependencies": {
     "@originjs/vite-plugin-federation": "^1.4.1"
+  },
+  "dependencies": {
+    "bullmq": "^5.73.0",
+    "ioredis": "^5.10.1"
   }
 }

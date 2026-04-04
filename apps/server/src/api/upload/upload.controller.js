@@ -355,115 +355,7 @@ exports.uploadFile = async (req, res) => {
     // Wait for the worker to finish (success or final failure)
     const queueEvents = getQueueEvents(QUEUE_NAMES.BACKGROUND_TASKS);
     let jobResult;
-    //Deletes old data
-    if (mode === "replace") {
-      await Promise.all([
-        CleanRecord.deleteMany({ datasetId }),
-        DLQRecord.deleteMany({ datasetId })
-      ]);
-    }
 
-    const rowBase = mode === "append" ? await getNextRowBase(datasetId) : 0;
-
-    emitProgress(uploadId, { stage: "parsing", progress: 35, datasetId });
-
-    let schema = mode === "append" ? (existingMeta?.schema || []) : null;
-    let totalCleanCount = 0;
-    let totalDlqCount = 0;
-    let currentRowOffset = rowBase;
-
-    const { parseQuarantineRows = [] } = await processGridFsFile({
-      gridFsFileId: sourceFileId,
-      originalFileName: safeFileName,
-      onBatch: async (batchRows) => {
-        const rawBatch = batchRows.map((row) => row.data || {});
-        
-        if (!schema || schema.length === 0) {
-          emitProgress(uploadId, { stage: "schema", progress: 55, datasetId });
-          const inferredColumns = classifyAllColumns(rawBatch, rawBatch.length);
-          schema = inferredColumns.map((column) => ({
-            name: column.name,
-            type: column.dataType,
-            dataType: column.dataType,
-            role: column.role,
-            nullable: false, 
-            constraints: inferConstraints(column),
-            suggestedAggregation: column.suggestedAggregation || null,
-            sampleValues: column.sampleValues || [],
-            nullCount: column.nullCount || 0,
-            uniqueCount: column.uniqueCount || 0
-          }));
-        }
-
-        const { validRows, invalidRows } = transformRows(rawBatch, datasetId, schema);
-
-        const cleanDocs = validRows.map((data, index) => ({
-          datasetId,
-          rowNumber: currentRowOffset + index + 1,
-          data,
-          sourceFileName: safeFileName,
-          status: "VALID"
-        }));
-
-        if (cleanDocs.length > 0) {
-          await CleanRecord.insertMany(cleanDocs);
-          totalCleanCount += cleanDocs.length;
-        }
-
-        const dlqDocs = invalidRows.map((row, index) => ({
-          datasetId,
-          rowNumber: currentRowOffset + validRows.length + index + 1,
-          rawData: row.rawData,
-          errorMessages: row.errors || ["Validation failed"],
-          status: "QUARANTINED"
-        }));
-
-        if (dlqDocs.length > 0) {
-          await DLQRecord.insertMany(dlqDocs);
-          totalDlqCount += dlqDocs.length;
-        }
-        
-        currentRowOffset += rawBatch.length;
-      }
-    });
-
-    emitProgress(uploadId, { stage: "quarantine", progress: 82, datasetId });
-    
-    const structuralDlqDocs = parseQuarantineRows.map((row, index) => ({
-      datasetId,
-      rowNumber: currentRowOffset + index + 1,
-      rawData: row.rawData,
-      errorMessages: row.errors || ["Structural parse error"],
-      status: "QUARANTINED"
-    }));
-
-    if (structuralDlqDocs.length > 0) {
-      await DLQRecord.insertMany(structuralDlqDocs);
-      totalDlqCount += structuralDlqDocs.length;
-    }
-
-    const updatedRowCount = (existingMeta?.rowCount || 0) + totalCleanCount;
-    const updatedQuarantineCount = (existingMeta?.quarantinedCount || 0) + totalDlqCount;
-    const finalSchema = schema && schema.length > 0 ? schema : existingMeta?.schema || [];
-
-    emitProgress(uploadId, { stage: "saving", progress: 92, datasetId });
-    await Metadata.findOneAndUpdate(
-      { datasetId },
-      {
-        $set: {
-          datasetId,
-          fileName: safeFileName,
-          mode,
-          schema: finalSchema,
-          rowCount: mode === "append" ? updatedRowCount : totalCleanCount,
-          quarantinedCount: mode === "append" ? updatedQuarantineCount : totalDlqCount,
-          sourceFileId
-        }
-      },
-      { upsert: true }
-    );
-
-    emitProgress(uploadId, { stage: "relationships", progress: 96, datasetId });
     try {
       jobResult = await job.waitUntilFinished(queueEvents, 120_000); // 2 min timeout
     } catch (jobErr) {
@@ -486,10 +378,7 @@ exports.uploadFile = async (req, res) => {
       rowCount: jobResult?.rowCount ?? 0,
       quarantinedCount: jobResult?.quarantinedCount ?? 0,
       uploadId: uploadId || undefined,
-      jobId: job.id,
-      rowCount: mode === "append" ? updatedRowCount : totalCleanCount,
-      quarantinedCount: mode === "append" ? updatedQuarantineCount : totalDlqCount,
-      uploadId: uploadId || undefined
+      jobId: job.id
     });
       //Error handling:
 //Handles:

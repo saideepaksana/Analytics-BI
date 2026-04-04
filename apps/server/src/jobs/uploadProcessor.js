@@ -1,7 +1,7 @@
 const { getBucket } = require("../core/storage");
-const Metadata = require("../models/Metadata"); 
-const CleanRecord = require("../models/CleanRecord"); 
-const DLQRecord = require("../models/DLQRecord"); 
+const Metadata = require("../models/Metadata");
+const CleanRecord = require("../models/CleanRecord");
+const DLQRecord = require("../models/DLQRecord");
 const { processGridFsFile } = require("../pipelines/parser/streamParser");
 const { classifyAllColumns } = require("../pipelines/schema-inference/classifyColumns");
 const { detectRelationships } = require("../pipelines/schema-inference/relationshipMapper");
@@ -114,91 +114,97 @@ exports.runUploadProcessor = async (jobData) => {
       ]);
     }
 
-    const parsedRows = [];
     emitProgress(uploadId, { stage: "parsing", progress: 35, datasetId });
-    
-    // Parse gridfs
+
+    let schema = mode === "append" ? (existingMeta?.schema || []) : null;
+    let totalCleanCount = 0;
+    let totalDlqCount = 0;
+    let currentRowOffset = rowBase;
+    let totalParsedCount = 0;
+
     let parseQuarantineRows = [];
     try {
-        const result = await processGridFsFile({
+      const result = await processGridFsFile({
         gridFsFileId: sourceFileId,
         originalFileName: safeFileName,
-        onBatch: async (batchRows) => parsedRows.push(...batchRows)
-        });
-        parseQuarantineRows = result.parseQuarantineRows || [];
+        onBatch: async (batchRows) => {
+          const rawBatch = batchRows.map((row) => row.data || {});
+          totalParsedCount += rawBatch.length;
+
+          if (!schema || schema.length === 0) {
+            emitProgress(uploadId, { stage: "schema", progress: 55, datasetId });
+            const inferredColumns = classifyAllColumns(rawBatch, rawBatch.length);
+            schema = inferredColumns.map((column) => ({
+              name: column.name,
+              type: column.dataType,
+              dataType: column.dataType,
+              role: column.role,
+              nullable: false,
+              constraints: inferConstraints(column),
+              suggestedAggregation: column.suggestedAggregation || null,
+              sampleValues: column.sampleValues || [],
+              nullCount: column.nullCount || 0,
+              uniqueCount: column.uniqueCount || 0
+            }));
+          }
+
+          const { validRows, invalidRows } = transformRows(rawBatch, datasetId, schema);
+
+          const cleanDocs = validRows.map((data, index) => ({
+            datasetId,
+            rowNumber: currentRowOffset + index + 1,
+            data,
+            sourceFileName: safeFileName,
+            status: "VALID"
+          }));
+
+          if (cleanDocs.length > 0) {
+            await CleanRecord.insertMany(cleanDocs);
+            totalCleanCount += cleanDocs.length;
+          }
+
+          const dlqDocs = invalidRows.map((row, index) => ({
+            datasetId,
+            rowNumber: currentRowOffset + validRows.length + index + 1,
+            rawData: row.rawData,
+            errorMessages: row.errors || ["Validation failed"],
+            status: "QUARANTINED"
+          }));
+
+          if (dlqDocs.length > 0) {
+            await DLQRecord.insertMany(dlqDocs);
+            totalDlqCount += dlqDocs.length;
+          }
+
+          currentRowOffset += rawBatch.length;
+        }
+      });
+      parseQuarantineRows = result.parseQuarantineRows || [];
     } catch (parseError) {
-        throw new PermanentError(`File parsing failed for ${safeFileName}: ` + parseError.message);
-    }
-  
-    const rawRows = parsedRows.map((row) => row.data || {});
-    emitProgress(uploadId, { stage: "schema", progress: 55, datasetId });
-    const inferredColumns = classifyAllColumns(rawRows, rawRows.length);
-    const schema = inferredColumns.map((column) => ({
-      name: column.name,
-      type: column.dataType,
-      dataType: column.dataType,
-      role: column.role,
-      nullable: false, 
-      constraints: inferConstraints(column),
-      suggestedAggregation: column.suggestedAggregation || null,
-      sampleValues: column.sampleValues || [],
-      nullCount: column.nullCount || 0,
-      uniqueCount: column.uniqueCount || 0
-    }));
-
-    emitProgress(uploadId, { stage: "transforming", progress: 70, datasetId });
-    const { validRows, invalidRows } = transformRows(rawRows, datasetId, schema);
-
-    const totalInvalidCount = parseQuarantineRows.length + invalidRows.length;
-    
-    // -----------------------------------------------------------------------
-    // Demonstration of #243 Retry Logic Thresholding
-    // If the data quality drops below a critical threshold (e.g., > 10% bad rows
-    // in this demo), we intentionally throw a non-permanent Error to simulate
-    // an operational block. BullMQ will catch this, backoff, and retry 3 times.
-    // If it's still failing (since the data hasn't changed), it moves to DLQ.
-    // -----------------------------------------------------------------------
-    if (rawRows.length > 0 && totalInvalidCount > (rawRows.length * 0.1)) {
-        throw new Error(`Data Quality Check Failed: Too many invalid rows (${totalInvalidCount} out of ${rawRows.length}). Halting ingestion for retry protocol.`);
-    }
-
-    const cleanDocs = validRows.map((data, index) => ({
-      datasetId,
-      rowNumber: rowBase + index + 1,
-      data,
-      sourceFileName: safeFileName,
-      status: "VALID"
-    }));
-
-    if (cleanDocs.length > 0) {
-      await CleanRecord.insertMany(cleanDocs);
+      throw new PermanentError(`File parsing failed for ${safeFileName}: ` + parseError.message);
     }
 
     emitProgress(uploadId, { stage: "quarantine", progress: 82, datasetId });
-    const dlqDocs = [
-      ...parseQuarantineRows.map((row, index) => ({
-        datasetId,
-        rowNumber: rowBase + parsedRows.length + index + 1,
-        rawData: row.rawData,
-        errorMessages: row.errors || ["Structural parse error"],
-        status: "QUARANTINED"
-      })),
-      ...invalidRows.map((row, index) => ({
-        datasetId,
-        rowNumber: rowBase + cleanDocs.length + parseQuarantineRows.length + index + 1,
-        rawData: row.rawData,
-        errorMessages: row.errors || ["Validation failed"],
-        status: "QUARANTINED"
-      }))
-    ];
 
-    if (dlqDocs.length > 0) {
-      await DLQRecord.insertMany(dlqDocs);
+    const structuralDlqDocs = parseQuarantineRows.map((row, index) => ({
+      datasetId,
+      rowNumber: currentRowOffset + index + 1,
+      rawData: row.rawData,
+      errorMessages: row.errors || ["Structural parse error"],
+      status: "QUARANTINED"
+    }));
+
+    if (structuralDlqDocs.length > 0) {
+      await DLQRecord.insertMany(structuralDlqDocs);
+      totalDlqCount += structuralDlqDocs.length;
     }
 
-    const updatedRowCount = (existingMeta?.rowCount || 0) + cleanDocs.length;
-    const updatedQuarantineCount = (existingMeta?.quarantinedCount || 0) + dlqDocs.length;
-    const finalSchema = schema.length > 0 ? schema : existingMeta?.schema || [];
+    const totalInvalidCount = parseQuarantineRows.length + (totalDlqCount - structuralDlqDocs.length);
+
+
+    const updatedRowCount = (existingMeta?.rowCount || 0) + totalCleanCount;
+    const updatedQuarantineCount = (existingMeta?.quarantinedCount || 0) + totalDlqCount;
+    const finalSchema = schema && schema.length > 0 ? schema : existingMeta?.schema || [];
 
     emitProgress(uploadId, { stage: "saving", progress: 92, datasetId });
     await Metadata.findOneAndUpdate(
@@ -209,8 +215,8 @@ exports.runUploadProcessor = async (jobData) => {
           fileName: safeFileName,
           mode,
           schema: finalSchema,
-          rowCount: mode === "append" ? updatedRowCount : cleanDocs.length,
-          quarantinedCount: mode === "append" ? updatedQuarantineCount : dlqDocs.length,
+          rowCount: mode === "append" ? updatedRowCount : totalCleanCount,
+          quarantinedCount: mode === "append" ? updatedQuarantineCount : totalDlqCount,
           sourceFileId
         }
       },
@@ -229,8 +235,8 @@ exports.runUploadProcessor = async (jobData) => {
     return {
       status: "success",
       datasetId,
-      rowCount: mode === "append" ? updatedRowCount : cleanDocs.length,
-      quarantinedCount: mode === "append" ? updatedQuarantineCount : dlqDocs.length,
+      rowCount: mode === "append" ? updatedRowCount : totalCleanCount,
+      quarantinedCount: mode === "append" ? updatedQuarantineCount : totalDlqCount,
     };
   } catch (error) {
     emitProgress(uploadId, { stage: "failed", progress: 100, detail: error.message });
