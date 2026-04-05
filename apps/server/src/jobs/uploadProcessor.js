@@ -1,60 +1,56 @@
-const { getBucket } = require("../core/storage");
+dd const { getBucket } = require("../core/storage");
 const Metadata = require("../models/Metadata");
 const CleanRecord = require("../models/CleanRecord");
 const DLQRecord = require("../models/DLQRecord");
 const { processGridFsFile } = require("../pipelines/parser/streamParser");
-const { classifyAllColumns } = require("../pipelines/schema-inference/classifyColumns");
+const { classifyAllColumns, inferConstraints } = require("../pipelines/schema-inference/classifyColumns");
+const { peekFirstRows } = require("../pipelines/parser/filePeeker");
 const { detectRelationships } = require("../pipelines/schema-inference/relationshipMapper");
-const { transformRows } = require("../pipelines/dts/index");
+const { transformRows, resolveCleanerForColumn } = require("../pipelines/dts/index");
 const { getIO } = require("../core/socket");
 const { PermanentError } = require("./retryPolicy");
 const logger = require("../core/logger");
 
-const SIGNED_NUMERIC_FIELDS = new Set(["base_excess"]);
-
+/**
+ * Bulk upsert clean records to ensure idempotency on job retries.
+ */
 const upsertCleanRecords = async (docs = []) => {
   if (!Array.isArray(docs) || docs.length === 0) {
     return;
   }
 
-  const operations = docs.map((doc) => ({
-    updateOne: {
-      filter: { datasetId: doc.datasetId, rowNumber: doc.rowNumber },
-      update: {
-        $set: {
-          data: doc.data,
-          sourceFileName: doc.sourceFileName,
-          status: doc.status,
-        },
-      },
-      upsert: true,
-    },
-  }));
-
-  await CleanRecord.bulkWrite(operations, { ordered: false });
+  try {
+    // Fast path: bulk insert. ordered: false ensures successful records are written even if duplicates exist.
+    await CleanRecord.insertMany(docs, { ordered: false });
+  } catch (error) {
+    // Idempotency: Ignore duplicate key errors implicitly (job retry)
+    const isDuplicateError = error.code === 11000 || (error.name === "MongoBulkWriteError" && error.writeErrors?.every(e => e.code === 11000));
+    if (!isDuplicateError) {
+      throw error;
+    }
+  }
 };
 
+/**
+ * Bulk upsert DLQ records to ensure idempotency on job retries.
+ */
 const upsertDlqRecords = async (docs = []) => {
   if (!Array.isArray(docs) || docs.length === 0) {
     return;
   }
 
-  const operations = docs.map((doc) => ({
-    updateOne: {
-      filter: { datasetId: doc.datasetId, rowNumber: doc.rowNumber },
-      update: {
-        $set: {
-          rawData: doc.rawData,
-          errorMessages: doc.errorMessages,
-          status: doc.status,
-        },
-      },
-      upsert: true,
-    },
-  }));
-
-  await DLQRecord.bulkWrite(operations, { ordered: false });
+  try {
+    // Fast path: bulk insert. ordered: false ensures successful records are written even if duplicates exist.
+    await DLQRecord.insertMany(docs, { ordered: false });
+  } catch (error) {
+    // Idempotency: Ignore duplicate key errors implicitly (job retry)
+    const isDuplicateError = error.code === 11000 || (error.name === "MongoBulkWriteError" && error.writeErrors?.every(e => e.code === 11000));
+    if (!isDuplicateError) {
+      throw error;
+    }
+  }
 };
+
 
 const emitProgress = (uploadId, payload) => {
   if (!uploadId) return;
@@ -64,31 +60,24 @@ const emitProgress = (uploadId, payload) => {
   }
 };
 
-const normalizeColumnName = (name) => String(name || "").toLowerCase().replace(/[^a-z0-9]+/g, "_");
-
-const hasToken = (name, tokens = []) => {
-  const normalized = normalizeColumnName(name);
-  return tokens.some((token) => new RegExp(`(^|_)${String(token).toLowerCase()}(_|$)`).test(normalized));
-};
-
-const isPositiveOnlyNumericField = (name) =>
-  hasToken(name, ["price", "amount", "cost", "quantity", "count", "total"]);
-
-const inferConstraints = (column) => {
-  const normalized = normalizeColumnName(column.name);
-  const constraints = {};
-
-  if (["number", "decimal", "integer", "int", "float", "double"].includes(column.dataType)) {
-    if (!SIGNED_NUMERIC_FIELDS.has(normalized) && isPositiveOnlyNumericField(column.name)) {
-      constraints.min = 0;
-    }
-  }
-  return constraints;
-};
-
 const getNextRowBase = async (datasetId) => {
   const latest = await CleanRecord.findOne({ datasetId }).sort({ rowNumber: -1 }).select("rowNumber").lean();
   return latest?.rowNumber || 0;
+};
+
+const buildSchemaMap = (metadataSchema = []) => {
+  const schemaMap = {};
+  metadataSchema.forEach((col) => {
+    const normalizedName = String(col.name || "").toLowerCase();
+    schemaMap[normalizedName] = {
+      ...col,
+      cleanerFn: resolveCleanerForColumn ? resolveCleanerForColumn(col) : null,
+      nullable: col.nullable === true,
+      constraints: col.constraints || {},
+      type: col.type || col.dataType,
+    };
+  });
+  return schemaMap;
 };
 
 const refreshDatasetRelationships = async (targetDatasetId, explicitlyRelatedDatasetIds = []) => {
@@ -168,53 +157,90 @@ exports.runUploadProcessor = async (jobData) => {
     let currentSchema = null;
     let totalParsedCount = 0;
 
-    let parseQuarantineRows = [];
+    // --- STEP 1: Pre-Infer Schema (Fast Peek) ---
+    if (mode !== "append" || !schema || schema.length === 0) {
+      emitProgress(uploadId, { stage: "schema", progress: 45, datasetId });
+      try {
+        const { rows: peekRows } = await peekFirstRows(sourceFileId, safeFileName, 500);
+        if (peekRows.length > 0) {
+          const inferredColumns = classifyAllColumns(peekRows, peekRows.length);
+          schema = inferredColumns.map((column) => ({
+            name: column.name,
+            type: column.dataType,
+            dataType: column.dataType,
+            role: column.role,
+            nullable: false,
+            constraints: inferConstraints(column),
+            suggestedAggregation: column.suggestedAggregation || null,
+            sampleValues: column.sampleValues || [],
+            nullCount: column.nullCount || 0,
+            uniqueCount: column.uniqueCount || 0
+          }));
+          currentSchema = schema;
+          emitProgress(uploadId, { stage: "parsing", progress: 50, datasetId });
+        }
+      } catch (peekError) {
+        logger.warn(`Peek-inference failed for ${safeFileName}: ${peekError.message}. Falling back to on-the-fly inference.`, "UploadProcessor");
+      }
+    } else {
+      currentSchema = schema;
+    }
+
     try {
-      const result = await processGridFsFile({
+      await processGridFsFile({
         gridFsFileId: sourceFileId,
         originalFileName: safeFileName,
         getSchema: () => currentSchema, // Pass schema to workers for parallel transformation
+        onQuarantine: async (quarantineBatch) => {
+          const structuralDlqDocs = quarantineBatch.map((row) => ({
+            datasetId,
+            rowNumber: row.rowNumber,
+            rawData: row.rawData,
+            errorMessages: row.errors || ["Structural parse error"],
+            status: "QUARANTINED"
+          }));
+          if (structuralDlqDocs.length > 0) {
+            await upsertDlqRecords(structuralDlqDocs);
+            totalDlqCount += structuralDlqDocs.length;
+          }
+        },
         onBatch: async (batchWrappers) => {
           const allTransformed = batchWrappers.every(w => w.transformed);
-          const rawBatch = batchWrappers.map(w => w.data);
+          totalParsedCount += batchWrappers.length;
 
-          totalParsedCount += rawBatch.length;
-
-          // 1. Initial Schema Inference (if not yet done)
-          if (!schema || schema.length === 0) {
-            emitProgress(uploadId, { stage: "transforming", progress: 55, datasetId, detail: "inferring-schema" });
-            const inferredColumns = classifyAllColumns(rawBatch, rawBatch.length);
-            schema = inferredColumns.map((column) => ({
-              name: column.name,
-              type: column.dataType,
-              dataType: column.dataType,
-              role: column.role,
-              nullable: false,
-              constraints: inferConstraints(column),
-              suggestedAggregation: column.suggestedAggregation || null,
-              sampleValues: column.sampleValues || [],
-              nullCount: column.nullCount || 0,
-              uniqueCount: column.uniqueCount || 0
-            }));
-            
-            // Set currentSchema to activate parallel transformation in workers for remaining batches
-            currentSchema = schema;
-          }
-
-          // 2. Data Insertion
           let cleanDocs = [];
           if (allTransformed) {
-            // Already cleaned and validated in worker threads!
-            cleanDocs = rawBatch.map((data, index) => ({
+            // Already cleaned and validated in worker threads (best performance!)
+            cleanDocs = batchWrappers.map((wrapper, index) => ({
               datasetId,
-              rowNumber: currentRowOffset + index + 1,
-              data,
+              rowNumber: wrapper.rowNumber || (currentRowOffset + index + 1),
+              data: wrapper.data,
               sourceFileName: safeFileName,
               status: "VALID"
             }));
           } else {
-            // Manual transformation (usually only for the first batch)
-            const { validRows, invalidRows } = transformRows(rawBatch, datasetId, schema);
+            // Manual transformation fallback (used for first batch if peek failed)
+            const rawRows = batchWrappers.map(w => w.data);
+            
+            // If schema still missing, infer it from this first batch
+            if (!schema || schema.length === 0) {
+              const inferredColumns = classifyAllColumns(rawRows, rawRows.length);
+              schema = inferredColumns.map((column) => ({
+                name: column.name,
+                type: column.dataType,
+                dataType: column.dataType,
+                role: column.role,
+                nullable: false,
+                constraints: inferConstraints(column),
+                suggestedAggregation: column.suggestedAggregation || null,
+                sampleValues: column.sampleValues || [],
+                nullCount: column.nullCount || 0,
+                uniqueCount: column.uniqueCount || 0
+              }));
+              currentSchema = schema;
+            }
+
+            const { validRows, invalidRows } = transformRows(rawRows, datasetId, schema);
             
             cleanDocs = validRows.map((data, index) => ({
               datasetId,
@@ -224,15 +250,14 @@ exports.runUploadProcessor = async (jobData) => {
               status: "VALID"
             }));
 
-            const dlqDocs = invalidRows.map((row, index) => ({
-              datasetId,
-              rowNumber: currentRowOffset + validRows.length + index + 1,
-              rawData: row.rawData,
-              errorMessages: row.errors || ["Validation failed"],
-              status: "QUARANTINED"
-            }));
-
-            if (dlqDocs.length > 0) {
+            if (invalidRows.length > 0) {
+              const dlqDocs = invalidRows.map((row, index) => ({
+                datasetId,
+                rowNumber: currentRowOffset + validRows.length + index + 1,
+                rawData: row.rawData,
+                errorMessages: row.errors || ["Validation failed"],
+                status: "QUARANTINED"
+              }));
               await upsertDlqRecords(dlqDocs);
               totalDlqCount += dlqDocs.length;
             }
@@ -243,31 +268,13 @@ exports.runUploadProcessor = async (jobData) => {
             totalCleanCount += cleanDocs.length;
           }
 
-          currentRowOffset += rawBatch.length;
+          currentRowOffset += batchWrappers.length;
         }
       });
-      parseQuarantineRows = result.parseQuarantineRows || [];
+      emitProgress(uploadId, { stage: "quarantine", progress: 82, datasetId });
     } catch (parseError) {
       throw new PermanentError(`File parsing failed for ${safeFileName}: ` + parseError.message);
     }
-
-    emitProgress(uploadId, { stage: "transforming", progress: 82, datasetId, detail: "quarantine-split" });
-
-    const structuralDlqDocs = parseQuarantineRows.map((row, index) => ({
-      datasetId,
-      rowNumber: currentRowOffset + index + 1,
-      rawData: row.rawData,
-      errorMessages: row.errors || ["Structural parse error"],
-      status: "QUARANTINED"
-    }));
-
-    if (structuralDlqDocs.length > 0) {
-      await upsertDlqRecords(structuralDlqDocs);
-      totalDlqCount += structuralDlqDocs.length;
-    }
-
-    const totalInvalidCount = parseQuarantineRows.length + (totalDlqCount - structuralDlqDocs.length);
-
 
     const updatedRowCount = (existingMeta?.rowCount || 0) + totalCleanCount;
     const updatedQuarantineCount = (existingMeta?.quarantinedCount || 0) + totalDlqCount;
@@ -309,22 +316,14 @@ exports.runUploadProcessor = async (jobData) => {
     };
   } catch (error) {
     emitProgress(uploadId, { stage: "failed", progress: 100, detail: error.message });
-    
-    // Finalize Metadata with failure status
     try {
       await Metadata.updateOne(
         { datasetId },
-        { 
-          $set: { 
-            inferenceStatus: "failed", 
-            inferenceError: error.message 
-          } 
-        }
+        { $set: { inferenceStatus: "failed", inferenceError: error.message } }
       );
     } catch (metaErr) {
       logger.error(`Failed to update error status in Metadata: ${metaErr.message}`, "Upload");
     }
-
     throw error;
   }
 };

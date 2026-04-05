@@ -10,6 +10,31 @@
 
 // Keyword Heuristics
 
+const SIGNED_NUMERIC_FIELDS = new Set(["base_excess"]);
+const POSITIVE_ONLY_NUMERIC_TOKENS = ["price", "amount", "cost", "quantity", "count", "total"];
+
+const normalizeColumnNameForConstraints = (name) => String(name || "").toLowerCase().replace(/[^a-z0-9]+/g, "_");
+
+const hasConstraintToken = (name, tokens = []) => {
+  const normalized = normalizeColumnNameForConstraints(name);
+  return tokens.some((token) => new RegExp(`(^|_)${String(token).toLowerCase()}(_|$)`).test(normalized));
+};
+
+const isPositiveOnlyNumericFieldForConstraints = (name) =>
+  hasConstraintToken(name, POSITIVE_ONLY_NUMERIC_TOKENS);
+
+const inferConstraints = (column) => {
+  const normalized = normalizeColumnNameForConstraints(column.name);
+  const constraints = {};
+
+  if (["number", "decimal", "integer", "int", "float", "double"].includes(column.dataType)) {
+    if (!SIGNED_NUMERIC_FIELDS.has(normalized) && isPositiveOnlyNumericFieldForConstraints(column.name)) {
+      constraints.min = 0;
+    }
+  }
+  return constraints;
+};
+
 // Words typically representing categorical (dimension) fields
 const DIMENSION_NAME_KEYWORDS = [
     "id", "name", "category", "type", "status", "region", "country",
@@ -301,4 +326,4 @@ function classifyAllColumns(documents, totalRows = documents.length) {
     return results;
 }
 
-module.exports = { classifyAllColumns, classifyColumn, inferDataType, };
+module.exports = { classifyAllColumns, classifyColumn, inferDataType, inferConstraints };

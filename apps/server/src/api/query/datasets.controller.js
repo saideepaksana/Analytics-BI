@@ -2,6 +2,9 @@ const Metadata = require("../../models/Metadata");
 const CleanRecord = require("../../models/CleanRecord");
 const DLQRecord = require("../../models/DLQRecord");
 const RawRecord = require("../../models/RawRecord");
+const { Worker } = require("worker_threads");
+const path = require("path");
+const os = require("os");
 const logger = require("../../core/logger");
 const { validateRow, cleanAndNormalizeRow, semanticValidateRow } = require("../../pipelines/dts/index");
 
@@ -21,6 +24,27 @@ const findQuarantineRowByIndexOrNumber = async (datasetId, rawIndex) => {
     .skip(parsed)
     .lean();
 };
+
+const VALIDATION_WORKER_FILE = path.join(__dirname, "../../pipelines/parser/validationWorker.js");
+const DEFAULT_WORKERS = Number(process.env.PARSER_WORKERS || Math.max(1, Math.min(os.cpus().length, 2)));
+
+const upsertCleanRecords = async (docs = []) => {
+  if (!Array.isArray(docs) || docs.length === 0) {
+    return;
+  }
+
+  try {
+    // Fast path: bulk insert. ordered: false ensures successful records are written even if duplicates exist.
+    await CleanRecord.insertMany(docs, { ordered: false });
+  } catch (error) {
+    // Idempotency: Ignore duplicate key errors implicitly (job retry)
+    const isDuplicateError = error.code === 11000 || (error.name === "MongoBulkWriteError" && error.writeErrors?.every(e => e.code === 11000));
+    if (!isDuplicateError) {
+      throw error;
+    }
+  }
+};
+
 
 // ─ Helper: Build schema map from metadata schema array ─
 const buildSchemaMap = (metadataSchema = []) => {
@@ -324,6 +348,7 @@ exports.deleteDataset = async (req, res) => {
 
 // POST /api/datasets/:datasetId/quarantine/restore-all
 exports.restoreAllValidQuarantinedRows = async (req, res) => {
+  let workerPool = null;
   try {
     const { datasetId } = req.params;
 
@@ -334,47 +359,113 @@ exports.restoreAllValidQuarantinedRows = async (req, res) => {
     const failedRows = [];
 
     const BATCH_SIZE = 500;
-    let batchRestored = [];
-    let batchIds = [];
+    const workerCount = DEFAULT_WORKERS;
 
-    const flushBatch = async () => {
-      if (batchRestored.length === 0) return;
-      await CleanRecord.insertMany(
-        batchRestored.map((r) => ({
+    // Helper: Initialize Worker Pool
+    const createPool = () => {
+      const workers = [];
+      const queue = [];
+      const callbacks = new Map();
+      let taskSeq = 0;
+
+      const assignTask = (workerState) => {
+        if (workerState.busy || queue.length === 0) return;
+        const task = queue.shift();
+        workerState.busy = true;
+        callbacks.set(task.taskId, { resolve: task.resolve, reject: task.reject, workerState });
+        workerState.worker.postMessage({
+          type: "process-batch",
+          taskId: task.taskId,
+          batchId: task.batchId,
+          rows: task.rows,
+          schemaMap
+        });
+      };
+
+      for (let i = 0; i < workerCount; i++) {
+        const worker = new Worker(VALIDATION_WORKER_FILE);
+        const workerState = { worker, busy: false };
+
+        worker.on("message", (msg) => {
+          const cb = callbacks.get(msg.taskId);
+          if (!cb) return;
+          callbacks.delete(msg.taskId);
+          cb.workerState.busy = false;
+          if (msg.error) cb.reject(new Error(msg.error));
+          else cb.resolve(msg);
+          assignTask(cb.workerState);
+        });
+
+        worker.on("error", (err) => {
+          const cb = Array.from(callbacks.values()).find(c => c.workerState === workerState);
+          if (cb) cb.reject(err);
+        });
+
+        workers.push(workerState);
+      }
+
+      return {
+        executeBatch: (batchId, rows) => new Promise((resolve, reject) => {
+          const taskId = ++taskSeq;
+          queue.push({ taskId, batchId, rows, resolve, reject });
+          workers.forEach(assignTask);
+        }),
+        close: () => Promise.all(workers.map(w => w.worker.terminate()))
+      };
+    };
+
+    workerPool = createPool();
+
+    const flushBatch = async (batchResult) => {
+      const { validRows = [], failedRows: batchFailed = [] } = batchResult;
+
+      if (validRows.length > 0) {
+        const cleanDocs = validRows.map((r) => ({
           datasetId,
           rowNumber: r.rowNumber,
           data: r.data,
           sourceFileName: metaDoc?.fileName || "",
           status: "VALID",
-        }))
-      );
-      await DLQRecord.deleteMany({ _id: { $in: batchIds } });
-      restoredCount += batchRestored.length;
-      batchRestored = [];
-      batchIds = [];
+        }));
+
+        await upsertCleanRecords(cleanDocs);
+
+        const validIds = validRows.map((r) => r._id);
+        await DLQRecord.deleteMany({ _id: { $in: validIds } });
+        restoredCount += validRows.length;
+      }
+
+      if (batchFailed.length > 0) {
+        failedRows.push(...batchFailed);
+      }
     };
 
     const cursor = DLQRecord.find({ datasetId }).sort({ rowNumber: 1 }).lean().cursor();
 
+    let currentBatch = [];
+    let batchSeq = 0;
+    const inFlight = [];
+
     for await (const row of cursor) {
-      const sourceData =
-        row.rawData && typeof row.rawData === "object" && !Array.isArray(row.rawData)
-          ? row.rawData
-          : {};
-      const normalizedData = cleanAndNormalizeRow(sourceData, schemaMap);
+      currentBatch.push(row);
+      if (currentBatch.length >= BATCH_SIZE) {
+        batchSeq++;
+        const promise = workerPool.executeBatch(batchSeq, currentBatch).then(flushBatch);
+        inFlight.push(promise);
+        currentBatch = [];
+      }
 
-      batchRestored.push({
-        data: normalizedData,
-        rowNumber: row.rowNumber,
-      });
-      batchIds.push(row._id);
-
-      if (batchRestored.length >= BATCH_SIZE) {
-        await flushBatch();
+      if (inFlight.length >= workerCount * 2) {
+        await Promise.race(inFlight);
       }
     }
 
-    await flushBatch();
+    if (currentBatch.length > 0) {
+      batchSeq++;
+      inFlight.push(workerPool.executeBatch(batchSeq, currentBatch).then(flushBatch));
+    }
+
+    await Promise.all(inFlight);
 
     const newRowCount = (metaDoc?.rowCount ?? 0) + restoredCount;
     const newQuarantinedCount = Math.max(0, (metaDoc?.quarantinedCount ?? 0) - restoredCount);
@@ -386,16 +477,16 @@ exports.restoreAllValidQuarantinedRows = async (req, res) => {
 
     return res.json({
       message: `Restored ${restoredCount} rows`,
-      restoredCount: restoredCount,
+      restoredCount,
       failedCount: failedRows.length,
-      restoredRows: [],
-      failedRows,
       rowCount: newRowCount,
       quarantinedCount: newQuarantinedCount,
     });
   } catch (error) {
     logger.error(`restoreAllValidQuarantinedRows error: ${error.message}`, "Datasets");
     return res.status(500).json({ message: "Internal server error" });
+  } finally {
+    if (workerPool) await workerPool.close();
   }
 };
 

@@ -121,6 +121,7 @@ const processWithWorkers = async ({
   batchSize,
   workerCount,
   onBatch,
+  onQuarantine, // Missing property
   onProgress,
   getSchema = () => null // New: dynamic schema getter
 }) => {
@@ -132,9 +133,9 @@ const processWithWorkers = async ({
   const pendingResults = new Map();
   const inFlight = new Set();
 
-  const parseQuarantineRows = [];
   let rowsSeen = 0;
   let rowsValid = 0;
+  let rowsQuarantined = 0;
 
   const emitResultInOrder = async (result) => {
     pendingResults.set(result.batchId, result);
@@ -145,9 +146,15 @@ const processWithWorkers = async ({
       nextBatchToEmit += 1;
 
       // Handle transformed results from worker
-      parseQuarantineRows.push(...(ordered.quarantineRows || []));
+      const quarantineBatch = ordered.quarantineRows || [];
+      if (quarantineBatch.length > 0) {
+        rowsQuarantined += quarantineBatch.length;
+        if (onQuarantine) {
+            await onQuarantine(quarantineBatch);
+        }
+      }
+      
       rowsValid += (ordered.validRows || []).length;
-
       if (ordered.validRows && ordered.validRows.length > 0) {
         // Some rows might be transformed, some might not (first batch)
         await onBatch(ordered.validRows);
@@ -156,7 +163,7 @@ const processWithWorkers = async ({
       onProgress({
         rowsSeen,
         rowsValid,
-        rowsQuarantined: parseQuarantineRows.length,
+        rowsQuarantined,
         batchesProcessed: nextBatchToEmit - 1
       });
     }
@@ -203,9 +210,9 @@ const processWithWorkers = async ({
   }
 
   return {
-    parseQuarantineRows,
     rowsSeen,
-    rowsValid
+    rowsValid,
+    rowsQuarantined
   };
 };
 
@@ -310,6 +317,7 @@ const processGridFsFile = async ({
   batchSize = DEFAULT_BATCH_SIZE,
   workerCount = DEFAULT_WORKERS,
   onBatch = async () => {},
+  onQuarantine = async () => {}, // New callback
   onProgress = () => {},
   getSchema = () => null // Pass through
 }) => {
@@ -338,15 +346,16 @@ const processGridFsFile = async ({
       batchSize,
       workerCount,
       onBatch,
+      onQuarantine,
       onProgress,
       getSchema
     });
 
     return {
       headers,
-      parseQuarantineRows: processed.parseQuarantineRows,
       rowsSeen: processed.rowsSeen,
-      rowsValid: processed.rowsValid
+      rowsValid: processed.rowsValid,
+      rowsQuarantined: processed.rowsQuarantined
     };
   }
 
@@ -359,15 +368,16 @@ const processGridFsFile = async ({
       batchSize,
       workerCount,
       onBatch,
+      onQuarantine,
       onProgress,
       getSchema
     });
 
     return {
       headers: excel.headers,
-      parseQuarantineRows: processed.parseQuarantineRows,
       rowsSeen: processed.rowsSeen,
-      rowsValid: processed.rowsValid
+      rowsValid: processed.rowsValid,
+      rowsQuarantined: processed.rowsQuarantined
     };
   }
 
