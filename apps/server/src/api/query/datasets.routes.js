@@ -10,10 +10,12 @@ const {
   restoreQuarantinedRow,
   restoreAllValidQuarantinedRows,
   deleteDataset,
+  queryDatasetData,
 } = require("./datasets.controller");
 
 router.get("/", listDatasets);
 router.get("/:datasetId/metadata", getDatasetMetadata);
+router.post("/:datasetId/query", queryDatasetData);
 router.patch("/:datasetId/schema/:columnName", updateSchemaColumn);
 router.delete("/:datasetId/quarantine/:rowIndex", deleteQuarantinedRow);
 router.delete("/:datasetId/quarantine", deleteAllQuarantinedRows);

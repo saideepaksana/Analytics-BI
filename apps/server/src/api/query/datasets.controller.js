@@ -398,3 +398,74 @@ exports.restoreAllValidQuarantinedRows = async (req, res) => {
     return res.status(500).json({ message: "Internal server error" });
   }
 };
+
+/**
+ * POST /api/datasets/:datasetId/query
+ */
+exports.queryDatasetData = async (req, res) => {
+  try {
+    const { datasetId } = req.params;
+    const { dimensions = [], measures = [], filters = [], orderBy = [], raw = false } = req.body;
+    if (!datasetId) return res.status(400).json({ message: "datasetId is required" });
+
+    const pipeline = [];
+    const matchStage = { datasetId };
+    if (Array.isArray(filters)) {
+      filters.forEach(f => {
+        if (f.field && f.operator) {
+          const key = `data.${f.field}`;
+          if (f.operator === "=") matchStage[key] = f.value;
+          else if (f.operator === ">") matchStage[key] = { $gt: f.value };
+          else if (f.operator === "<") matchStage[key] = { $lt: f.value };
+        }
+      });
+    }
+    pipeline.push({ $match: matchStage });
+
+    if (raw) {
+      // Raw mode: return individual records (for scatter plots)
+      const projectStage = { _id: 0 };
+      const allFields = [
+        ...dimensions.map(d => (typeof d === "string" ? d : d.field)),
+        ...measures.map(m => m.field)
+      ].filter(Boolean);
+      allFields.forEach(f => { projectStage[f] = `$data.${f}`; });
+      pipeline.push({ $project: projectStage });
+      pipeline.push({ $limit: 1000 });
+    } else {
+      // Aggregated mode: group and aggregate (for bar, line, pie, area)
+      const groupStage = { _id: {} };
+      dimensions.forEach(dim => {
+        const f = typeof dim === "string" ? dim : dim.field;
+        if (f) groupStage._id[f] = `$data.${f}`;
+      });
+      measures.forEach(m => {
+        if (m.field && m.aggregation) {
+          const op = m.aggregation.toUpperCase();
+          if (op === "COUNT") groupStage[m.field] = { $sum: 1 };
+          else groupStage[m.field] = { [`$${op.toLowerCase()}`]: `$data.${m.field}` };
+        }
+      });
+      if (Object.keys(groupStage._id).length === 0 && Object.keys(groupStage).length === 1) groupStage.count = { $sum: 1 };
+      pipeline.push({ $group: groupStage });
+
+      const projectStage = { _id: 0 };
+      Object.keys(groupStage._id).forEach(k => { projectStage[k] = `$_id.${k}`; });
+      Object.keys(groupStage).forEach(k => { if (k !== "_id") projectStage[k] = 1; });
+      pipeline.push({ $project: projectStage });
+
+      if (Array.isArray(orderBy) && orderBy.length > 0) {
+        const sortStage = {};
+        orderBy.forEach(o => { if (o.field) sortStage[o.field] = o.direction === "desc" ? -1 : 1; });
+        pipeline.push({ $sort: sortStage });
+      }
+      pipeline.push({ $limit: 1000 });
+    }
+
+    const results = await CleanRecord.aggregate(pipeline);
+    return res.json({ results });
+  } catch (error) {
+    logger.error(`queryDatasetData error: ${error.message}`, "Datasets");
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};

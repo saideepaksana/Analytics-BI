@@ -1,58 +1,61 @@
 const Chart = require("../../models/Chart");
+const crypto = require("crypto");
+const logger = require("../../core/logger");
 
-const sanitizeStringArray = (value) => {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  return value
-    .map((item) => String(item || "").trim())
-    .filter(Boolean);
-};
-
-const buildChartPayload = (body = {}, current = null) => {
-  const datasetId = String(body.datasetId || current?.datasetId || "").trim();
-  const chartType = String(body.chartType || body.type || current?.chartType || "").trim().toLowerCase();
-  const title = String(body.title || current?.title || "Untitled Chart").trim();
-
-  const queryConfig = {
-    dimensions: sanitizeStringArray(body.queryConfig?.dimensions || body.dimensions || current?.queryConfig?.dimensions),
-    measures: sanitizeStringArray(body.queryConfig?.measures || body.measures || current?.queryConfig?.measures),
-    filters: Array.isArray(body.queryConfig?.filters) ? body.queryConfig.filters : (current?.queryConfig?.filters || []),
-    sort: Array.isArray(body.queryConfig?.sort) ? body.queryConfig.sort : (current?.queryConfig?.sort || []),
-    limit: Number.isFinite(Number(body.queryConfig?.limit)) ? Number(body.queryConfig.limit) : (current?.queryConfig?.limit || 1000),
-  };
-
-  const visualization = {
-    theme: String(body.visualization?.theme || current?.visualization?.theme || "default"),
-    options: body.visualization?.options || current?.visualization?.options || {},
-  };
-
-  const state = body.state || current?.state || {};
-
+/**
+ * Maps incoming request body to the professional Chart schema.
+ * Provides defaults for missing nested fields.
+ */
+const mapToChartSchema = (body = {}) => {
   return {
-    title,
-    datasetId,
-    chartType,
-    queryConfig,
-    visualization,
-    state,
+    chartId: body.chartId || crypto.randomUUID(),
+    name: body.name || body.title || "Untitled Chart",
+
+    dataSource: {
+      datasetId: body.dataSource?.datasetId || body.datasetId || "",
+      table: body.dataSource?.table || body.table || "",
+    },
+
+    query: {
+      dimensions: Array.isArray(body.query?.dimensions) ? body.query.dimensions : [],
+      measures: Array.isArray(body.query?.measures) ? body.query.measures : [],
+      filters: Array.isArray(body.query?.filters) ? body.query.filters : [],
+      groupBy: Array.isArray(body.query?.groupBy) ? body.query.groupBy : [],
+      orderBy: Array.isArray(body.query?.orderBy) ? body.query.orderBy : [],
+    },
+
+    visualization: {
+      type: body.visualization?.type || body.chartType || "bar",
+      xAxis: body.visualization?.xAxis || "",
+      yAxis: body.visualization?.yAxis || "",
+      series: body.visualization?.series || {},
+    },
+
+    style: {
+      colorPalette: body.style?.colorPalette || ["#5470C6"],
+      showLegend: body.style?.showLegend !== false,
+      showGrid: body.style?.showGrid !== false,
+    },
+
+    state: {
+      validation: body.state?.validation || "valid",
+    },
   };
 };
 
+/**
+ * GET /api/charts
+ * Lists charts with pagination and optional dataset filtering.
+ */
 exports.listCharts = async (req, res) => {
   try {
     const limit = Math.min(parseInt(req.query.limit, 10) || 20, 200);
     const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
     const datasetId = String(req.query.datasetId || "").trim();
-    const q = String(req.query.q || "").trim();
 
     const filter = {};
     if (datasetId) {
-      filter.datasetId = datasetId;
-    }
-    if (q) {
-      filter.$text = { $search: q };
+      filter["dataSource.datasetId"] = datasetId;
     }
 
     const [charts, total] = await Promise.all([
@@ -60,21 +63,39 @@ exports.listCharts = async (req, res) => {
         .sort({ updatedAt: -1 })
         .skip(offset)
         .limit(limit)
-        .select("title chartType datasetId version createdAt updatedAt visualization.theme")
         .lean(),
       Chart.countDocuments(filter),
     ]);
 
-    return res.json({ charts, total, limit, offset });
+    return res.json({
+      charts,
+      pagination: {
+        total,
+        limit,
+        offset,
+      },
+    });
   } catch (error) {
+    logger.error(`List charts failed: ${error.message}`, "ChartsController");
     return res.status(500).json({ message: "Internal server error" });
   }
 };
 
+/**
+ * GET /api/charts/:id
+ * Fetches a single chart by chartId or MongoDB _id.
+ */
 exports.getChartById = async (req, res) => {
   try {
-    const { chartId } = req.params;
-    const chart = await Chart.findById(chartId).lean();
+    const { id } = req.params;
+    const isMongoId = id.match(/^[0-9a-fA-F]{24}$/);
+
+    const chart = await Chart.findOne({
+      $or: [
+        { chartId: id },
+        ...(isMongoId ? [{ _id: id }] : [])
+      ]
+    }).lean();
 
     if (!chart) {
       return res.status(404).json({ message: "Chart not found" });
@@ -82,80 +103,69 @@ exports.getChartById = async (req, res) => {
 
     return res.json({ chart });
   } catch (error) {
+    logger.error(`Get chart failed: ${error.message}`, "ChartsController");
     return res.status(500).json({ message: "Internal server error" });
   }
 };
 
+/**
+ * POST /api/charts
+ * Saves a chart (creates if new chartId, updates if existing).
+ */
 exports.saveChart = async (req, res) => {
   try {
-    const chartId = String(req.body.chartId || "").trim();
+    const payload = mapToChartSchema(req.body);
     const actor = req.user?.id || "anonymous";
 
-    if (chartId) {
-      const existing = await Chart.findById(chartId);
-      if (!existing) {
-        return res.status(404).json({ message: "Chart not found" });
-      }
-
-      const payload = buildChartPayload(req.body, existing);
-      if (!payload.datasetId || !payload.chartType) {
-        return res.status(400).json({ message: "datasetId and chartType are required" });
-      }
-
-      existing.set({
-        ...payload,
-        version: (existing.version || 1) + 1,
-        updatedBy: actor,
-      });
-
-      await existing.save();
-      return res.json({ message: "Chart updated", chart: existing });
+    if (!payload.dataSource.datasetId) {
+      return res.status(400).json({ message: "datasetId is required" });
     }
 
-    const payload = buildChartPayload(req.body, null);
-    if (!payload.datasetId || !payload.chartType) {
-      return res.status(400).json({ message: "datasetId and chartType are required" });
-    }
+    const chart = await Chart.findOneAndUpdate(
+      { chartId: payload.chartId },
+      {
+        $set: {
+          ...payload,
+          updatedBy: actor,
+        },
+        $setOnInsert: { createdBy: actor }
+      },
+      { upsert: true, returnDocument: 'after', runValidators: true }
+    );
 
-    const chart = await Chart.create({
-      ...payload,
-      createdBy: actor,
-      updatedBy: actor,
+    return res.json({
+      message: "Chart saved successfully",
+      chart,
     });
-
-    return res.status(201).json({ message: "Chart created", chart });
   } catch (error) {
-    return res.status(500).json({ message: "Internal server error" });
+    logger.error(`Save chart failed: ${error.message}`, "ChartsController");
+    return res.status(500).json({ message: "Internal server error", detail: error.message });
   }
 };
 
-exports.persistChartState = async (req, res) => {
+/**
+ * DELETE /api/charts/:id
+ * Removes a chart by chartId or MongoDB _id.
+ */
+exports.deleteChart = async (req, res) => {
   try {
-    const { chartId } = req.params;
-    const state = req.body?.state;
+    const { id } = req.params;
+    const isMongoId = id.match(/^[0-9a-fA-F]{24}$/);
 
-    if (!state || typeof state !== "object" || Array.isArray(state)) {
-      return res.status(400).json({ message: "state object is required" });
-    }
+    const deleted = await Chart.findOneAndDelete({
+      $or: [
+        { chartId: id },
+        ...(isMongoId ? [{ _id: id }] : [])
+      ]
+    });
 
-    const chart = await Chart.findByIdAndUpdate(
-      chartId,
-      {
-        $set: {
-          state,
-          updatedBy: req.user?.id || "anonymous",
-        },
-        $inc: { version: 1 },
-      },
-      { new: true }
-    ).lean();
-
-    if (!chart) {
+    if (!deleted) {
       return res.status(404).json({ message: "Chart not found" });
     }
 
-    return res.json({ message: "State persisted", chart });
+    return res.json({ message: "Chart deleted successfully" });
   } catch (error) {
+    logger.error(`Delete chart failed: ${error.message}`, "ChartsController");
     return res.status(500).json({ message: "Internal server error" });
   }
 };

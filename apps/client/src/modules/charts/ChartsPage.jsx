@@ -1,28 +1,60 @@
-import React, { useState } from "react";
-import { PlusCircle, BarChart3, Plus } from "lucide-react";
+import React, { useState, useEffect, useCallback } from "react";
+import { PlusCircle, BarChart3, Plus, Loader2 } from "lucide-react";
 import ChartCard from "./ChartCard";
 import ChartWizard from "./components/ChartWizard";
+import { fetchCharts, deleteChartData } from "../../services/charts.service";
 import "./styles/charts.css";
 
 export default function ChartsPage() {
   const [charts, setCharts] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [isWizardOpen, setIsWizardOpen] = useState(false);
+  const [error, setError] = useState(null);
+
+  const loadCharts = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await fetchCharts();
+      setCharts(data.charts || []);
+      setError(null);
+    } catch (err) {
+      setError("Failed to load charts from server.");
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadCharts();
+  }, [loadCharts]);
 
   const handleCreateChart = () => {
     setIsWizardOpen(true);
   };
 
-  const handleWizardComplete = (chartData) => {
-    const newChart = {
-      id: Math.random().toString(36).substr(2, 9),
-      title: chartData.title || `Sample Chart ${charts.length + 1}`,
-      type: ["Bar Chart", "Line Chart", "Pie Chart"][Math.floor(Math.random() * 3)],
-      datasetId: chartData.datasetId,
-      updatedAt: "Just now",
-    };
-    setCharts([newChart, ...charts]);
+  const handleDeleteChart = async (id) => {
+    try {
+      await deleteChartData(id);
+      setCharts(charts.filter(c => c.chartId !== id && c._id !== id));
+    } catch (err) {
+      console.error("Delete failed", err);
+    }
+  };
+
+  const handleWizardComplete = () => {
+    loadCharts();
     setIsWizardOpen(false);
   };
+
+  if (loading) {
+    return (
+      <div className="charts-page loading-center">
+        <Loader2 className="spinner" size={48} />
+        <p>Loading your visualizations...</p>
+      </div>
+    );
+  }
 
   if (charts.length === 0 && !isWizardOpen) {
     return (
@@ -42,6 +74,12 @@ export default function ChartsPage() {
             Create your first chart
           </button>
         </div>
+        
+        <ChartWizard 
+          isOpen={isWizardOpen} 
+          onClose={() => setIsWizardOpen(false)}
+          onComplete={handleWizardComplete}
+        />
       </div>
     );
   }
@@ -56,9 +94,15 @@ export default function ChartsPage() {
         </button>
       </div>
 
+      {error && <div className="page-error">{error}</div>}
+
       <div className="charts-grid">
         {charts.map((chart) => (
-          <ChartCard key={chart.id} chart={chart} />
+          <ChartCard 
+            key={chart.chartId || chart._id} 
+            chart={chart} 
+            onDelete={() => handleDeleteChart(chart.chartId || chart._id)}
+          />
         ))}
       </div>
 

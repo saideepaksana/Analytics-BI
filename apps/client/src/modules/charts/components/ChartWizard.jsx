@@ -1,50 +1,129 @@
-import React, { useState, useEffect, useCallback } from "react";
-import { X, ChevronRight, ChevronLeft, BarChart3, Settings2 } from "lucide-react";
+import React, { useState, useCallback } from "react";
+import { X, ChevronRight, ChevronLeft, Loader2, Sparkles } from "lucide-react";
 import DatasetExplorer from "./DatasetExplorer";
 import ChartTypeSelector from "./ChartTypeSelector";
 import DimensionMeasureSelector from "./DimensionMeasureSelector";
+import ChartPreview from "./ChartPreview";
 import { getDatasetMetadata } from "../../../services/datasets.service";
+import { queryDataset, saveChartData } from "../../../services/charts.service";
 import "../styles/wizard.css";
 
 export default function ChartWizard({ isOpen, onClose, onComplete }) {
   const [step, setStep] = useState(1);
   const [selectedDatasetId, setSelectedDatasetId] = useState("");
-  const [selectedChartType, setSelectedChartType] = useState("");
+  const [selectedChartType, setSelectedChartType] = useState("bar");
   const [availableColumns, setAvailableColumns] = useState([]);
   const [dimensions, setDimensions] = useState([]);
   const [measures, setMeasures] = useState([]);
   const [loadingSchema, setLoadingSchema] = useState(false);
-
-  if (!isOpen) return null;
+  const [loadingPreview, setLoadingPreview] = useState(false);
+  const [previewData, setPreviewData] = useState([]);
+  const [error, setError] = useState(null);
 
   const fetchSchema = useCallback(async (datasetId) => {
     setLoadingSchema(true);
+    setError(null);
     try {
       const data = await getDatasetMetadata(datasetId);
       const schema = data.schema || [];
       setAvailableColumns(schema);
-      
-      // Auto-categorize
-      const initialMeasures = schema
+
+      const numericTypes = schema
         .filter(col => {
           const t = (col.type || "").toLowerCase();
           return t.includes("int") || t.includes("float") || t.includes("number") || t.includes("decimal");
         })
         .map(col => col.name);
-      
-      const initialDimensions = schema
-        .filter(col => !initialMeasures.includes(col.name))
-        .map(col => col.name)
-        .slice(0, 2); // Pick first 2 as safety default
 
-      setMeasures(initialMeasures);
-      setDimensions(initialDimensions);
+      const nonNumericTypes = schema
+        .filter(col => !numericTypes.includes(col.name))
+        .map(col => col.name)
+        .slice(0, 1);
+
+      setMeasures(numericTypes.slice(0, 1));
+      setDimensions(nonNumericTypes);
     } catch (err) {
-      console.error("Failed to fetch dataset schema", err);
+      setError("Failed to fetch dataset schema");
+      console.error(err);
     } finally {
       setLoadingSchema(false);
     }
   }, []);
+
+  const fetchPreview = useCallback(async () => {
+    setLoadingPreview(true);
+    setError(null);
+    try {
+      let query;
+      if (selectedChartType === "scatter") {
+        // Scatter needs raw rows, not aggregated data
+        query = {
+          dimensions: dimensions.map(d => ({ field: d })),
+          measures: measures.map(m => ({ field: m })),
+          groupBy: [],
+          orderBy: [],
+          raw: true
+        };
+      } else {
+        query = {
+          dimensions,
+          measures: measures.map(m => ({ field: m, aggregation: "SUM" })),
+          groupBy: dimensions,
+          orderBy: measures.length > 0 ? [{ field: measures[0], direction: "desc" }] : []
+        };
+      }
+      const results = await queryDataset(selectedDatasetId, query);
+      setPreviewData(results);
+    } catch (err) {
+      setError("Failed to generate chart preview data");
+      console.error(err);
+    } finally {
+      setLoadingPreview(false);
+    }
+  }, [selectedDatasetId, selectedChartType, dimensions, measures]);
+
+  const handleCreateChart = useCallback(async () => {
+    try {
+      const chartPayload = {
+        name: `New ${selectedChartType.charAt(0).toUpperCase() + selectedChartType.slice(1)} Chart`,
+        dataSource: {
+          datasetId: selectedDatasetId,
+          table: "cleaned_records"
+        },
+        query: {
+          dimensions: dimensions.map(d => ({ field: d, type: "categorical" })),
+          measures: measures.map(m => ({ field: m, aggregation: "SUM" })),
+          groupBy: dimensions,
+          orderBy: measures.length > 0 ? [{ field: measures[0], direction: "desc" }] : []
+        },
+        visualization: {
+          type: selectedChartType,
+          xAxis: dimensions[0],
+          yAxis: measures[0],
+          series: { stack: false, grouped: true }
+        },
+        style: {
+          colorPalette: ["#6366f1", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6"],
+          showLegend: true,
+          showGrid: true
+        }
+      };
+
+      const newChart = await saveChartData(chartPayload);
+      onComplete?.(newChart);
+      // Reset state
+      setStep(1);
+      setSelectedDatasetId("");
+      setSelectedChartType("bar");
+      setDimensions([]);
+      setMeasures([]);
+      setError(null);
+      onClose();
+    } catch (err) {
+      setError("Failed to save chart");
+      console.error(err);
+    }
+  }, [selectedDatasetId, selectedChartType, dimensions, measures, onComplete, onClose]);
 
   const handleNext = () => {
     if (step === 1) {
@@ -52,105 +131,161 @@ export default function ChartWizard({ isOpen, onClose, onComplete }) {
     } else if (step === 2) {
       fetchSchema(selectedDatasetId);
       setStep(3);
+    } else if (step === 3) {
+      fetchPreview();
+      setStep(4);
     } else {
-      // Finalize creation
-      onComplete?.({
-        datasetId: selectedDatasetId,
-        type: selectedChartType,
-        dimensions,
-        measures,
-        title: `New ${selectedChartType.charAt(0).toUpperCase() + selectedChartType.slice(1)} Chart`,
-      });
-      handleClose();
+      handleCreateChart();
     }
   };
 
   const handleBack = () => {
-    if (step > 1) setStep(step - 1);
+    if (step > 1) {
+      setError(null);
+      setStep(step - 1);
+    }
   };
 
   const handleClose = () => {
     setStep(1);
     setSelectedDatasetId("");
-    setSelectedChartType("");
+    setSelectedChartType("bar");
     setDimensions([]);
     setMeasures([]);
+    setError(null);
     onClose();
   };
 
-  const isNextDisabled = 
-    (step === 1 && !selectedDatasetId) || 
+  // --- Validation ---
+  const CHART_CONSTRAINTS = {
+    bar:     { minDim: 1, maxDim: null, minMeas: 1, maxMeas: null, label: "Bar Chart" },
+    line:    { minDim: 1, maxDim: null, minMeas: 1, maxMeas: null, label: "Line Chart" },
+    area:    { minDim: 1, maxDim: null, minMeas: 1, maxMeas: null, label: "Area Chart" },
+    pie:     { minDim: 1, maxDim: 1,    minMeas: 1, maxMeas: 1,    label: "Pie Chart" },
+    scatter: { minDim: 0, maxDim: null, minMeas: 2, maxMeas: 2,    label: "Scatter Plot" },
+  };
+
+  const c = CHART_CONSTRAINTS[selectedChartType];
+  let validationError = null;
+  if (step === 3 && c) {
+    if (c.maxDim !== null && dimensions.length > c.maxDim) {
+      validationError = `${c.label} supports at most ${c.maxDim} dimension — remove ${dimensions.length - c.maxDim}.`;
+    } else if (c.maxMeas !== null && measures.length > c.maxMeas) {
+      validationError = `${c.label} supports at most ${c.maxMeas} measure(s) — remove ${measures.length - c.maxMeas}.`;
+    } else if (c.minDim > 0 && dimensions.length < c.minDim) {
+      validationError = `Add ${c.minDim - dimensions.length} more dimension(s) for ${c.label}.`;
+    } else if (c.minMeas > 0 && measures.length < c.minMeas) {
+      validationError = `Add ${c.minMeas - measures.length} more measure(s) for ${c.label}.`;
+    }
+  }
+
+  const isNextDisabled =
+    (step === 1 && !selectedDatasetId) ||
     (step === 2 && !selectedChartType) ||
-    (step === 3 && (dimensions.length === 0 && measures.length === 0));
+    (step === 3 && !!validationError);
+
+  // --- Early return AFTER all hooks ---
+  if (!isOpen) return null;
 
   return (
     <div className="wizard-overlay">
       <div className="wizard-container">
         <header className="wizard-header">
-          <h2>Create New Chart</h2>
+          <div className="header-title">
+            <Sparkles size={24} className="accent-icon" />
+            <h2>Create New Chart</h2>
+          </div>
           <button className="wizard-close-btn" onClick={handleClose}>
             <X size={20} />
           </button>
         </header>
 
         <nav className="wizard-progress">
-          <div className={`wizard-step-pill ${step >= 1 ? "active" : ""} ${step > 1 ? "completed" : ""}`} />
-          <div className={`wizard-step-pill ${step >= 2 ? "active" : ""} ${step > 2 ? "completed" : ""}`} />
-          <div className={`wizard-step-pill ${step >= 3 ? "active" : ""}`} />
+          {[1, 2, 3, 4].map(s => (
+            <div
+              key={s}
+              className={`wizard-step-pill ${step >= s ? "active" : ""} ${step > s ? "completed" : ""}`}
+            />
+          ))}
         </nav>
 
         <main className="wizard-content">
           <div className="wizard-step-info">
-            <span className="step-number">Step {step} of 3</span>
+            <span className="step-number">Step {step} of 4</span>
             <h3>
               {step === 1 && "Select Data Source"}
               {step === 2 && "Choose Chart Type"}
-              {step === 3 && "Assign Dimensions & Measures"}
+              {step === 3 && (validationError ? <span className="validation-text">{validationError}</span> : "Assign Dimensions & Measures")}
+              {step === 4 && "Live Chart Preview"}
             </h3>
+            {error && <div className="wizard-error">{error}</div>}
           </div>
 
-          {step === 1 && (
-            <DatasetExplorer
-              selectedId={selectedDatasetId}
-              onSelect={setSelectedDatasetId}
-            />
-          )}
-
-          {step === 2 && (
-            <ChartTypeSelector
-              selectedType={selectedChartType}
-              onSelect={setSelectedChartType}
-            />
-          )}
-
-          {step === 3 && (
-            loadingSchema ? (
-              <div className="loading-schema">Fetching dataset structure...</div>
-            ) : (
-              <DimensionMeasureSelector
-                availableColumns={availableColumns}
-                dimensions={dimensions}
-                measures={measures}
-                onMoveToDimension={(name) => {
-                  setDimensions([...dimensions, name]);
-                  setMeasures(measures.filter(m => m !== name));
-                }}
-                onMoveToMeasure={(name) => {
-                  setMeasures([...measures, name]);
-                  setDimensions(dimensions.filter(d => d !== name));
-                }}
-                onRemove={(name) => {
-                  setDimensions(dimensions.filter(d => d !== name));
-                  setMeasures(measures.filter(m => m !== name));
-                }}
+          <div className="step-content-box">
+            {step === 1 && (
+              <DatasetExplorer
+                selectedId={selectedDatasetId}
+                onSelect={setSelectedDatasetId}
               />
-            )
-          )}
+            )}
+
+            {step === 2 && (
+              <ChartTypeSelector
+                selectedType={selectedChartType}
+                onSelect={setSelectedChartType}
+              />
+            )}
+
+            {step === 3 && (
+              loadingSchema ? (
+                <div className="loading-stage">
+                  <Loader2 className="spinner" size={40} />
+                  <p>Analyzing dataset structure...</p>
+                </div>
+              ) : (
+                <DimensionMeasureSelector
+                  availableColumns={availableColumns}
+                  dimensions={dimensions}
+                  measures={measures}
+                  chartType={selectedChartType}
+                  validationError={validationError}
+                  onMoveToDimension={(name) => {
+                    setDimensions(prev => [...prev, name]);
+                    setMeasures(prev => prev.filter(m => m !== name));
+                  }}
+                  onMoveToMeasure={(name) => {
+                    setMeasures(prev => [...prev, name]);
+                    setDimensions(prev => prev.filter(d => d !== name));
+                  }}
+                  onRemove={(name) => {
+                    setDimensions(prev => prev.filter(d => d !== name));
+                    setMeasures(prev => prev.filter(m => m !== name));
+                  }}
+                />
+              )
+            )}
+
+            {step === 4 && (
+              loadingPreview ? (
+                <div className="loading-stage">
+                  <Loader2 className="spinner" size={40} />
+                  <p>Rendering visualization...</p>
+                </div>
+              ) : (
+                <ChartPreview
+                  type={selectedChartType}
+                  data={previewData}
+                  dimensions={dimensions}
+                  measures={measures.map(m => ({ field: m }))}
+                />
+              )
+            )}
+          </div>
         </main>
 
         <footer className="wizard-footer">
-          <button 
-            className="wizard-footer-btn secondary" 
+          <button
+            className="wizard-footer-btn secondary"
             onClick={handleBack}
             disabled={step === 1}
           >
@@ -162,13 +297,16 @@ export default function ChartWizard({ isOpen, onClose, onComplete }) {
             <button className="wizard-footer-btn secondary" onClick={handleClose}>
               Cancel
             </button>
-            <button 
-              className="wizard-footer-btn primary" 
+            <button
+              className="wizard-footer-btn primary"
               onClick={handleNext}
-              disabled={isNextDisabled || loadingSchema}
+              disabled={isNextDisabled || loadingSchema || loadingPreview}
             >
-              {step === 3 ? "Create Chart" : "Next"}
-              <ChevronRight size={18} />
+              {step === 4 ? (
+                <>Save Chart <Sparkles size={16} /></>
+              ) : (
+                <>Next <ChevronRight size={18} /></>
+              )}
             </button>
           </div>
         </footer>

@@ -4,32 +4,67 @@ const { Schema } = mongoose;
 
 const ChartSchema = new Schema(
   {
-    title: { type: String, required: true, trim: true },
-    datasetId: { type: String, required: true, index: true },
-    chartType: { type: String, required: true, trim: true },
-    queryConfig: {
-      dimensions: { type: [String], default: [] },
-      measures: { type: [String], default: [] },
-      filters: { type: [Schema.Types.Mixed], default: [] },
-      sort: { type: [Schema.Types.Mixed], default: [] },
-      limit: { type: Number, default: 1000 },
+    chartId: { type: String, required: true, unique: true, index: true },
+    name: { type: String, required: true, trim: true },
+
+    dataSource: {
+      datasetId: { type: String, required: true, index: true },
+      table: { type: String, default: "" },
     },
+
+    query: {
+      dimensions: [
+        {
+          field: { type: String },
+          type: { type: String },
+        },
+      ],
+      measures: [
+        {
+          field: { type: String },
+          aggregation: { type: String },
+        },
+      ],
+      filters: [
+        {
+          field: { type: String },
+          operator: { type: String },
+          value: { type: Schema.Types.Mixed },
+        },
+      ],
+      groupBy: { type: [String], default: [] },
+      orderBy: [
+        {
+          field: { type: String },
+          direction: { type: String, enum: ["asc", "desc"] },
+        },
+      ],
+    },
+
     visualization: {
-      theme: { type: String, default: "default" },
-      options: { type: Schema.Types.Mixed, default: {} },
+      type: { type: String, required: true },
+      xAxis: { type: String },
+      yAxis: { type: String },
+      series: { type: Schema.Types.Mixed, default: {} },
     },
+
+    style: {
+      colorPalette: { type: [String], default: [] },
+      showLegend: { type: Boolean, default: true },
+      showGrid: { type: Boolean, default: true },
+    },
+
     state: {
-      type: Schema.Types.Mixed,
-      default: {},
+      validation: { type: String, default: "valid" },
     },
-    version: { type: Number, default: 1 },
+
     createdBy: { type: String, default: "anonymous" },
     updatedBy: { type: String, default: "anonymous" },
   },
   { timestamps: true }
 );
 
-ChartSchema.index({ datasetId: 1, updatedAt: -1 });
-ChartSchema.index({ title: "text", chartType: "text" });
+ChartSchema.index({ "dataSource.datasetId": 1, updatedAt: -1 });
+ChartSchema.index({ name: "text" });
 
 module.exports = mongoose.model("Chart", ChartSchema);

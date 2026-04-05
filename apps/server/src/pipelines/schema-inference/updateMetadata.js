@@ -98,7 +98,7 @@ async function saveMetadata(collectionName, inferredData = {}) {
         update,
         {
             upsert: true,
-            new: true,
+            returnDocument: 'after',
             runValidators: true,
             setDefaultsOnInsert: true,
         }
@@ -123,7 +123,7 @@ async function markInferenceFailed(collectionName, errorMessage, datasetId = col
         },
         {
             upsert: true,
-            new: true,
+            returnDocument: 'after',
             runValidators: true,
             setDefaultsOnInsert: true,
         }
