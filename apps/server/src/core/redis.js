@@ -4,7 +4,10 @@ const logger = require("./logger");
 const redisConfig = {
   host: process.env.REDIS_HOST || "127.0.0.1",
   port: process.env.REDIS_PORT || 6379,
+  lazyConnect: true,
+  enableOfflineQueue: false,
   maxRetriesPerRequest: null, // Required by BullMQ
+  retryStrategy: () => null,
 };
 
 // Create a singleton Redis connection

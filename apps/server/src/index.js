@@ -4,7 +4,9 @@ const cors = require("cors");
 const mongoose = require("mongoose");
 const http = require("http");
 const { Server } = require("socket.io");
+const Redis = require("ioredis");
 const connectDB = require("./core/db");
+const { redisConfig } = require("./core/redis");
 const { initStorage } = require("./core/storage");
 const uploadRoutes = require("./api/upload/upload.routes");
 const datasetsRoutes = require("./api/query/datasets.routes");
@@ -12,9 +14,6 @@ const exportRoutes = require("./export/exportRoutes");
 const chartsRoutes = require("./api/charts/charts.routes");
 const dashboardRoutes = require("./api/dashboard/dashboard.routes");
 const { setIO } = require("./core/socket");
-const { initWorkers, shutdownWorkers } = require("./jobs/worker");
-const { addBackgroundTask, backgroundTasksQueue } = require("./jobs/queue");
-const { getQueueStats } = require("./jobs/orchestrator");
 const logger = require("./core/logger");
 
 const app = express();
@@ -22,8 +21,35 @@ const server = http.createServer(app);
 
 connectDB();
 
-// Initialize background task workers
-initWorkers();
+const startWorkersIfAvailable = async () => {
+  const probe = new Redis({
+    ...redisConfig,
+    lazyConnect: true,
+    enableOfflineQueue: false,
+  });
+
+  probe.on("error", () => {});
+
+  try {
+    await probe.connect();
+    await probe.ping();
+    const { initWorkers } = require("./jobs/worker");
+    initWorkers();
+  } catch (error) {
+    logger.warn(
+      `Redis unavailable at startup (${error.message}). Background workers are disabled until Redis is reachable.`,
+      "Server"
+    );
+  } finally {
+    try {
+      await probe.quit();
+    } catch {
+      probe.disconnect();
+    }
+  }
+};
+
+startWorkersIfAvailable();
 
 //start GridFS AFTER DB connects
 mongoose.connection.once("open", () => {
@@ -78,6 +104,7 @@ app.use("/api/export", exportRoutes);
 // Body: { "message": "hello" }
 app.post("/api/jobs/test-job", async (req, res) => {
   try {
+    const { addBackgroundTask } = require("./jobs/queue");
     const { message = "default test message" } = req.body;
     const job = await addBackgroundTask("test-job", { message });
     res.json({ queued: true, jobId: job.id, message });
@@ -90,6 +117,7 @@ app.post("/api/jobs/test-job", async (req, res) => {
 // Enqueues a job with an unknown name — triggers PermanentError → DLQ.
 app.post("/api/jobs/test-permanent-fail", async (req, res) => {
   try {
+    const { addBackgroundTask } = require("./jobs/queue");
     const job = await addBackgroundTask("nonexistent-job-type", { test: true });
     res.json({ queued: true, jobId: job.id, note: "This job will be routed to DLQ immediately" });
   } catch (err) {
@@ -101,6 +129,8 @@ app.post("/api/jobs/test-permanent-fail", async (req, res) => {
 // Returns live queue stats: active, waiting, failed, completed counts.
 app.get("/api/jobs/stats", async (req, res) => {
   try {
+    const { getQueueStats } = require("./jobs/orchestrator");
+    const { backgroundTasksQueue } = require("./jobs/queue");
     const stats = await getQueueStats(backgroundTasksQueue);
     res.json(stats);
   } catch (err) {
@@ -125,7 +155,12 @@ server.listen(PORT, () => {
 const shutdown = async () => {
   logger.warn("Graceful shutdown initiated...", "Server");
   try {
-    await shutdownWorkers();
+    try {
+      const { shutdownWorkers } = require("./jobs/worker");
+      await shutdownWorkers();
+    } catch {
+      // Workers may never have started if Redis was unavailable.
+    }
     // if mongoose is connected, we might want to close that too
     await mongoose.connection.close();
   } catch (err) {

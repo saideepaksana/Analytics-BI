@@ -12,6 +12,50 @@ const logger = require("../core/logger");
 
 const SIGNED_NUMERIC_FIELDS = new Set(["base_excess"]);
 
+const upsertCleanRecords = async (docs = []) => {
+  if (!Array.isArray(docs) || docs.length === 0) {
+    return;
+  }
+
+  const operations = docs.map((doc) => ({
+    updateOne: {
+      filter: { datasetId: doc.datasetId, rowNumber: doc.rowNumber },
+      update: {
+        $set: {
+          data: doc.data,
+          sourceFileName: doc.sourceFileName,
+          status: doc.status,
+        },
+      },
+      upsert: true,
+    },
+  }));
+
+  await CleanRecord.bulkWrite(operations, { ordered: false });
+};
+
+const upsertDlqRecords = async (docs = []) => {
+  if (!Array.isArray(docs) || docs.length === 0) {
+    return;
+  }
+
+  const operations = docs.map((doc) => ({
+    updateOne: {
+      filter: { datasetId: doc.datasetId, rowNumber: doc.rowNumber },
+      update: {
+        $set: {
+          rawData: doc.rawData,
+          errorMessages: doc.errorMessages,
+          status: doc.status,
+        },
+      },
+      upsert: true,
+    },
+  }));
+
+  await DLQRecord.bulkWrite(operations, { ordered: false });
+};
+
 const emitProgress = (uploadId, payload) => {
   if (!uploadId) return;
   const io = getIO();
@@ -189,13 +233,13 @@ exports.runUploadProcessor = async (jobData) => {
             }));
 
             if (dlqDocs.length > 0) {
-              await DLQRecord.insertMany(dlqDocs);
+              await upsertDlqRecords(dlqDocs);
               totalDlqCount += dlqDocs.length;
             }
           }
 
           if (cleanDocs.length > 0) {
-            await CleanRecord.insertMany(cleanDocs);
+            await upsertCleanRecords(cleanDocs);
             totalCleanCount += cleanDocs.length;
           }
 
@@ -218,7 +262,7 @@ exports.runUploadProcessor = async (jobData) => {
     }));
 
     if (structuralDlqDocs.length > 0) {
-      await DLQRecord.insertMany(structuralDlqDocs);
+      await upsertDlqRecords(structuralDlqDocs);
       totalDlqCount += structuralDlqDocs.length;
     }
 
