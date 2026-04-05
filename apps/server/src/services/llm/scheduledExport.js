@@ -5,6 +5,7 @@ const { Parser: CsvParser } = require("json2csv");
 const ExcelJS = require("exceljs");
 const fs = require("fs");
 const path = require("path");
+const logger = require("../../core/logger");
 
 const EXPORT_DIR = path.join(__dirname, "../../../../../exports");
 if (!fs.existsSync(EXPORT_DIR)) fs.mkdirSync(EXPORT_DIR, { recursive: true });
@@ -42,7 +43,7 @@ function registerSchedule({ scheduleId, datasetId, format, frequency, notifyFn }
       await ExportLog.create({ datasetId, format, exportedBy: `scheduler:${frequency}`, recordCount: records.length });
       if (notifyFn) notifyFn({ scheduleId, datasetId, format, filePath });
     } catch (err) {
-      console.error(`[Scheduler] ${scheduleId} failed:`, err.message);
+      logger.error(`${scheduleId} failed: ${err.message}`, "Scheduler");
     }
   });
 

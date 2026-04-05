@@ -8,6 +8,7 @@ const { detectRelationships } = require("../pipelines/schema-inference/relations
 const { transformRows } = require("../pipelines/dts/index");
 const { getIO } = require("../core/socket");
 const { PermanentError } = require("./retryPolicy");
+const logger = require("../core/logger");
 
 const SIGNED_NUMERIC_FIELDS = new Set(["base_excess"]);
 
@@ -251,7 +252,7 @@ exports.runUploadProcessor = async (jobData) => {
     try {
       await refreshDatasetRelationships(datasetId, explicitlyRelatedDatasets);
     } catch (relationshipError) {
-      console.warn("[Upload] Relationship mapping refresh failed:", relationshipError.message);
+      logger.warn(`Relationship mapping refresh failed: ${relationshipError.message}`, "Upload");
     }
 
     emitProgress(uploadId, { stage: "done", progress: 100, datasetId });
@@ -277,7 +278,7 @@ exports.runUploadProcessor = async (jobData) => {
         }
       );
     } catch (metaErr) {
-      console.error("[Upload] Failed to update error status in Metadata:", metaErr.message);
+      logger.error(`Failed to update error status in Metadata: ${metaErr.message}`, "Upload");
     }
 
     throw error;

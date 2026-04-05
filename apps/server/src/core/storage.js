@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const { GridFSBucket } = require("mongodb");
+const logger = require("./logger");
 
 let bucket;
 
@@ -14,7 +15,7 @@ const initStorage = () => {
     bucketName: "uploads",
   });
 
-  console.log("GridFS Initialized");
+  logger.success("GridFS Initialized", "Storage");
 };
 
 const getBucket = () => {

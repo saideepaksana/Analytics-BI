@@ -16,6 +16,7 @@ const mongoose = require("mongoose");
 const { classifyAllColumns } = require("./classifyColumns");
 const { detectRelationships } = require("./relationshipMapper");
 const { saveMetadata, markInferenceFailed, getAllMetadata, } = require("./updateMetadata");
+const logger = require("../../core/logger");
 
 const SAMPLE_SIZE = 100;
 
@@ -82,7 +83,7 @@ async function runSchemaInference({
     sourceFileId = "",
     datasetId = collectionName,
 }) {
-    console.log(`[SchemaInference] Starting inference for collection: ${collectionName}`);
+    logger.info(`Starting inference for collection: ${collectionName}`, "SchemaInference");
 
     try {
         if (!collectionName || typeof collectionName !== "string") {
@@ -96,15 +97,16 @@ async function runSchemaInference({
             throw new Error(`No documents found in collection "${collectionName}"`);
         }
 
-        console.log(`[SchemaInference] Sampled ${sampleDocs.length} documents`);
+        logger.info(`Sampled ${sampleDocs.length} documents`, "SchemaInference");
 
         // Step 2: classify columns
         const columns = classifyAllColumns(sampleDocs, totalRows || sampleDocs.length);
 
-        console.log(`[SchemaInference] Classified ${columns.length} columns`);
+        logger.info(`Classified ${columns.length} columns`, "SchemaInference");
         for (const col of columns) {
-            console.log(
-                `  → ${col.name}: ${col.role} (${col.dataType}) [confidence: ${col.confidence}]`
+            logger.info(
+                `  → ${col.name}: ${col.role} (${col.dataType}) [confidence: ${col.confidence}]`,
+                "SchemaInference"
             );
         }
 
@@ -137,10 +139,11 @@ async function runSchemaInference({
         // Step 4: detect relationships
         const relationships = detectRelationships(allCollectionsData);
 
-        console.log(`[SchemaInference] Detected ${relationships.length} relationships`);
+        logger.info(`Detected ${relationships.length} relationships`, "SchemaInference");
         for (const rel of relationships) {
-            console.log(
-                `  → ${rel.fromCollection}.${rel.fromColumn} -> ${rel.toCollection}.${rel.toColumn} (${rel.strategy || "unknown"}, confidence: ${rel.confidence})`
+            logger.info(
+                `  → ${rel.fromCollection}.${rel.fromColumn} -> ${rel.toCollection}.${rel.toColumn} (${rel.strategy || "unknown"}, confidence: ${rel.confidence})`,
+                "SchemaInference"
             );
         }
 
@@ -156,9 +159,7 @@ async function runSchemaInference({
             ingestionRule,
         });
 
-        console.log(
-            `[SchemaInference] ✓ Metadata saved for "${collectionName}" (id: ${savedMeta._id})`
-        );
+        logger.success(`Metadata saved for "${collectionName}" (id: ${savedMeta._id})`, "SchemaInference");
 
         // Step 6: Update cross-collection edges for previously existing datasets
         for (const meta of existingMetadata) {
@@ -179,21 +180,18 @@ async function runSchemaInference({
                     uploadedBy: meta.uploadedBy,
                     ingestionRule: meta.ingestionRule,
                 });
-                console.log(`[SchemaInference] ✓ Cross-collection links updated for "${mCollName}"`);
+                logger.success(`Cross-collection links updated for "${mCollName}"`, "SchemaInference");
             }
         }
 
         return savedMeta;
     } catch (err) {
-        console.error(`[SchemaInference] ✗ Failed for "${collectionName}":`, err.message);
+        logger.error(`✗ Failed for "${collectionName}": ${err.message}`, "SchemaInference");
 
         try {
             await markInferenceFailed(collectionName, err.message, datasetId);
         } catch (markErr) {
-            console.error(
-                `[SchemaInference] Failed to mark inference as failed:`,
-                markErr.message
-            );
+            logger.error(`Failed to mark inference as failed: ${markErr.message}`, "SchemaInference");
         }
 
         throw err;

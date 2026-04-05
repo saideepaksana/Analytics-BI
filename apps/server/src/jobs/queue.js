@@ -15,6 +15,7 @@
 const { Queue, QueueEvents } = require("bullmq");
 const { redisConnection } = require("../core/redis");
 const { RETRY_POLICIES } = require("./retryPolicy");
+const logger = require("../core/logger");
 
 // ---------------------------------------------------------------------------
 // Queue name registry — single source of truth
@@ -52,18 +53,17 @@ const getQueue = (queueName, defaultJobOptions = RETRY_POLICIES.STANDARD) => {
     const events = new QueueEvents(queueName, { connection: redisConnection });
 
     events.on("completed", ({ jobId }) => {
-      console.log(`[Queue:${queueName}] ✓ Job ${jobId} completed.`);
+      logger.success(`Job ${jobId} completed.`, `Queue:${queueName}`);
     });
 
     events.on("failed", ({ jobId, failedReason }) => {
-      console.error(
-        `[Queue:${queueName}] ✗ Job ${jobId} failed — ${failedReason}`
-      );
+      logger.error(`Job ${jobId} failed — ${failedReason}`, `Queue:${queueName}`);
     });
 
     events.on("stalled", ({ jobId }) => {
-      console.warn(
-        `[Queue:${queueName}] ⚠ Job ${jobId} stalled (worker likely crashed mid-job).`
+      logger.warn(
+        `Job ${jobId} stalled (worker likely crashed mid-job).`,
+        `Queue:${queueName}`
       );
     });
 

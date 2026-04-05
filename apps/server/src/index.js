@@ -13,6 +13,7 @@ const { setIO } = require("./core/socket");
 const { initWorkers, shutdownWorkers } = require("./jobs/worker");
 const { addBackgroundTask, backgroundTasksQueue } = require("./jobs/queue");
 const { getQueueStats } = require("./jobs/orchestrator");
+const logger = require("./core/logger");
 
 const app = express();
 const server = http.createServer(app);
@@ -115,21 +116,21 @@ app.get("/", (req, res) => {
 const PORT = process.env.PORT || 5000;
 
 server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  logger.info(`Server running on port ${PORT}`, "Server");
 });
 
 // Graceful shutdown handling
 const shutdown = async () => {
-  console.log("Graceful shutdown initiated...");
+  logger.warn("Graceful shutdown initiated...", "Server");
   try {
     await shutdownWorkers();
     // if mongoose is connected, we might want to close that too
     await mongoose.connection.close();
   } catch (err) {
-    console.error("Error during shutdown:", err);
+    logger.error(`Error during shutdown: ${err.message}`, "Server");
   } finally {
     server.close(() => {
-      console.log("Server closed.");
+      logger.info("Server closed.", "Server");
       process.exit(0);
     });
   }

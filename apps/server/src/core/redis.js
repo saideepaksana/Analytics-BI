@@ -1,4 +1,5 @@
 const Redis = require("ioredis");
+const logger = require("./logger");
 
 const redisConfig = {
   host: process.env.REDIS_HOST || "127.0.0.1",
@@ -10,12 +11,11 @@ const redisConfig = {
 const redisConnection = new Redis(redisConfig);
 
 redisConnection.on("error", (err) => {
-  console.error("Redis connection error:", err.message);
-  console.error("Background jobs and queuing might fail due to Redis unavailability.");
+  logger.error(`Redis connection error: ${err.message}`, "Redis");
 });
 
 redisConnection.on("connect", () => {
-  console.log(`Redis Connected at ${redisConfig.host}:${redisConfig.port}`);
+  logger.success(`Redis Connected at ${redisConfig.host}:${redisConfig.port}`, "Redis");
 });
 
 module.exports = {

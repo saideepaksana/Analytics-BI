@@ -20,6 +20,7 @@
 const { Queue, QueueEvents } = require("bullmq");
 const { redisConnection } = require("../core/redis");
 const { RETRY_POLICIES } = require("./retryPolicy");
+const logger = require("../core/logger");
 
 const DLQ_NAME = "dead-letter-queue";
 
@@ -56,12 +57,13 @@ const sendToDLQ = async (job, err) => {
       { jobId: `dlq-${job.id}-${Date.now()}` }
     );
 
-    console.error(
-      `[DLQ] Job "${job.name}" (ID: ${job.id}) from queue "${job.queueName}" ` +
-        `quarantined after ${job.attemptsMade} attempt(s). Reason: ${err?.message}`
+    logger.error(
+      `Job "${job.name}" (ID: ${job.id}) from queue "${job.queueName}" ` +
+        `quarantined after ${job.attemptsMade} attempt(s). Reason: ${err?.message}`,
+      "DLQ"
     );
   } catch (dlqErr) {
-    console.error("[DLQ] Could not write to dead-letter-queue:", dlqErr.message);
+    logger.error(`Could not write to dead-letter-queue: ${dlqErr.message}`, "DLQ");
   }
 };
 
@@ -93,16 +95,17 @@ const attachDLQListener = (sourceQueueName) => {
         { jobId: `dlq-auto-${jobId}-${Date.now()}` }
       );
 
-      console.error(
-        `[DLQ] Auto-captured exhausted job ${jobId} from queue "${sourceQueueName}". ` +
-          `Reason: ${failedReason}`
+      logger.error(
+        `Auto-captured exhausted job ${jobId} from queue "${sourceQueueName}". ` +
+          `Reason: ${failedReason}`,
+        "DLQ"
       );
     } catch (err) {
-      console.error("[DLQ] Auto-capture failed:", err.message);
+      logger.error(`Auto-capture failed: ${err.message}`, "DLQ");
     }
   });
 
-  console.log(`[DLQ] Watching queue "${sourceQueueName}" for exhausted failures.`);
+  logger.info(`Watching queue "${sourceQueueName}" for exhausted failures.`, "DLQ");
 };
 
 module.exports = {

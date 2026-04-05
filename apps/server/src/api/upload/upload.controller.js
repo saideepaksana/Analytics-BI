@@ -14,6 +14,7 @@ const { classifyAllColumns } = require("../../pipelines/schema-inference/classif
 const { detectRelationships } = require("../../pipelines/schema-inference/relationshipMapper"); //Finds relationships between datasets.
 const { transformRows } = require("../../pipelines/dts/index"); //Validates + transforms rows.
 const { getIO } = require("../../core/socket"); //for real-time progress updates
+const logger = require("../../core/logger");
 
 //Some numeric fields can be negative
 const SIGNED_NUMERIC_FIELDS = new Set(["base_excess"]);
@@ -306,7 +307,7 @@ exports.uploadFile = async (req, res) => {
     //Basic safety check for file name.
     const safeFileName = req.file.originalname.replace(/[^a-zA-Z0-9.\-_]/g, "_");
 
-    console.log(`Uploading file: ${safeFileName}, mode: ${mode}`);
+    logger.info(`Uploading file: ${safeFileName}, mode: ${mode}`, "Upload");
     emitProgress(uploadId, { stage: "received", progress: 1 });
 
     // Buffer to stream.
@@ -376,12 +377,9 @@ exports.uploadFile = async (req, res) => {
       jobId: job.id,
       processing: true
     });
-      //Error handling:
-//Handles:
-//corrupted Excel
 //internal errors
   } catch (error) {
-    console.error("Upload Controller Error:", error);
+    logger.error(`Upload Controller Error: ${error.message}`, "Upload");
     const uploadId = typeof req.body?.uploadId === "string" ? req.body.uploadId.trim() : "";
 
     const lowerMessage = String(error?.message || "").toLowerCase();

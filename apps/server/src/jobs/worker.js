@@ -25,6 +25,7 @@ const { QUEUE_NAMES, backgroundTasksQueue, bulkIngestionQueue } = require("./que
 const { RETRY_POLICIES, isPermanentFailure, PermanentError } = require("./retryPolicy");
 const { sendToDLQ, attachDLQListener } = require("./dlq");
 const { getConcurrency, globalSemaphore } = require("./orchestrator");
+const logger = require("../core/logger");
 
 // ---------------------------------------------------------------------------
 // Internal worker registry
@@ -46,7 +47,7 @@ const BACKGROUND_TASK_HANDLERS = {
   // Example handler — remove once you wire in real jobs:
   "test-job": async (job) => {
     const { message } = job.data;
-    console.log(`[test-job] ${message}`);
+    logger.info(`[test-job] ${message}`, "Worker");
     await new Promise((r) => setTimeout(r, 500));
     return { status: "ok", echo: message };
   },
@@ -92,9 +93,10 @@ const makeProcessor = (handlerMap) => async (job) => {
   // 1. Global concurrency guard
   if (!globalSemaphore.acquire()) {
     const waitMs = 3000 + Math.random() * 2000; // jitter: 3–5 s
-    console.warn(
-      `[Worker] Global limit reached (${globalSemaphore.count}/${globalSemaphore.limit}). ` +
-        `Re-queuing job ${job.id} ("${job.name}") after ${Math.round(waitMs)}ms.`
+    logger.warn(
+      `Global limit reached (${globalSemaphore.count}/${globalSemaphore.limit}). ` +
+        `Re-queuing job ${job.id} ("${job.name}") after ${Math.round(waitMs)}ms.`,
+      "Worker"
     );
     throw Object.assign(new Error("Global concurrency limit reached — will retry"), {
       delay: waitMs,
@@ -102,9 +104,10 @@ const makeProcessor = (handlerMap) => async (job) => {
   }
 
   try {
-    console.log(
-      `[Worker] Starting job "${job.name}" (ID: ${job.id}) — ` +
-        `attempt ${job.attemptsMade + 1} of ${job.opts.attempts ?? "?"}`
+    logger.info(
+      `Starting job "${job.name}" (ID: ${job.id}) — ` +
+        `attempt ${job.attemptsMade + 1} of ${job.opts.attempts ?? "?"}`,
+      "Worker"
     );
 
     // 2. Route to the correct handler
@@ -116,14 +119,15 @@ const makeProcessor = (handlerMap) => async (job) => {
 
     const result = await handler(job);
 
-    console.log(`[Worker] Job "${job.name}" (ID: ${job.id}) completed successfully.`);
+    logger.success(`Job "${job.name}" (ID: ${job.id}) completed successfully.`, "Worker");
     return result;
   } catch (err) {
     // 3. Classify failure
     if (isPermanentFailure(err)) {
-      console.error(
-        `[Worker] Permanent failure on job "${job.name}" (ID: ${job.id}). ` +
-          `Routing to DLQ. Error: ${err.message}`
+      logger.error(
+        `Permanent failure on job "${job.name}" (ID: ${job.id}). ` +
+          `Routing to DLQ. Error: ${err.message}`,
+        "Worker"
       );
       await sendToDLQ(job, err);
 
@@ -133,9 +137,10 @@ const makeProcessor = (handlerMap) => async (job) => {
     }
 
     // Transient error — log and re-throw so BullMQ applies exponential backoff
-    console.error(
-      `[Worker] Transient failure on job "${job.name}" (ID: ${job.id}), ` +
-        `attempt ${job.attemptsMade + 1}. BullMQ will retry. Error: ${err.message}`
+    logger.error(
+      `Transient failure on job "${job.name}" (ID: ${job.id}), ` +
+        `attempt ${job.attemptsMade + 1}. BullMQ will retry. Error: ${err.message}`,
+      "Worker"
     );
     throw err;
   } finally {
@@ -158,7 +163,7 @@ const makeProcessor = (handlerMap) => async (job) => {
  */
 const startWorker = (queueName, processor, opts = {}) => {
   if (workers[queueName]) {
-    console.warn(`[Worker] Already running for queue "${queueName}".`);
+    logger.warn(`Already running for queue "${queueName}".`, "Worker");
     return workers[queueName];
   }
 
@@ -171,15 +176,16 @@ const startWorker = (queueName, processor, opts = {}) => {
   });
 
   worker.once("ready", () => {
-    console.log(
-      `[Worker] Ready — queue: "${queueName}" | concurrency: ${concurrency} | ` +
-        `global limit: ${globalSemaphore.limit}`
+    logger.success(
+      `Ready — queue: "${queueName}" | concurrency: ${concurrency} | ` +
+        `global limit: ${globalSemaphore.limit}`,
+      "Worker"
     );
   });
 
   worker.on("error", (err) => {
     // Connection-level errors (not job errors) — log only, don't exit.
-    console.error(`[Worker][${queueName}] Connection error:`, err.message);
+    logger.error(`Connection error for "${queueName}": ${err.message}`, "Worker");
   });
 
   workers[queueName] = worker;
@@ -199,13 +205,14 @@ const initWorkers = () => {
   // Prevents duplicate workers if initWorkers() is accidentally called multiple
   // times (e.g., from test setup, hot-reload quirks, or a mis-placed import).
   if (global.__workers_initialized__) {
-    console.warn("[Worker] initWorkers() called again — skipping (already initialized).");
+    logger.warn("initWorkers() called again — skipping (already initialized).", "Worker");
     return;
   }
   global.__workers_initialized__ = true;
 
-  console.log(
-    `[Worker] Initializing workers (profile: ${process.env.WORKER_CONCURRENCY_PROFILE || "MEDIUM"})...`
+  logger.info(
+    `Initializing workers (profile: ${process.env.WORKER_CONCURRENCY_PROFILE || "MEDIUM"})...`,
+    "Worker"
   );
 
   // --- background-tasks worker ---
@@ -232,12 +239,12 @@ const initWorkers = () => {
  * Called from SIGINT / SIGTERM in src/index.js.
  */
 const shutdownWorkers = async () => {
-  console.log("[Worker] Initiating graceful shutdown...");
+  logger.warn("Initiating graceful shutdown...", "Worker");
   for (const [queueName, worker] of Object.entries(workers)) {
-    console.log(`[Worker] Closing worker for "${queueName}"...`);
+    logger.info(`Closing worker for "${queueName}"...`, "Worker");
     await worker.close(); // Waits for in-flight jobs to finish
   }
-  console.log("[Worker] All workers shut down cleanly.");
+  logger.success("All workers shut down cleanly.", "Worker");
 };
 
 module.exports = {

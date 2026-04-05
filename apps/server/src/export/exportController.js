@@ -4,6 +4,7 @@ const Metadata = require("../models/Metadata");
 const ExcelJS = require("exceljs");
 const { Parser: CsvParser } = require("json2csv");
 const PDFDocument = require("pdfkit");
+const logger = require("../core/logger");
 
 // ─── Flatten Helper ───────────────────────────────────────────────────────────
 /**
@@ -82,7 +83,7 @@ async function exportCSV(req, res) {
     );
     return res.send(csv);
   } catch (err) {
-    console.error("[exportCSV]", err);
+    logger.error(`CSV export failed: ${err.message}`, "exportCSV");
     res.status(500).json({ error: "CSV export failed.", details: err.message });
   }
 }
@@ -240,7 +241,7 @@ async function exportExcel(req, res) {
     await workbook.xlsx.write(res);
     res.end();
   } catch (err) {
-    console.error("[exportExcel]", err);
+    logger.error(`Excel export failed: ${err.message}`, "exportExcel");
     res.status(500).json({ error: "Excel export failed.", details: err.message });
   }
 }
@@ -323,7 +324,7 @@ async function exportPDF(req, res) {
       recordCount: Math.min(flatRecords.length, 200),
     });
   } catch (err) {
-    console.error("[exportPDF]", err);
+    logger.error(`PDF export failed: ${err.message}`, "exportPDF");
     res.status(500).json({ error: "PDF export failed.", details: err.message });
   }
 }

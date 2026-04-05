@@ -2,6 +2,7 @@ const { Transform } = require('node:stream');
 const { TYPE_CLEANER_MAP } = require('./cleaner.js');
 const { parseDate } = require('./normalizer.js');
 const DLQRecord = require('../../models/DLQRecord.js');
+const logger = require('../../core/logger');
 
 // ─────────────────────────────────────────────────────────────
 // Helpers
@@ -296,7 +297,7 @@ class DTSEngineStream extends Transform {
                 errorMessages: ['Row contains no usable values'],
                 status: 'UNFIXABLE'
             });
-            console.log(`[DTS] Row rejected: no usable values`);
+            logger.warn(`Row rejected: no usable values`, "DTS");
             return callback();
         }
 
@@ -317,13 +318,13 @@ class DTSEngineStream extends Transform {
                 status: 'UNFIXABLE'
             });
 
-            console.log(`[DTS] Sent to DLQ`);
+            logger.warn(`Sent to DLQ`, "DTS");
             return callback();
         }
 
         // ── 4. Emit Row (Warnings allowed) ────────────────────
         if (warnings.length > 0) {
-            console.warn(`[DTS] Warnings:`, warnings);
+            logger.warn(`Warnings: ${JSON.stringify(warnings)}`, "DTS");
         }
 
         callback(null, cleanedRow);

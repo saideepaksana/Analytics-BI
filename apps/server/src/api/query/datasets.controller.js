@@ -2,6 +2,7 @@ const Metadata = require("../../models/Metadata");
 const CleanRecord = require("../../models/CleanRecord");
 const DLQRecord = require("../../models/DLQRecord");
 const RawRecord = require("../../models/RawRecord");
+const logger = require("../../core/logger");
 const { validateRow, cleanAndNormalizeRow, semanticValidateRow } = require("../../pipelines/dts/index");
 
 // ─ Helper: Build schema map from metadata schema array ─
@@ -31,7 +32,7 @@ exports.listDatasets = async (req, res) => {
 
     return res.json({ datasets });
   } catch (error) {
-    console.error("[Datasets] listDatasets error:", error);
+    logger.error(`listDatasets error: ${error.message}`, "Datasets");
     return res.status(500).json({ message: "Internal server error" });
   }
 };
@@ -74,7 +75,7 @@ exports.getDatasetMetadata = async (req, res) => {
       preview: previewDocs.map((r) => r.data),
     });
   } catch (error) {
-    console.error("[Datasets] getDatasetMetadata error:", error);
+    logger.error(`getDatasetMetadata error: ${error.message}`, "Datasets");
     return res.status(500).json({ message: "Internal server error" });
   }
 };
@@ -105,7 +106,7 @@ exports.updateSchemaColumn = async (req, res) => {
 
     return res.json({ message: "Schema updated", schema: result.schema });
   } catch (error) {
-    console.error("[Datasets] updateSchemaColumn error:", error);
+    logger.error(`updateSchemaColumn error: ${error.message}`, "Datasets");
     return res.status(500).json({ message: "Internal server error" });
   }
 };
@@ -137,7 +138,7 @@ exports.deleteQuarantinedRow = async (req, res) => {
       rowCount: meta?.rowCount ?? 0,
     });
   } catch (error) {
-    console.error("[Datasets] deleteQuarantinedRow error:", error);
+    logger.error(`deleteQuarantinedRow error: ${error.message}`, "Datasets");
     return res.status(500).json({ message: "Internal server error" });
   }
 };
@@ -160,7 +161,7 @@ exports.deleteAllQuarantinedRows = async (req, res) => {
       rowCount: meta?.rowCount ?? 0,
     });
   } catch (error) {
-    console.error("[Datasets] deleteAllQuarantinedRows error:", error);
+    logger.error(`deleteAllQuarantinedRows error: ${error.message}`, "Datasets");
     return res.status(500).json({ message: "Internal server error" });
   }
 };
@@ -202,7 +203,7 @@ exports.validateQuarantinedRow = async (req, res) => {
 
     return res.json({ message: "Validation passed", errors: [], cleanedData });
   } catch (error) {
-    console.error("[Datasets] validateQuarantinedRow error:", error);
+    logger.error(`validateQuarantinedRow error: ${error.message}`, "Datasets");
     return res.status(500).json({ message: "Internal server error" });
   }
 };
@@ -264,7 +265,7 @@ exports.restoreQuarantinedRow = async (req, res) => {
       quarantinedCount: Math.max(0, meta?.quarantinedCount ?? 0),
     });
   } catch (error) {
-    console.error("[Datasets] restoreQuarantinedRow error:", error);
+    logger.error(`restoreQuarantinedRow error: ${error.message}`, "Datasets");
     return res.status(500).json({ message: "Internal server error" });
   }
 };
@@ -290,7 +291,7 @@ exports.deleteDataset = async (req, res) => {
 
     return res.json({ message: "Dataset deleted successfully", datasetId });
   } catch (error) {
-    console.error("[Datasets] deleteDataset error:", error);
+    logger.error(`deleteDataset error: ${error.message}`, "Datasets");
     return res.status(500).json({ message: "Internal server error" });
   }
 };
@@ -367,7 +368,7 @@ exports.restoreAllValidQuarantinedRows = async (req, res) => {
       quarantinedCount: newQuarantinedCount,
     });
   } catch (error) {
-    console.error("[Datasets] restoreAllValidQuarantinedRows error:", error);
+    logger.error(`restoreAllValidQuarantinedRows error: ${error.message}`, "Datasets");
     return res.status(500).json({ message: "Internal server error" });
   }
 };

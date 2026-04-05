@@ -18,6 +18,7 @@
  */
 
 const { RETRY_POLICIES } = require("./retryPolicy");
+const logger = require("../core/logger");
 
 // ---------------------------------------------------------------------------
 // Concurrency profile — tweak per environment / deployment size
@@ -148,9 +149,10 @@ const bulkDispatch = async (
     enqueued += chunk.length;
     batches++;
 
-    console.log(
-      `[Orchestrator] Dispatched batch ${batches} → ${chunk.length} jobs ` +
-        `(${enqueued}/${dataItems.length} total) to queue "${queue.name}"`
+    logger.info(
+      `Dispatched batch ${batches} → ${chunk.length} jobs ` +
+        `(${enqueued}/${dataItems.length} total) to queue "${queue.name}"`,
+      "Orchestrator"
     );
   }
 
@@ -196,7 +198,7 @@ const getQueueStats = async (queue) => {
  */
 const pauseQueue = async (queue) => {
   await queue.pause();
-  console.warn(`[Orchestrator] Queue "${queue.name}" PAUSED.`);
+  logger.warn(`Queue "${queue.name}" PAUSED.`, "Orchestrator");
 };
 
 /**
@@ -206,7 +208,7 @@ const pauseQueue = async (queue) => {
  */
 const resumeQueue = async (queue) => {
   await queue.resume();
-  console.log(`[Orchestrator] Queue "${queue.name}" RESUMED.`);
+  logger.info(`Queue "${queue.name}" RESUMED.`, "Orchestrator");
 };
 
 // ---------------------------------------------------------------------------
