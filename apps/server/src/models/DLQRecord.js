@@ -31,4 +31,7 @@ const DLQRecordSchema = new Schema(
   }
 );
 
+DLQRecordSchema.index({ datasetId: 1, rowNumber: 1 }, { unique: true });
+DLQRecordSchema.index({ datasetId: 1, createdAt: -1 });
+
 module.exports = mongoose.model("DLQRecord", DLQRecordSchema);

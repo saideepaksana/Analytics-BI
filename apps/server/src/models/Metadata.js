@@ -83,4 +83,7 @@ const MetadataSchema = new mongoose.Schema(
     { timestamps: true }
 );
 
+MetadataSchema.index({ createdAt: -1 });
+MetadataSchema.index({ updatedAt: -1 });
+
 module.exports = mongoose.model("Metadata", MetadataSchema);        // Export the Mongoose model for Metadata, which includes column-level schema details and inferred relationships.

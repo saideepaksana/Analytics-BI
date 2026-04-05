@@ -5,6 +5,23 @@ const RawRecord = require("../../models/RawRecord");
 const logger = require("../../core/logger");
 const { validateRow, cleanAndNormalizeRow, semanticValidateRow } = require("../../pipelines/dts/index");
 
+const findQuarantineRowByIndexOrNumber = async (datasetId, rawIndex) => {
+  const parsed = Number.parseInt(rawIndex, 10);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    return null;
+  }
+
+  const direct = await DLQRecord.findOne({ datasetId, rowNumber: parsed }).lean();
+  if (direct) {
+    return direct;
+  }
+
+  return DLQRecord.findOne({ datasetId })
+    .sort({ rowNumber: 1 })
+    .skip(parsed)
+    .lean();
+};
+
 // ─ Helper: Build schema map from metadata schema array ─
 const buildSchemaMap = (metadataSchema = []) => {
   const schemaMap = {};
@@ -50,8 +67,17 @@ exports.getDatasetMetadata = async (req, res) => {
     }
 
     const [previewDocs, quarantinedDocs] = await Promise.all([
-      CleanRecord.find({ datasetId }).skip(previewOffset).limit(previewLimit).lean(),
-      DLQRecord.find({ datasetId }).sort({ rowNumber: 1 }).limit(previewLimit).lean(),
+      CleanRecord.find({ datasetId })
+        .sort({ rowNumber: 1 })
+        .skip(previewOffset)
+        .limit(previewLimit)
+        .select("data rowNumber")
+        .lean(),
+      DLQRecord.find({ datasetId })
+        .sort({ rowNumber: 1 })
+        .limit(previewLimit)
+        .select("rowNumber rawData errorMessages status")
+        .lean(),
     ]);
 
     return res.json({
@@ -120,7 +146,7 @@ exports.deleteQuarantinedRow = async (req, res) => {
     if (isNaN(idx) || idx < 0) {
       return res.status(404).json({ message: "Row not found" });
     }
-    const row = await DLQRecord.findOne({ datasetId }).sort({ rowNumber: 1 }).skip(idx).lean();
+    const row = await findQuarantineRowByIndexOrNumber(datasetId, idx);
     if (!row) {
       return res.status(404).json({ message: "Row not found" });
     }
@@ -178,8 +204,8 @@ exports.validateQuarantinedRow = async (req, res) => {
     }
 
     const [row, metaDoc] = await Promise.all([
-      DLQRecord.findOne({ datasetId }).sort({ rowNumber: 1 }).skip(idx).lean(),
-      Metadata.findOne({ datasetId }).lean()
+      findQuarantineRowByIndexOrNumber(datasetId, idx),
+      Metadata.findOne({ datasetId }).lean(),
     ]);
 
     if (!row) {
@@ -220,8 +246,8 @@ exports.restoreQuarantinedRow = async (req, res) => {
     }
 
     const [row, metaDoc] = await Promise.all([
-      DLQRecord.findOne({ datasetId }).sort({ rowNumber: 1 }).skip(idx).lean(),
-      Metadata.findOne({ datasetId }).lean()
+      findQuarantineRowByIndexOrNumber(datasetId, idx),
+      Metadata.findOne({ datasetId }).lean(),
     ]);
 
     if (!row) {

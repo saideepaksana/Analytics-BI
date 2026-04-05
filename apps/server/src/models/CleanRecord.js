@@ -46,4 +46,7 @@ const CleanRecordSchema = new Schema(
   }
 );
 
+CleanRecordSchema.index({ datasetId: 1, rowNumber: 1 }, { unique: true });
+CleanRecordSchema.index({ datasetId: 1, createdAt: -1 });
+
 module.exports = mongoose.model("CleanRecord", CleanRecordSchema);

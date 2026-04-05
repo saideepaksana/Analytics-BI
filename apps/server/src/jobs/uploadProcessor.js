@@ -138,7 +138,7 @@ exports.runUploadProcessor = async (jobData) => {
 
           // 1. Initial Schema Inference (if not yet done)
           if (!schema || schema.length === 0) {
-            emitProgress(uploadId, { stage: "schema", progress: 55, datasetId });
+            emitProgress(uploadId, { stage: "transforming", progress: 55, datasetId, detail: "inferring-schema" });
             const inferredColumns = classifyAllColumns(rawBatch, rawBatch.length);
             schema = inferredColumns.map((column) => ({
               name: column.name,
@@ -207,7 +207,7 @@ exports.runUploadProcessor = async (jobData) => {
       throw new PermanentError(`File parsing failed for ${safeFileName}: ` + parseError.message);
     }
 
-    emitProgress(uploadId, { stage: "quarantine", progress: 82, datasetId });
+    emitProgress(uploadId, { stage: "transforming", progress: 82, datasetId, detail: "quarantine-split" });
 
     const structuralDlqDocs = parseQuarantineRows.map((row, index) => ({
       datasetId,
@@ -229,7 +229,7 @@ exports.runUploadProcessor = async (jobData) => {
     const updatedQuarantineCount = (existingMeta?.quarantinedCount || 0) + totalDlqCount;
     const finalSchema = schema && schema.length > 0 ? schema : existingMeta?.schema || [];
 
-    emitProgress(uploadId, { stage: "saving", progress: 92, datasetId });
+    emitProgress(uploadId, { stage: "transforming", progress: 90, datasetId, detail: "finalizing-records" });
     await Metadata.findOneAndUpdate(
       { datasetId },
       {
@@ -248,14 +248,14 @@ exports.runUploadProcessor = async (jobData) => {
       { upsert: true }
     );
 
-    emitProgress(uploadId, { stage: "relationships", progress: 96, datasetId });
+    emitProgress(uploadId, { stage: "persisted", progress: 96, datasetId });
     try {
       await refreshDatasetRelationships(datasetId, explicitlyRelatedDatasets);
     } catch (relationshipError) {
       logger.warn(`Relationship mapping refresh failed: ${relationshipError.message}`, "Upload");
     }
 
-    emitProgress(uploadId, { stage: "done", progress: 100, datasetId });
+    emitProgress(uploadId, { stage: "complete", progress: 100, datasetId });
 
     return {
       status: "success",
