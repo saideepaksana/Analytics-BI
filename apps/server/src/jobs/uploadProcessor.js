@@ -56,7 +56,20 @@ const emitProgress = (uploadId, payload) => {
   if (!uploadId) return;
   const io = getIO();
   if (io) {
+    // 1. Target the specific upload room (legacy behavior)
     io.to(`upload:${uploadId}`).emit("upload:progress", { uploadId, ...payload });
+
+    // 2. Global monitoring for the Ingestion page
+    io.emit("background-tasks:update", { uploadId, ...payload });
+
+    // 3. User notification on completion
+    if (payload.stage === "complete") {
+      io.emit("background-tasks:completed", {
+        uploadId,
+        datasetId: payload.datasetId,
+        fileName: payload.fileName || "Unnamed Dataset",
+      });
+    }
   }
 };
 
@@ -306,7 +319,7 @@ exports.runUploadProcessor = async (jobData) => {
       logger.warn(`Relationship mapping refresh failed: ${relationshipError.message}`, "Upload");
     }
 
-    emitProgress(uploadId, { stage: "complete", progress: 100, datasetId });
+    emitProgress(uploadId, { stage: "complete", progress: 100, datasetId, fileName: safeFileName });
 
     return {
       status: "success",

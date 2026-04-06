@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react";
+import axios from "axios";
+import { io } from "socket.io-client";
 import { Home, Upload, Database, Sparkles, Sun, Moon, PieChart, LayoutDashboard } from "lucide-react";
 import HomePage from "./modules/home/HomePage";
 import { IngestionWizard } from "./modules/ingestion";
@@ -7,6 +9,8 @@ import DataReviewModal from "./modules/data-review/DataReviewModal";
 import { DatasetsPage } from "./modules/datasets";
 import ChartsPage from "./modules/charts/ChartsPage";
 import DashboardsPage from "./modules/dashboard/DashboardsPage";
+import { SOCKET_URL, API_BASE_URL } from "./core/config/env";
+import SimplePopup from "./components/SimplePopup";
 import "./modules/data-review/styles/data-review.css";
 import "./App.css";
 
@@ -15,6 +19,8 @@ function App() {
   const [activeView, setActiveView] = useState("home"); // home | ingestion | review | datasets
   const [reviewModalDatasetId, setReviewModalDatasetId] = useState(null);
   const [chartsExploreMode, setChartsExploreMode] = useState(false);
+  const [activeTasks, setActiveTasks] = useState([]);
+  const [completionPopup, setCompletionPopup] = useState(null);
   
   // defaulting to dark mode for Midnight Aurora aesthetic, persisting in localStorage
   const [theme, setTheme] = useState(() => {
@@ -24,6 +30,39 @@ function App() {
   useEffect(() => {
     localStorage.setItem("analytics-theme", theme);
   }, [theme]);
+
+  // Global socket listener for background tasks
+  useEffect(() => {
+    const socket = io(SOCKET_URL, { transports: ["websocket"] });
+
+    // Initial fetch of active jobs
+    axios.get(`${API_BASE_URL}/upload/active-jobs`)
+      .then(res => setActiveTasks(res.data))
+      .catch(err => console.error("Failed to fetch active jobs", err));
+
+    socket.on("background-tasks:update", (event) => {
+      setActiveTasks((prev) => {
+        const isFinished = event.stage === "complete" || event.stage === "failed";
+        if (isFinished) {
+          return prev.filter(t => t.uploadId !== event.uploadId);
+        }
+        
+        const existing = prev.find(t => t.uploadId === event.uploadId);
+        if (existing) {
+          return prev.map(t => t.uploadId === event.uploadId ? { ...t, ...event } : t);
+        }
+        return [...prev, event];
+      });
+    });
+
+    socket.on("background-tasks:completed", (event) => {
+      setCompletionPopup({
+        message: `Dataset "${event.fileName}" (ID: ${event.datasetId}) has finished uploading background processing.`
+      });
+    });
+
+    return () => socket.disconnect();
+  }, []);
 
   const headerConfig = {
     ingestion: {
@@ -117,6 +156,7 @@ function App() {
         {activeView === "ingestion" ? (
           <>
             <IngestionWizard
+              activeBackgroundTasks={activeTasks}
               onCompleted={(result) => {
                 setActiveDatasetId(result.datasetId);
                 setReviewModalDatasetId(result.datasetId);
@@ -146,6 +186,14 @@ function App() {
         <DataReviewModal
           datasetId={reviewModalDatasetId}
           onClose={() => setReviewModalDatasetId(null)}
+        />
+      )}
+
+      {/* Global Completion Popup */}
+      {completionPopup && (
+        <SimplePopup
+          message={completionPopup.message}
+          onClose={() => setCompletionPopup(null)}
         />
       )}
     </div>

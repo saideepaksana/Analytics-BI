@@ -17,7 +17,7 @@ const getAppendMismatchDetails = (payload = {}) => ({
   unexpectedColumns: Array.isArray(payload.unexpectedColumns) ? payload.unexpectedColumns : []
 });
 
-function IngestionWizard({ onCompleted }) {
+function IngestionWizard({ onCompleted, activeBackgroundTasks = [] }) {
   const [currentStep, setCurrentStep] = useState(1);
   const [file, setFile] = useState(null);
   const [mode, setMode] = useState("new");
@@ -547,6 +547,36 @@ function IngestionWizard({ onCompleted }) {
         onClose={() => setIsDatasetPickerOpen(false)}
         formatDate={formatDateTime}
       />
+      {/* Active Background Tasks Monitor */}
+      {activeBackgroundTasks.length > 0 && (
+        <div className="background-tasks-panel" aria-live="polite">
+          <div className="wizard-head" style={{ padding: 0, marginBottom: '0.5rem' }}>
+            <h3>Global Background Tasks ({activeBackgroundTasks.length})</h3>
+            <p className="muted">Other data ingestion processes currently running in the system.</p>
+          </div>
+          <div className="background-tasks-list">
+            {activeBackgroundTasks.map((task) => (
+              <div key={task.uploadId || task.jobId} className="task-item">
+                <div className="task-item-head">
+                  <span className="task-item-name" title={task.fileName}>
+                    {task.fileName || "Processing dataset..."}
+                  </span>
+                  <span className="task-item-status">
+                    {task.stage || "queued"}
+                  </span>
+                </div>
+                <div className="task-progress-track">
+                  <div 
+                    className="task-progress-bar" 
+                    style={{ width: `${task.progress ?? 0}%` }} 
+                  />
+                </div>
+                <div className="task-progress-text">{task.progress ?? 0}%</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </section>
   );
 }

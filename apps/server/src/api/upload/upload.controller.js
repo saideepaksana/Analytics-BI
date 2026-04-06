@@ -375,3 +375,28 @@ exports.uploadFile = async (req, res) => {
     return res.status(500).json({ message: "Internal server error" });
   }
 };
+
+/**
+ * GET /api/upload/active-jobs
+ * Returns a list of currently active ingestion jobs.
+ */
+exports.getActiveJobs = async (req, res) => {
+  try {
+    const { backgroundTasksQueue } = require("../../jobs/queue");
+    const activeJobs = await backgroundTasksQueue.getJobs(["active", "waiting"]);
+
+    const jobs = activeJobs.map((job) => ({
+      jobId: job.id,
+      uploadId: job.data.uploadId,
+      datasetId: job.data.datasetId,
+      fileName: job.data.safeFileName,
+      progress: job.progress,
+      timestamp: job.timestamp,
+    }));
+
+    return res.json(jobs);
+  } catch (err) {
+    logger.error(`Error fetching active jobs: ${err.message}`, "Upload");
+    return res.status(500).json({ message: "Failed to fetch active jobs" });
+  }
+};
