@@ -266,10 +266,16 @@ export default function ChartExplore({ chartId, onBack }) {
 
   // ── Handle column click from source panel ──
   const handleColumnClick = useCallback((col, role) => {
+    if (!col || !col.name) return;
+
     if (role === "metric") {
       const aggregation = col.aggregation || "SUM";
 
       if (col.requiresColumn) {
+        if (pendingMetricAggregation === aggregation) {
+          setPendingMetricAggregation(null);
+          return;
+        }
         setPendingMetricAggregation(aggregation);
         return;
       }
@@ -292,6 +298,10 @@ export default function ChartExplore({ chartId, onBack }) {
           ]);
         }
         setPendingMetricAggregation(null);
+        return;
+      }
+
+      if (pendingMetricAggregation && !isNumeric) {
         return;
       }
 

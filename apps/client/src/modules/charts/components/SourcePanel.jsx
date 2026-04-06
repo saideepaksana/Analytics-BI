@@ -40,13 +40,18 @@ export default function SourcePanel({
     };
   }, [columns]);
 
+  const displayColumns = useMemo(() => {
+    if (!pendingMetricAggregation) return regularColumns;
+    return regularColumns.filter((col) => NUMERIC_TYPE_REGEX.test((col.type || "").toLowerCase()));
+  }, [regularColumns, pendingMetricAggregation]);
+
   const filterBySearch = (items) =>
     items.filter((col) =>
       col.name.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
   const filteredMetrics = filterBySearch(metrics);
-  const filteredColumns = filterBySearch(regularColumns);
+  const filteredColumns = filterBySearch(displayColumns);
 
   const getTypeIcon = (type = "") => {
     const t = type.toLowerCase();
@@ -149,6 +154,11 @@ export default function SourcePanel({
               Columns
             </span>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              {pendingMetricAggregation ? (
+                <span className="source-section-count">
+                  Pick a numeric column
+                </span>
+              ) : null}
               <span className="source-section-count">
                 Showing {filteredColumns.length} of {regularColumns.length} items
               </span>
