@@ -500,42 +500,119 @@ exports.queryDatasetData = async (req, res) => {
     const startTime = Date.now();
     const { datasetId } = req.params;
     const {
-      dimensions = [], measures = [], filters = [], orderBy = [], sortBy = [],
+      dimensions,
+      measures,
+      filters,
+      orderBy,
+      sortBy,
       raw = false,
       rowLimit = 10000,
       seriesLimit = 0,
       contributionMode = "none"
-    } = req.body;
+    } = req.body || {};
+
+    const normalizedDimensions = Array.isArray(dimensions) ? dimensions : [];
+    const normalizedMeasures = Array.isArray(measures) ? measures : [];
+    const normalizedFilters = Array.isArray(filters) ? filters : [];
+    const normalizedOrderBy = Array.isArray(orderBy) ? orderBy : [];
+    const normalizedSortBy = Array.isArray(sortBy) ? sortBy : [];
+
     if (!datasetId) return res.status(400).json({ message: "datasetId is required" });
+
+    const metadataDoc = await Metadata.findOne({ datasetId }).select("schema").lean();
+    const schemaMap = buildSchemaMap(metadataDoc?.schema || []);
 
     const effectiveRowLimit = Math.min(Math.max(parseInt(rowLimit, 10) || 10000, 1), 50000);
     const effectiveSeriesLimit = Math.max(parseInt(seriesLimit, 10) || 0, 0);
 
     const pipeline = [];
     const matchStage = { datasetId };
-    if (Array.isArray(filters)) {
-      filters.forEach(f => {
-        if (f.field && f.operator) {
-          const key = `data.${f.field}`;
-          if (f.operator === "=" || f.operator === "==") matchStage[key] = f.value;
-          else if (f.operator === "!=") matchStage[key] = { $ne: f.value };
-          else if (f.operator === ">") matchStage[key] = { $gt: f.value };
-          else if (f.operator === ">=") matchStage[key] = { $gte: f.value };
-          else if (f.operator === "<") matchStage[key] = { $lt: f.value };
-          else if (f.operator === "<=") matchStage[key] = { $lte: f.value };
-          else if (f.operator === "IN" && Array.isArray(f.value)) matchStage[key] = { $in: f.value };
-          else if (f.operator === "NOT IN" && Array.isArray(f.value)) matchStage[key] = { $nin: f.value };
+    let metricKeys = [];
+
+    const isNumericType = (t = "") => /(int|float|number|decimal|double|long|short|numeric|real)/i.test(t);
+    const isDateType = (t = "") => /(date|time|timestamp)/i.test(t);
+    const isBooleanType = (t = "") => /(bool|boolean)/i.test(t);
+
+    const coerceValue = (value, columnType = "", operator = "=") => {
+      if (value === null || value === undefined) return value;
+
+      const raw = typeof value === "string" ? value.trim() : value;
+
+      if (isBooleanType(columnType)) {
+        if (raw === true || raw === false) return raw;
+        if (String(raw).toLowerCase() === "true") return true;
+        if (String(raw).toLowerCase() === "false") return false;
+      }
+
+      if (isNumericType(columnType) || [">", ">=", "<", "<="].includes(operator)) {
+        const num = Number(raw);
+        if (!Number.isNaN(num) && Number.isFinite(num)) return num;
+      }
+
+      if (isDateType(columnType)) {
+        const dt = new Date(raw);
+        if (!Number.isNaN(dt.getTime())) return dt;
+      }
+
+      return raw;
+    };
+
+    normalizedFilters.forEach(f => {
+      if (f.field && f.operator) {
+        const key = `data.${f.field}`;
+        const columnType = schemaMap[String(f.field).toLowerCase()]?.type || "";
+        const typedValue = coerceValue(f.value, columnType, f.operator);
+
+        if (f.operator === "=" || f.operator === "==") {
+          if (typedValue !== f.value) {
+            matchStage[key] = { $in: [typedValue, f.value] };
+          } else {
+            matchStage[key] = typedValue;
+          }
         }
-      });
-    }
+        else if (f.operator === "!=") {
+          if (typedValue !== f.value) {
+            matchStage[key] = { $nin: [typedValue, f.value] };
+          } else {
+            matchStage[key] = { $ne: typedValue };
+          }
+        }
+        else if (f.operator === ">") matchStage[key] = { $gt: typedValue };
+        else if (f.operator === ">=") matchStage[key] = { $gte: typedValue };
+        else if (f.operator === "<") matchStage[key] = { $lt: typedValue };
+        else if (f.operator === "<=") matchStage[key] = { $lte: typedValue };
+        else if (f.operator === "IN") {
+          const values = Array.isArray(f.value)
+            ? f.value
+            : String(f.value || "")
+                .split(",")
+                .map((v) => v.trim())
+                .filter(Boolean);
+          const typedValues = values.map((v) => coerceValue(v, columnType, "IN"));
+          const merged = [...new Set([...values, ...typedValues])];
+          if (merged.length > 0) matchStage[key] = { $in: merged };
+        } else if (f.operator === "NOT IN") {
+          const values = Array.isArray(f.value)
+            ? f.value
+            : String(f.value || "")
+                .split(",")
+                .map((v) => v.trim())
+                .filter(Boolean);
+          const typedValues = values.map((v) => coerceValue(v, columnType, "NOT IN"));
+          const merged = [...new Set([...values, ...typedValues])];
+          if (merged.length > 0) matchStage[key] = { $nin: merged };
+        }
+      }
+    });
+
     pipeline.push({ $match: matchStage });
 
     if (raw) {
       // Raw mode: return individual records (for scatter plots)
       const projectStage = { _id: 0 };
       const allFields = [
-        ...dimensions.map(d => (typeof d === "string" ? d : d.field)),
-        ...measures.map(m => m.field).filter(f => f && f !== "*")
+        ...normalizedDimensions.map(d => (typeof d === "string" ? d : d.field)),
+        ...normalizedMeasures.map(m => m.field).filter(f => f && f !== "*")
       ].filter(Boolean);
       allFields.forEach(f => { projectStage[f] = `$data.${f}`; });
       pipeline.push({ $project: projectStage });
@@ -543,14 +620,13 @@ exports.queryDatasetData = async (req, res) => {
     } else {
       // Aggregated mode: group and aggregate
       const groupStage = { _id: {} };
-      const metricKeys = [];
-      dimensions.forEach(dim => {
+      normalizedDimensions.forEach(dim => {
         const f = typeof dim === "string" ? dim : dim.field;
         if (f) groupStage._id[f] = `$data.${f}`;
       });
 
       // Track metric output keys for project stage
-      measures.forEach(m => {
+      normalizedMeasures.forEach(m => {
         const agg = (m.aggregation || "SUM").toUpperCase();
         if (m.field === "*" || agg === "COUNT") {
           // COUNT(*) — count all matching documents
@@ -580,8 +656,8 @@ exports.queryDatasetData = async (req, res) => {
       pipeline.push({ $project: projectStage });
 
       // Sort
-      const sortFields = sortBy.length > 0 ? sortBy : orderBy;
-      if (Array.isArray(sortFields) && sortFields.length > 0) {
+      const sortFields = normalizedSortBy.length > 0 ? normalizedSortBy : normalizedOrderBy;
+      if (sortFields.length > 0) {
         const sortStage = {};
         sortFields.forEach(o => { if (o.field) sortStage[o.field] = o.direction === "desc" ? -1 : 1; });
         pipeline.push({ $sort: sortStage });
@@ -593,16 +669,12 @@ exports.queryDatasetData = async (req, res) => {
       } else {
         pipeline.push({ $limit: effectiveRowLimit });
       }
-
-      // Expose metric keys outside the aggregation branch for contribution mode.
-      req._metricKeys = metricKeys;
     }
 
     const results = await CleanRecord.aggregate(pipeline);
 
     // Contribution mode: calculate percentage of total
     let processedResults = results;
-    const metricKeys = req._metricKeys || [];
     if (contributionMode === "row" && metricKeys.length > 0) {
       const totals = {};
       metricKeys.forEach(k => {
