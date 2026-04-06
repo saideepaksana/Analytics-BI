@@ -15,6 +15,7 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
     }
 
     const colors = style.colorPalette || ["#6366f1", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6"];
+    const getMeasureKey = (m = {}) => m.label || (m.field === "*" ? "COUNT(*)" : m.field);
     const darkTooltip = {
       backgroundColor: "rgba(15, 23, 42, 0.9)",
       borderColor: "#1e293b",
@@ -72,7 +73,7 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
     // --- PIE CHART ---
     if (type === "pie") {
       const xAxisField = dimensions[0] || Object.keys(data[0])[0];
-      const yAxisField = measures[0]?.field || Object.keys(data[0]).find(k => k !== xAxisField);
+      const yAxisField = getMeasureKey(measures[0]) || Object.keys(data[0]).find(k => k !== xAxisField);
       return {
         backgroundColor: "transparent",
         tooltip: { ...darkTooltip, trigger: "item" },
@@ -95,9 +96,9 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
     const xAxisField = dimensions[0] || Object.keys(data[0])[0];
     const xAxisData = data.map(item => item[xAxisField]);
     const seriesData = measures.map(m => ({
-      name: m.field,
+      name: m.label || m.field,
       type: type === "area" ? "line" : type,
-      data: data.map(item => item[m.field]),
+      data: data.map(item => item[getMeasureKey(m)]),
       areaStyle: type === "area" ? {} : undefined,
       smooth: true,
       emphasis: { focus: "series" }

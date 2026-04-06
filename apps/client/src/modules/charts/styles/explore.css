@@ -1144,3 +1144,99 @@
   color: #93c5fd;
   background: rgba(59,130,246,0.05);
 }
+
+/* ── Light Theme Overrides ── */
+[data-theme="light"] .explore-page {
+  background: #f8fafc;
+}
+
+[data-theme="light"] .explore-top-bar,
+[data-theme="light"] .source-panel,
+[data-theme="light"] .query-panel,
+[data-theme="light"] .chart-toolbar,
+[data-theme="light"] .chart-bottom-tab-bar {
+  background: #ffffff;
+  border-color: #e2e8f0;
+}
+
+[data-theme="light"] .source-panel-header,
+[data-theme="light"] .query-section-label,
+[data-theme="light"] .chart-status-bar,
+[data-theme="light"] .source-section-title,
+[data-theme="light"] .source-section-count,
+[data-theme="light"] .query-panel-tab {
+  color: #475569;
+}
+
+[data-theme="light"] .source-column-item,
+[data-theme="light"] .chart-toolbar-link,
+[data-theme="light"] .query-panel-tab.active,
+[data-theme="light"] .chart-bottom-tab.active,
+[data-theme="light"] .explore-chart-name,
+[data-theme="light"] .customize-toggle label,
+[data-theme="light"] .results-table td {
+  color: #0f172a;
+}
+
+[data-theme="light"] .source-dataset-dropdown,
+[data-theme="light"] .source-search input,
+[data-theme="light"] .query-select,
+[data-theme="light"] .query-chip-area,
+[data-theme="light"] .filter-row select,
+[data-theme="light"] .filter-row input {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  color: #0f172a;
+}
+
+[data-theme="light"] .query-chip-placeholder,
+[data-theme="light"] .filter-add-btn,
+[data-theme="light"] .filter-remove-btn,
+[data-theme="light"] .source-search-wrapper svg,
+[data-theme="light"] .query-section-chevron {
+  color: #64748b;
+}
+
+[data-theme="light"] .metric-picker {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.15);
+}
+
+[data-theme="light"] .metric-picker-header {
+  color: #334155;
+  border-bottom-color: #e2e8f0;
+}
+
+[data-theme="light"] .metric-picker-item {
+  color: #0f172a;
+}
+
+[data-theme="light"] .metric-picker-item:hover {
+  background: rgba(59, 130, 246, 0.08);
+  color: #1d4ed8;
+}
+
+[data-theme="light"] .chart-panel {
+  background: #f8fafc;
+}
+
+[data-theme="light"] .chart-render-area,
+[data-theme="light"] .chart-bottom-tabs {
+  border-color: #e2e8f0;
+}
+
+[data-theme="light"] .chart-empty-state,
+[data-theme="light"] .chart-empty-state p {
+  color: #64748b;
+}
+
+[data-theme="light"] .results-table th {
+  background: #f1f5f9;
+  color: #334155;
+  border-bottom-color: #cbd5e1;
+}
+
+[data-theme="light"] .results-table td {
+  border-bottom-color: #e2e8f0;
+}

@@ -416,7 +416,6 @@ export default function ChartExplore({ chartId, onBack }) {
           isDirty={isDirty}
           onUpdateChart={handleUpdateChart}
           sampleData={sampleData}
-          onBackToList={onBack}
         />
       </div>
     </div>

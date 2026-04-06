@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback } from "react";
 import { PlusCircle, BarChart3, Plus, Loader2 } from "lucide-react";
 import ChartCard from "./ChartCard";
 import ChartExplore from "./components/ChartExplore";
-import { fetchCharts, deleteChartData } from "../../services/charts.service";
+import ChartPreview from "./components/ChartPreview";
+import { fetchCharts, deleteChartData, queryDataset } from "../../services/charts.service";
 import "./styles/charts.css";
 
 export default function ChartsPage({ onExploreMode }) {
@@ -10,6 +11,10 @@ export default function ChartsPage({ onExploreMode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [exploreChartId, setExploreChartId] = useState(null); // null = grid, "new" = new chart, <id> = edit
+  const [viewChart, setViewChart] = useState(null);
+  const [viewData, setViewData] = useState([]);
+  const [viewLoading, setViewLoading] = useState(false);
+  const [viewError, setViewError] = useState(null);
 
   const loadCharts = useCallback(async () => {
     setLoading(true);
@@ -47,6 +52,49 @@ export default function ChartsPage({ onExploreMode }) {
     setExploreChartId(null);
     loadCharts(); // Refresh list after editing
   };
+
+  useEffect(() => {
+    const fetchViewData = async () => {
+      if (!viewChart) return;
+      setViewLoading(true);
+      setViewError(null);
+      try {
+        const datasetId = viewChart.dataSource?.datasetId;
+        if (!datasetId) {
+          setViewError("No data source found");
+          return;
+        }
+
+        const isScatter = viewChart.visualization?.type === "scatter";
+        const isLineOrArea = viewChart.visualization?.type === "line" || viewChart.visualization?.type === "area";
+        const hasRawMetric = (viewChart.query?.measures || []).some(
+          (m) => (m.aggregation || "").toUpperCase() === "RAW"
+        );
+
+        let query = viewChart.query || {};
+        if (isScatter || (isLineOrArea && hasRawMetric)) {
+          query = {
+            ...query,
+            raw: true,
+            dimensions: viewChart.query?.dimensions || [],
+            measures: viewChart.query?.measures || [],
+            groupBy: [],
+            orderBy: [],
+          };
+        }
+
+        const response = await queryDataset(datasetId, query);
+        setViewData(response.results || []);
+      } catch (err) {
+        setViewError("Failed to load chart data");
+        console.error(err);
+      } finally {
+        setViewLoading(false);
+      }
+    };
+
+    fetchViewData();
+  }, [viewChart]);
 
   // ── Explore View ──
   if (exploreChartId !== null) {
@@ -109,10 +157,50 @@ export default function ChartsPage({ onExploreMode }) {
             key={chart.chartId || chart._id} 
             chart={chart} 
             onDelete={() => handleDeleteChart(chart.chartId || chart._id)}
+            onView={() => setViewChart(chart)}
             onEdit={() => setExploreChartId(chart.chartId || chart._id)}
           />
         ))}
       </div>
+
+      {viewChart && (
+        <div className="chart-view-overlay" onClick={() => setViewChart(null)}>
+          <div className="chart-view-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="chart-view-header">
+              <div>
+                <h3>{viewChart.name}</h3>
+                <p>{viewChart.visualization?.type || "chart"}</p>
+              </div>
+              <button
+                className="chart-view-close"
+                onClick={() => setViewChart(null)}
+                aria-label="Close popup"
+                title="Close"
+              >
+                X
+              </button>
+            </div>
+
+            <div className="chart-view-content">
+              {viewLoading ? (
+                <div className="chart-loading">
+                  <Loader2 className="spinner" size={32} />
+                </div>
+              ) : viewError ? (
+                <div className="chart-error">{viewError}</div>
+              ) : (
+                <ChartPreview
+                  type={viewChart.visualization?.type}
+                  data={viewData}
+                  dimensions={viewChart.query?.dimensions?.map((d) => d.field || d) || []}
+                  measures={viewChart.query?.measures || []}
+                  style={viewChart.style}
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

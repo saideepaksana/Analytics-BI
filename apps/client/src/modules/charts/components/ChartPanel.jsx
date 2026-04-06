@@ -20,7 +20,6 @@ export default function ChartPanel({
   isDirty = false,
   onUpdateChart,
   sampleData = [],
-  onBackToList,
 }) {
   const [bottomTab, setBottomTab] = useState("results");
 
@@ -177,14 +176,6 @@ export default function ChartPanel({
 
   return (
     <div className="chart-panel">
-      {/* Toolbar */}
-      <div className="chart-toolbar">
-        <div />
-        <button className="chart-toolbar-link" onClick={onBackToList}>
-          View all charts
-        </button>
-      </div>
-
       {/* Alert banner when dirty */}
       {isDirty && (
         <div className="chart-alert-banner">
