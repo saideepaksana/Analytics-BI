@@ -1,4 +1,4 @@
-dd const { getBucket } = require("../core/storage");
+const { getBucket } = require("../core/storage");
 const Metadata = require("../models/Metadata");
 const CleanRecord = require("../models/CleanRecord");
 const DLQRecord = require("../models/DLQRecord");
@@ -221,7 +221,7 @@ exports.runUploadProcessor = async (jobData) => {
           } else {
             // Manual transformation fallback (used for first batch if peek failed)
             const rawRows = batchWrappers.map(w => w.data);
-            
+
             // If schema still missing, infer it from this first batch
             if (!schema || schema.length === 0) {
               const inferredColumns = classifyAllColumns(rawRows, rawRows.length);
@@ -241,7 +241,7 @@ exports.runUploadProcessor = async (jobData) => {
             }
 
             const { validRows, invalidRows } = transformRows(rawRows, datasetId, schema);
-            
+
             cleanDocs = validRows.map((data, index) => ({
               datasetId,
               rowNumber: currentRowOffset + index + 1,
