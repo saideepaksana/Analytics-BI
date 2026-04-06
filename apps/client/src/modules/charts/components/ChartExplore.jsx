@@ -165,6 +165,8 @@ export default function ChartExplore({ chartId, onBack }) {
 
     try {
       const isScatter = chartType === "scatter";
+      const isLineOrArea = chartType === "line" || chartType === "area";
+      const isLineAreaRaw = isLineOrArea && metrics.some((m) => (m.aggregation || "").toUpperCase() === "RAW");
       const queryPayload = {
         dimensions: isScatter ? [] : (xAxis ? [xAxis] : []),
         measures: metrics.map((m) => ({
@@ -175,7 +177,7 @@ export default function ChartExplore({ chartId, onBack }) {
         filters: filters.filter((f) => f.field && f.operator),
         sortBy,
         orderBy: sortBy.length > 0 ? sortBy : (metrics.length > 0 ? [{ field: metrics[0].label || metrics[0].field, direction: "desc" }] : []),
-        raw: isScatter,
+        raw: isScatter || isLineAreaRaw,
         rowLimit,
         seriesLimit,
         contributionMode,
@@ -224,6 +226,9 @@ export default function ChartExplore({ chartId, onBack }) {
     if (!selectedDatasetId) return;
     setIsSaving(true);
     try {
+      const isScatter = chartType === "scatter";
+      const isLineOrArea = chartType === "line" || chartType === "area";
+      const isLineAreaRaw = isLineOrArea && metrics.some((m) => (m.aggregation || "").toUpperCase() === "RAW");
       const payload = {
         ...(savedChartId ? { chartId: savedChartId } : {}),
         name: chartName || "Untitled Chart",
@@ -235,6 +240,7 @@ export default function ChartExplore({ chartId, onBack }) {
             aggregation: m.aggregation,
             label: m.label,
           })),
+          raw: isScatter || isLineAreaRaw,
           filters: filters.filter((f) => f.field && f.operator),
           groupBy: xAxis ? [xAxis] : [],
           orderBy: sortBy,
@@ -289,6 +295,18 @@ export default function ChartExplore({ chartId, onBack }) {
     } else {
       const isNumeric = NUMERIC_TYPE_REGEX.test((col.type || "").toLowerCase());
 
+      if (chartType === "scatter") {
+        if (!isNumeric) return;
+        const exists = metrics.some((m) => (m.field || m.label) === col.name);
+        if (exists || metrics.length >= 2) return;
+        setMetrics((prev) => [
+          ...prev,
+          { field: col.name, aggregation: "RAW", label: col.name },
+        ]);
+        setPendingMetricAggregation(null);
+        return;
+      }
+
       if (pendingMetricAggregation && isNumeric) {
         const label = `${pendingMetricAggregation}(${col.name})`;
         if (!metrics.some((m) => m.label === label)) {
@@ -312,7 +330,7 @@ export default function ChartExplore({ chartId, onBack }) {
         setDimensionsList((prev) => [...prev, col.name]);
       }
     }
-  }, [metrics, xAxis, dimensionsList, pendingMetricAggregation]);
+  }, [metrics, xAxis, dimensionsList, pendingMetricAggregation, chartType]);
 
   // ── Loading state ──
   if (loadingDatasets) {
@@ -352,7 +370,6 @@ export default function ChartExplore({ chartId, onBack }) {
             setXAxis(null);
             setMetrics([]);
             setPendingMetricAggregation(null);
-            setDimensionsList([]);
             setFilters([]);
             setSortBy([]);
           }}
@@ -369,11 +386,9 @@ export default function ChartExplore({ chartId, onBack }) {
           xAxisSortBy={xAxisSortBy}
           onSetXAxisSortBy={(v) => setXAxisSortBy(v)}
           metrics={metrics}
+          onSetMetrics={setMetrics}
           onAddMetric={(m) => setMetrics((prev) => [...prev, m])}
           onRemoveMetric={(idx) => setMetrics((prev) => prev.filter((_, i) => i !== idx))}
-          dimensionsList={dimensionsList}
-          onAddDimension={(d) => setDimensionsList((prev) => [...prev, d])}
-          onRemoveDimension={(idx) => setDimensionsList((prev) => prev.filter((_, i) => i !== idx))}
           contributionMode={contributionMode}
           onSetContributionMode={setContributionMode}
           filters={filters}

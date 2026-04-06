@@ -13,19 +13,15 @@ import {
 } from "lucide-react";
 
 const AGGREGATIONS = ["COUNT", "SUM", "AVG", "MIN", "MAX"];
-const CONTRIBUTION_MODES = [
-  { value: "none", label: "None" },
-  { value: "row", label: "Row" },
-];
 const FILTER_OPERATORS = ["=", "!=", ">", ">=", "<", "<=", "IN", "NOT IN"];
 const NUMERIC_TYPE_REGEX = /(int|float|number|decimal|double|long|short|numeric|real)/;
 const CHART_TYPES = [
   { id: "bar", icon: BarChart3, label: "Bar Chart" },
   { id: "line", icon: LineChart, label: "Line Chart" },
-  { id: "area", icon: AreaChart, label: "Area Chart" },
-  { id: "table", icon: Table2, label: "Table View" },
-  { id: "pie", icon: PieChart, label: "Pie Chart" },
   { id: "scatter", icon: ScatterChart, label: "Scatter Plot" },
+  { id: "area", icon: AreaChart, label: "Area Chart" },
+  { id: "pie", icon: PieChart, label: "Pie Chart" },
+  { id: "table", icon: Table2, label: "Table View" },
 ];
 
 /**
@@ -37,16 +33,10 @@ export default function QueryPanel({
   columns = [],
   xAxis,
   onSetXAxis,
-  xAxisSortBy,
-  onSetXAxisSortBy,
   metrics = [],
+  onSetMetrics,
   onAddMetric,
   onRemoveMetric,
-  dimensionsList = [],
-  onAddDimension,
-  onRemoveDimension,
-  contributionMode = "none",
-  onSetContributionMode,
   filters = [],
   onAddFilter,
   onRemoveFilter,
@@ -59,17 +49,64 @@ export default function QueryPanel({
   showGrid = true,
   onToggleGrid,
 }) {
+  const isScatter = chartType === "scatter";
+  const isLineOrArea = chartType === "line" || chartType === "area";
   const [activeTab, setActiveTab] = useState("data");
   const [metricPickerOpen, setMetricPickerOpen] = useState(false);
   const [metricPickerField, setMetricPickerField] = useState(null);
+  const [metricPickerTarget, setMetricPickerTarget] = useState("metrics");
+  const [scatterAxisTarget, setScatterAxisTarget] = useState("x");
   const [queryOpen, setQueryOpen] = useState(true);
 
-  const handleAddMetricClick = () => {
+  const numericColumns = columns.filter((c) => {
+    const t = (c.type || "").toLowerCase();
+    return NUMERIC_TYPE_REGEX.test(t);
+  });
+
+  const handleAddMetricClick = (targetAxis = "x", target = "metrics") => {
     setMetricPickerField(null);
+    setMetricPickerTarget(target);
+    if (isScatter) {
+      setScatterAxisTarget(targetAxis);
+    }
     setMetricPickerOpen(true);
   };
 
   const handleSelectMetricField = (field) => {
+    if (isScatter) {
+      if (!field) return;
+      const entry = { field, aggregation: "RAW", label: field };
+      const next = [...metrics];
+
+      if (scatterAxisTarget === "y") {
+        if (!next[0]) {
+          // Y axis is only meaningful after X axis is assigned.
+          setMetricPickerOpen(false);
+          setMetricPickerField(null);
+          return;
+        }
+        next[1] = entry;
+      } else {
+        next[0] = entry;
+      }
+
+      // Keep only X/Y entries for scatter.
+      const normalized = next.slice(0, 2).filter(Boolean);
+      onSetMetrics?.(normalized);
+      setMetricPickerOpen(false);
+      setMetricPickerField(null);
+      return;
+    }
+
+    if (metricPickerTarget === "lineAreaY") {
+      if (!field) return;
+      onSetMetrics?.([{ field, aggregation: "RAW", label: field }]);
+      setMetricPickerOpen(false);
+      setMetricPickerTarget("metrics");
+      setMetricPickerField(null);
+      return;
+    }
+
     setMetricPickerField(field);
   };
 
@@ -79,30 +116,40 @@ export default function QueryPanel({
         metricPickerField === "*"
           ? "COUNT(*)"
           : `${agg}(${metricPickerField})`;
-      onAddMetric({
+      const nextMetric = {
         field: metricPickerField,
         aggregation: agg,
         label,
-      });
+      };
+
+      if (metricPickerTarget === "lineAreaY") {
+        onSetMetrics?.([nextMetric]);
+      } else {
+        onAddMetric(nextMetric);
+      }
     }
     setMetricPickerOpen(false);
     setMetricPickerField(null);
+    setMetricPickerTarget("metrics");
   };
 
   const handleAddCountStar = () => {
+    if (isScatter) return;
     onAddMetric({
       field: "*",
       aggregation: "COUNT",
       label: "COUNT(*)",
     });
     setMetricPickerOpen(false);
+    setMetricPickerTarget("metrics");
   };
 
-  // Get sortable fields (xAxis + metric labels)
-  const sortableFields = [
-    ...(xAxis ? [xAxis] : []),
-    ...metrics.map((m) => m.label || m.field),
-  ];
+  const handleRemoveScatterAxis = (axisIndex) => {
+    if (!onSetMetrics) return;
+    const next = [...metrics];
+    next.splice(axisIndex, 1);
+    onSetMetrics(next);
+  };
 
   return (
     <div className="query-panel">
@@ -156,84 +203,207 @@ export default function QueryPanel({
 
             {queryOpen && (
               <>
-                {/* X-Axis */}
-                <div className="query-section">
-                  <label className="query-section-label" style={{ marginBottom: 6, display: "block", fontSize: "0.75rem" }}>
-                    X-axis
-                  </label>
-                  <div className="query-chip-area">
-                    {xAxis ? (
-                      <span className="query-chip dimension">
-                        <span style={{ fontSize: "0.7rem", opacity: 0.7 }}>A</span>
-                        {xAxis}
-                        <button
-                          className="chip-remove"
-                          onClick={() => onSetXAxis(null)}
-                        >
-                          <X size={12} />
-                        </button>
-                      </span>
-                    ) : (
-                      <div className="query-chip-placeholder">
-                        <Plus size={12} />
-                        Drop columns here or click
+                {!isScatter && (
+                  <>
+                    {/* X-Axis */}
+                    <div className="query-section">
+                      <label className="query-section-label" style={{ marginBottom: 6, display: "block", fontSize: "0.75rem" }}>
+                        X-axis
+                      </label>
+                      <div className="query-chip-area">
+                        {xAxis ? (
+                          <span className="query-chip dimension">
+                            <span style={{ fontSize: "0.7rem", opacity: 0.7 }}>A</span>
+                            {xAxis}
+                            <button
+                              className="chip-remove"
+                              onClick={() => onSetXAxis(null)}
+                            >
+                              <X size={12} />
+                            </button>
+                          </span>
+                        ) : (
+                          <div className="query-chip-placeholder">
+                            <Plus size={12} />
+                            Drop columns here or click
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {isLineOrArea && (
+                      <div className="query-section" style={{ position: "relative" }}>
+                        <label className="query-section-label" style={{ marginBottom: 6, display: "block", fontSize: "0.75rem" }}>
+                          Y Axis
+                        </label>
+                        <div className="query-chip-area" onClick={() => handleAddMetricClick("x", "lineAreaY")}>
+                          {metrics[0] ? (
+                            <span className="query-chip metric">
+                              <span style={{ fontSize: "0.7rem", opacity: 0.7 }}>ƒx</span>
+                              {metrics[0].label || metrics[0].field}
+                              <button
+                                className="chip-remove"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onSetMetrics?.([]);
+                                }}
+                              >
+                                <X size={12} />
+                              </button>
+                            </span>
+                          ) : (
+                            <div className="query-chip-placeholder">
+                              <Plus size={12} />
+                              Select numeric column for Y Axis
+                            </div>
+                          )}
+                        </div>
+
+                        {metricPickerOpen && metricPickerTarget === "lineAreaY" && (
+                          <>
+                            <div
+                              className="metric-picker-overlay"
+                              onClick={() => {
+                                setMetricPickerOpen(false);
+                                setMetricPickerTarget("metrics");
+                                setMetricPickerField(null);
+                              }}
+                            />
+                            <div className="metric-picker">
+                              {!metricPickerField ? (
+                                <>
+                                  <div className="metric-picker-header">
+                                    Select column for Y Axis
+                                  </div>
+                                  {numericColumns.map((col) => (
+                                    <button
+                                      key={col.name}
+                                      className="metric-picker-item"
+                                      onClick={() => handleSelectMetricField(col.name)}
+                                    >
+                                      <span style={{ color: "#818cf8", fontWeight: 700, fontSize: "0.75rem" }}>#</span>
+                                      {col.name}
+                                    </button>
+                                  ))}
+                                </>
+                              ) : (
+                                <>
+                                  <div className="metric-picker-header">
+                                    Aggregation for {metricPickerField}
+                                  </div>
+                                  {AGGREGATIONS.map((agg) => (
+                                    <button
+                                      key={agg}
+                                      className="metric-picker-item"
+                                      onClick={() => handleSelectAggregation(agg)}
+                                    >
+                                      {agg}({metricPickerField})
+                                    </button>
+                                  ))}
+                                </>
+                              )}
+                            </div>
+                          </>
+                        )}
                       </div>
                     )}
-                  </div>
-                </div>
 
-                {/* X-Axis Sort By */}
-                <div className="query-section">
-                  <label className="query-section-label" style={{ marginBottom: 6, display: "block", fontSize: "0.75rem" }}>
-                    X-Axis Sort By
-                  </label>
-                  <select
-                    className="query-select"
-                    value={xAxisSortBy || ""}
-                    onChange={(e) => onSetXAxisSortBy(e.target.value || null)}
-                  >
-                    <option value="">Select…</option>
-                    {columns.map((col) => (
-                      <option key={col.name} value={col.name}>
-                        {col.name}
-                      </option>
-                    ))}
-                    {metrics.map((m) => (
-                      <option key={m.label} value={m.label}>
-                        {m.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                  </>
+                )}
 
                 {/* Metrics */}
+                {!isLineOrArea && (
                 <div className="query-section" style={{ position: "relative" }}>
                   <label className="query-section-label" style={{ marginBottom: 6, display: "block", fontSize: "0.75rem" }}>
                     Metrics
                   </label>
-                  <div className="query-chip-area" onClick={handleAddMetricClick}>
-                    {metrics.map((m, idx) => (
-                      <span key={idx} className="query-chip metric">
-                        <span style={{ fontSize: "0.7rem", opacity: 0.7 }}>ƒx</span>
-                        {m.label || m.field}
-                        <button
-                          className="chip-remove"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onRemoveMetric(idx);
-                          }}
-                        >
-                          <X size={12} />
-                        </button>
-                      </span>
-                    ))}
-                    {metrics.length === 0 && (
-                      <div className="query-chip-placeholder">
-                        <Plus size={12} />
-                        Drop columns/metrics here or click
+                  {isScatter ? (
+                    <div style={{ display: "grid", gap: 8 }}>
+                      <div>
+                        <label className="query-section-label" style={{ marginBottom: 4, display: "block", fontSize: "0.75rem" }}>
+                          X Axis
+                        </label>
+                        <div className="query-chip-area" onClick={() => handleAddMetricClick("x")}>
+                          {metrics[0] ? (
+                            <span className="query-chip metric">
+                              <span style={{ fontSize: "0.7rem", opacity: 0.7 }}>ƒx</span>
+                              {metrics[0].label || metrics[0].field}
+                              <button
+                                className="chip-remove"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleRemoveScatterAxis(0);
+                                }}
+                              >
+                                <X size={12} />
+                              </button>
+                            </span>
+                          ) : (
+                            <div className="query-chip-placeholder">
+                              <Plus size={12} />
+                              Select numeric column for X Axis
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    )}
-                  </div>
+
+                      <div>
+                        <label className="query-section-label" style={{ marginBottom: 4, display: "block", fontSize: "0.75rem" }}>
+                          Y Axis
+                        </label>
+                        <div
+                          className="query-chip-area"
+                          onClick={() => metrics[0] && handleAddMetricClick("y")}
+                          style={{ opacity: metrics[0] ? 1 : 0.6, cursor: metrics[0] ? "pointer" : "not-allowed" }}
+                        >
+                          {metrics[1] ? (
+                            <span className="query-chip metric">
+                              <span style={{ fontSize: "0.7rem", opacity: 0.7 }}>ƒx</span>
+                              {metrics[1].label || metrics[1].field}
+                              <button
+                                className="chip-remove"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleRemoveScatterAxis(1);
+                                }}
+                              >
+                                <X size={12} />
+                              </button>
+                            </span>
+                          ) : (
+                            <div className="query-chip-placeholder">
+                              <Plus size={12} />
+                              {metrics[0] ? "Select numeric column for Y Axis" : "Pick X Axis first"}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="query-chip-area" onClick={() => handleAddMetricClick()}>
+                      {metrics.map((m, idx) => (
+                        <span key={idx} className="query-chip metric">
+                          <span style={{ fontSize: "0.7rem", opacity: 0.7 }}>ƒx</span>
+                          {m.label || m.field}
+                          <button
+                            className="chip-remove"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onRemoveMetric(idx);
+                            }}
+                          >
+                            <X size={12} />
+                          </button>
+                        </span>
+                      ))}
+                      {metrics.length === 0 && (
+                        <div className="query-chip-placeholder">
+                          <Plus size={12} />
+                          Drop columns/metrics here or click
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Metric picker dropdown */}
                   {metricPickerOpen && (
@@ -246,30 +416,31 @@ export default function QueryPanel({
                         {!metricPickerField ? (
                           <>
                             <div className="metric-picker-header">
-                              Select column or metric
+                              {metricPickerTarget === "lineAreaY"
+                                ? "Select column for Y Axis"
+                                : isScatter
+                                ? `Select numeric column for ${scatterAxisTarget === "y" ? "Y Axis" : "X Axis"}`
+                                : "Select column or metric"}
                             </div>
-                            <button
-                              className="metric-picker-item"
-                              onClick={handleAddCountStar}
-                            >
-                              <span style={{ color: "#f472b6", fontWeight: 700, fontSize: "0.75rem" }}>ƒx</span>
-                              COUNT(*)
-                            </button>
-                            {columns
-                              .filter((c) => {
-                                const t = (c.type || "").toLowerCase();
-                                return NUMERIC_TYPE_REGEX.test(t);
-                              })
-                              .map((col) => (
-                                <button
-                                  key={col.name}
-                                  className="metric-picker-item"
-                                  onClick={() => handleSelectMetricField(col.name)}
-                                >
-                                  <span style={{ color: "#818cf8", fontWeight: 700, fontSize: "0.75rem" }}>#</span>
-                                  {col.name}
-                                </button>
-                              ))}
+                            {!isScatter && metricPickerTarget !== "lineAreaY" && (
+                              <button
+                                className="metric-picker-item"
+                                onClick={handleAddCountStar}
+                              >
+                                <span style={{ color: "#f472b6", fontWeight: 700, fontSize: "0.75rem" }}>ƒx</span>
+                                COUNT(*)
+                              </button>
+                            )}
+                            {numericColumns.map((col) => (
+                              <button
+                                key={col.name}
+                                className="metric-picker-item"
+                                onClick={() => handleSelectMetricField(col.name)}
+                              >
+                                <span style={{ color: "#818cf8", fontWeight: 700, fontSize: "0.75rem" }}>#</span>
+                                {col.name}
+                              </button>
+                            ))}
                           </>
                         ) : (
                           <>
@@ -291,50 +462,12 @@ export default function QueryPanel({
                     </>
                   )}
                 </div>
+                )}
 
-                {/* Dimensions */}
-                <div className="query-section">
-                  <label className="query-section-label" style={{ marginBottom: 6, display: "block", fontSize: "0.75rem" }}>
-                    Dimensions
-                  </label>
-                  <div className="query-chip-area">
-                    {dimensionsList.map((dim, idx) => (
-                      <span key={idx} className="query-chip dimension">
-                        {dim}
-                        <button
-                          className="chip-remove"
-                          onClick={() => onRemoveDimension(idx)}
-                        >
-                          <X size={12} />
-                        </button>
-                      </span>
-                    ))}
-                    {dimensionsList.length === 0 && (
-                      <div className="query-chip-placeholder">
-                        <Plus size={12} />
-                        Drop columns here or click
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Contribution Mode */}
-                <div className="query-section">
-                  <label className="query-section-label" style={{ marginBottom: 6, display: "block", fontSize: "0.75rem" }}>
-                    Contribution Mode
-                  </label>
-                  <select
-                    className="query-select"
-                    value={contributionMode}
-                    onChange={(e) => onSetContributionMode(e.target.value)}
-                  >
-                    {CONTRIBUTION_MODES.map((m) => (
-                      <option key={m.value} value={m.value}>
-                        {m.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                {!isScatter && (
+                  <>
+                  </>
+                )}
 
                 {/* Filters */}
                 <div className="query-section">

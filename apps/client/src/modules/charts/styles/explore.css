@@ -357,11 +357,12 @@
 .query-chart-type-bar {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 6px;
   padding: 8px 10px;
   border-bottom: 1px solid var(--border, rgba(255,255,255,0.08));
   background: var(--surface, rgba(255,255,255,0.02));
-  overflow-x: auto;
+  overflow-x: hidden;
 }
 
 .query-chart-type-btn {
@@ -369,9 +370,9 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  width: 54px;
+  width: calc((100% - 12px) / 3);
   height: 44px;
-  min-width: 54px;
+  min-width: 0;
   border-radius: 6px;
   border: 1px solid transparent;
   background: transparent;
