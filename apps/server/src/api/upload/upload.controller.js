@@ -8,7 +8,7 @@ const Metadata = require("../../models/Metadata");
 const { getIO } = require("../../core/socket");
 const logger = require("../../core/logger");
 
-const MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024;
+const MAX_FILE_SIZE_BYTES = 1024 * 1024 * 1024; // 1GB
 const allowedExtensions = new Set([".csv", ".xls", ".xlsx"]);
 
 const emitProgress = (uploadId, payload) => {
@@ -64,6 +64,8 @@ const getGridFsFileBuffer = async (bucket, sourceFileId) => {
   return Buffer.concat(chunks);
 };
 
+const ExcelJS = require("exceljs");
+
 const extractIncomingHeadersFromGridFs = async (bucket, sourceFileId, originalName) => {
   const lowerName = String(originalName || "").toLowerCase();
 
@@ -82,8 +84,26 @@ const extractIncomingHeadersFromGridFs = async (bucket, sourceFileId, originalNa
   }
 
   if (lowerName.endsWith(".xlsx") || lowerName.endsWith(".xls")) {
-    const buffer = await getGridFsFileBuffer(bucket, sourceFileId);
-    return extractHeadersFromWorkbookBuffer(buffer);
+    const stream = bucket.openDownloadStream(sourceFileId);
+    const workbookReader = new ExcelJS.stream.xlsx.WorkbookReader(stream, {
+        worksheets: "emit",
+        sharedStrings: "emit",
+        hyperlinks: "ignore",
+        styles: "ignore",
+        entries: "ignore",
+    });
+
+    try {
+        for await (const worksheetReader of workbookReader) {
+            for await (const row of worksheetReader) {
+                const values = Array.isArray(row.values) ? row.values.slice(1) : []; // exceljs rows are 1-indexed
+                return values.map(normalizeHeader);
+            }
+        }
+    } finally {
+        stream.destroy();
+    }
+    return [];
   }
 
   throw new Error("Unsupported file format");
@@ -165,7 +185,7 @@ const parseUploadRequest = async (req, bucket) => {
       });
 
       fileStream.on("limit", () => {
-        parsingError = new Error("File too large. Max size is 100MB.");
+        parsingError = new Error("File too large. Max size is 1GB.");
         parsingError.sourceFileId = sourceFileId;
         fileStream.unpipe(uploadStream);
         uploadStream.destroy(parsingError);
@@ -356,7 +376,7 @@ exports.uploadFile = async (req, res) => {
 
     if (lowerMessage.includes("file too large")) {
       emitProgress(uploadId, { stage: "failed", progress: 100, detail: "File too large" });
-      return res.status(400).json({ message: "File too large. Max size is 100MB." });
+      return res.status(400).json({ message: "File too large. Max size is 1GB." });
     }
 
     if (lowerMessage.includes("invalid file type")) {

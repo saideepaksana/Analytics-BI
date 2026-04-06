@@ -1,4 +1,4 @@
-export const MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024;
+export const MAX_FILE_SIZE_BYTES = 1024 * 1024 * 1024; // 1GB
 
 export const MODE_OPTIONS = [
   {

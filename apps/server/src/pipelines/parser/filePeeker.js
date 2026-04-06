@@ -58,20 +58,43 @@ exports.peekFirstRows = async (gridFsFileId, fileName, maxRows = 500) => {
     }
   } else if (lowerName.endsWith(".xlsx") || lowerName.endsWith(".xls")) {
     const downloadStream = bucket.openDownloadStream(toObjectId(gridFsFileId));
-    const buffer = await streamToBuffer(downloadStream);
-    const workbook = XLSX.read(buffer, { type: "buffer", raw: true });
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    
-    if (sheet) {
-      const allRows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null, blankrows: false });
-      if (allRows.length > 0) {
-        headers = allRows[0].map(normalizeHeader);
-        for (let i = 1; i < Math.min(allRows.length, maxRows + 1); i++) {
-          const rowObj = {};
-          headers.forEach((h, j) => { rowObj[h] = allRows[i][j] ?? null; });
-          rows.push(rowObj);
+    const ExcelJS = require("exceljs");
+    const workbookReader = new ExcelJS.stream.xlsx.WorkbookReader(downloadStream, {
+      worksheets: "emit",
+      sharedStrings: "emit",
+      hyperlinks: "ignore",
+      styles: "ignore",
+      entries: "ignore",
+    });
+
+    try {
+      for await (const worksheetReader of workbookReader) {
+        let rowSeq = 0;
+        for await (const row of worksheetReader) {
+          rowSeq += 1;
+          const values = Array.isArray(row.values) ? row.values.slice(1) : []; // 1-indexed
+
+          if (rowSeq === 1) {
+            headers = values.map(normalizeHeader);
+            continue;
+          }
+
+          if (headers) {
+            const rowObj = {};
+            headers.forEach((h, i) => {
+              rowObj[h] = values[i] ?? null;
+            });
+            rows.push(rowObj);
+          }
+
+          if (rows.length >= maxRows) {
+            break;
+          }
         }
+        break; // Only first sheet
       }
+    } finally {
+      downloadStream.destroy();
     }
   } else {
     throw new Error("Unsupported file format for peeking");

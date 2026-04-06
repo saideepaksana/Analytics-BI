@@ -4,13 +4,25 @@ const { parseDate } = require('./normalizer.js');
 const DATE_TYPES = new Set(['date', 'datetime', 'timestamp']);
 const POSITIVE_ONLY_NUMERIC_TOKENS = ['price', 'amount', 'cost', 'quantity', 'count', 'total', 'id'];
 
-const hasNameToken = (key, tokens = []) => {
-    const normalized = String(key || '').toLowerCase().replace(/[^a-z0-9]+/g, '_');
-    return tokens.some((token) => {
+// --- PERFORMANCE OPTIMIZATION: Regex Caching ---
+const TOKEN_REGEX_CACHE = new Map();
+const getTokenRegex = (token) => {
+    let re = TOKEN_REGEX_CACHE.get(token);
+    if (!re) {
         const safe = String(token).toLowerCase();
-        const pattern = new RegExp(`(^|_)${safe}(_|$)`);
-        return pattern.test(normalized);
-    });
+        re = new RegExp(`(^|_)${safe}(_|$)`);
+        TOKEN_REGEX_CACHE.set(token, re);
+    }
+    return re;
+};
+
+const hasNameToken = (key, tokens = []) => {
+    if (!key) return false;
+    const normalized = String(key).toLowerCase().replace(/[^a-z0-9]+/g, '_');
+    for (let i = 0; i < tokens.length; i++) {
+        if (getTokenRegex(tokens[i]).test(normalized)) return true;
+    }
+    return false;
 };
 
 const isPositiveOnlyNumericField = (key) => hasNameToken(key, POSITIVE_ONLY_NUMERIC_TOKENS);
@@ -29,7 +41,8 @@ const resolveCleanerForColumn = (schemaColumn) => {
         let booleanCount = 0;
         let stringCount = 0;
         
-        for (const val of samples) {
+        for (let i = 0; i < samples.length; i++) {
+            const val = samples[i];
             if (typeof val === 'number') numericCount++;
             else if (typeof val === 'boolean') booleanCount++;
             else if (typeof val === 'string') {
@@ -50,7 +63,10 @@ const resolveCleanerForColumn = (schemaColumn) => {
 const semanticValidateRow = (row, schemaMap) => {
     const errors = [];
 
-    for (const [key, value] of Object.entries(row)) {
+    // --- PERFORMANCE OPTIMIZATION: Use for...in instead of Object.entries ---
+    for (const key in row) {
+        if (!Object.prototype.hasOwnProperty.call(row, key)) continue;
+        const value = row[key];
         const lowerKey = key.toLowerCase();
         const meta = schemaMap[lowerKey];
 
@@ -147,8 +163,11 @@ const semanticValidateRow = (row, schemaMap) => {
 
 const hasNoUsableValue = (normalizedData) => {
     if (!normalizedData || typeof normalizedData !== 'object') return true;
-    for (const value of Object.values(normalizedData)) {
-        if (value !== null && value !== undefined && value !== '') return false;
+    // --- PERFORMANCE OPTIMIZATION: Avoid Object.values ---
+    for (const key in normalizedData) {
+        if (!Object.prototype.hasOwnProperty.call(normalizedData, key)) continue;
+        const val = normalizedData[key];
+        if (val !== null && val !== undefined && val !== '') return false;
     }
     return true;
 };
@@ -158,7 +177,10 @@ const transformRow = (row, schemaMap) => {
     const structuralErrors = [];
     const warnings = [];
 
-    for (const [key, rawValue] of Object.entries(row)) {
+    // --- PERFORMANCE OPTIMIZATION: Use for...in instead of Object.entries ---
+    for (const key in row) {
+        if (!Object.prototype.hasOwnProperty.call(row, key)) continue;
+        const rawValue = row[key];
         const lowerKey = key.toLowerCase();
         const colMeta = schemaMap[lowerKey];
 

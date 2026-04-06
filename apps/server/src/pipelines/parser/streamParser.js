@@ -7,7 +7,7 @@ const { ObjectId } = require("mongodb");
 const { getBucket } = require("../../core/storage");
 
 const WORKER_FILE = path.join(__dirname, "structuralWorker.js");
-const DEFAULT_BATCH_SIZE = Number(process.env.PARSER_BATCH_SIZE || 500);
+const DEFAULT_BATCH_SIZE = Number(process.env.PARSER_BATCH_SIZE || 5000);
 const DEFAULT_WORKERS = Number(process.env.PARSER_WORKERS || Math.max(1, Math.min(os.cpus().length, 2)));
 
 const toObjectId = (value) => {
@@ -261,6 +261,8 @@ const streamToBuffer = async (stream) =>
     stream.on("end", () => resolve(Buffer.concat(chunks)));
   });
 
+const ExcelJS = require("exceljs");
+
 const createExcelIterator = async (gridFsFileId) => {
   const bucket = getBucket();
   if (!bucket) {
@@ -268,46 +270,75 @@ const createExcelIterator = async (gridFsFileId) => {
   }
 
   const downloadStream = bucket.openDownloadStream(toObjectId(gridFsFileId));
-  const workbookBuffer = await streamToBuffer(downloadStream);
-  const workbook = XLSX.read(workbookBuffer, { type: "buffer", raw: true });
-  const firstSheetName = workbook.SheetNames[0];
-  const firstSheet = firstSheetName ? workbook.Sheets[firstSheetName] : null;
 
-  if (!firstSheet) {
-    return {
-      headers: [],
-      rowIterator: (async function* empty() {})()
-    };
-  }
-
-  const rows = XLSX.utils.sheet_to_json(firstSheet, {
-    header: 1,
-    raw: true,
-    defval: null,
-    blankrows: false
+  const workbookReader = new ExcelJS.stream.xlsx.WorkbookReader(downloadStream, {
+    worksheets: "emit",
+    sharedStrings: "emit",
+    hyperlinks: "ignore",
+    styles: "ignore",
+    entries: "ignore",
   });
 
-  const headerValues = Array.isArray(rows[0]) ? rows[0] : [];
-  const headers = headerValues.map(normalizeHeader);
-  validateHeaders(headers);
+  let firstSheetFound = false;
+  let headers = null;
+  let rowSeq = 0;
 
   async function* iterator() {
-    for (let rowNum = 2; rowNum <= rows.length; rowNum += 1) {
-      const values = Array.isArray(rows[rowNum - 1]) ? rows[rowNum - 1] : [];
-      if (values.every((value) => value === null || value === undefined || value === "")) {
+    for await (const worksheetReader of workbookReader) {
+      if (firstSheetFound) {
+        // Skip subsequent sheets for now
+        for await (const _ of worksheetReader) {}
         continue;
       }
+      firstSheetFound = true;
 
-      yield {
-        sourceRowNumber: rowNum,
-        values
-      };
+      for await (const row of worksheetReader) {
+        rowSeq += 1;
+        const values = Array.isArray(row.values) ? row.values.slice(1) : []; // 1-indexed
+
+        if (rowSeq === 1) {
+          headers = values.map(normalizeHeader);
+          validateHeaders(headers);
+          continue;
+        }
+
+        // Skip empty rows
+        if (values.every((v) => v === null || v === undefined || v === "")) {
+          continue;
+        }
+
+        yield {
+          sourceRowNumber: rowSeq,
+          values,
+        };
+      }
     }
   }
 
+  // Prime the iterator to get headers
+  const gen = iterator();
+  const first = await gen.next();
+
+  if (!headers) {
+    // If workbook completes without headers, it's effectively empty
+    return {
+      headers: [],
+      rowIterator: (async function* empty() {})(),
+    };
+  }
+
+  const replayIterator = async function* replay() {
+    if (!first.done) {
+      yield first.value;
+    }
+    for await (const item of gen) {
+      yield item;
+    }
+  };
+
   return {
     headers,
-    rowIterator: iterator()
+    rowIterator: replayIterator(),
   };
 };
 

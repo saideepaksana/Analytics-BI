@@ -20,8 +20,8 @@ const upsertCleanRecords = async (docs = []) => {
   }
 
   try {
-    // Fast path: bulk insert. ordered: false ensures successful records are written even if duplicates exist.
-    await CleanRecord.insertMany(docs, { ordered: false });
+    // Switch to native driver for maximum performance (bypasses Mongoose document overhead)
+    await CleanRecord.collection.insertMany(docs, { ordered: false });
   } catch (error) {
     // Idempotency: Ignore duplicate key errors implicitly (job retry)
     const isDuplicateError = error.code === 11000 || (error.name === "MongoBulkWriteError" && error.writeErrors?.every(e => e.code === 11000));
@@ -40,8 +40,8 @@ const upsertDlqRecords = async (docs = []) => {
   }
 
   try {
-    // Fast path: bulk insert. ordered: false ensures successful records are written even if duplicates exist.
-    await DLQRecord.insertMany(docs, { ordered: false });
+    // Switch to native driver for maximum performance
+    await DLQRecord.collection.insertMany(docs, { ordered: false });
   } catch (error) {
     // Idempotency: Ignore duplicate key errors implicitly (job retry)
     const isDuplicateError = error.code === 11000 || (error.name === "MongoBulkWriteError" && error.writeErrors?.every(e => e.code === 11000));
@@ -210,7 +210,9 @@ exports.runUploadProcessor = async (jobData) => {
             rowNumber: row.rowNumber,
             rawData: row.rawData,
             errorMessages: row.errors || ["Structural parse error"],
-            status: "QUARANTINED"
+            status: "QUARANTINED",
+            createdAt: new Date(),
+            updatedAt: new Date(),
           }));
           if (structuralDlqDocs.length > 0) {
             await upsertDlqRecords(structuralDlqDocs);
@@ -229,7 +231,9 @@ exports.runUploadProcessor = async (jobData) => {
               rowNumber: wrapper.rowNumber || (currentRowOffset + index + 1),
               data: wrapper.data,
               sourceFileName: safeFileName,
-              status: "VALID"
+              status: "VALID",
+              createdAt: new Date(),
+              updatedAt: new Date(),
             }));
           } else {
             // Manual transformation fallback (used for first batch if peek failed)
@@ -260,7 +264,9 @@ exports.runUploadProcessor = async (jobData) => {
               rowNumber: currentRowOffset + index + 1,
               data,
               sourceFileName: safeFileName,
-              status: "VALID"
+              status: "VALID",
+              createdAt: new Date(),
+              updatedAt: new Date(),
             }));
 
             if (invalidRows.length > 0) {
@@ -269,7 +275,9 @@ exports.runUploadProcessor = async (jobData) => {
                 rowNumber: currentRowOffset + validRows.length + index + 1,
                 rawData: row.rawData,
                 errorMessages: row.errors || ["Validation failed"],
-                status: "QUARANTINED"
+                status: "QUARANTINED",
+                createdAt: new Date(),
+                updatedAt: new Date(),
               }));
               await upsertDlqRecords(dlqDocs);
               totalDlqCount += dlqDocs.length;
@@ -282,6 +290,17 @@ exports.runUploadProcessor = async (jobData) => {
           }
 
           currentRowOffset += batchWrappers.length;
+
+          // Granular progress reporting (throttled by batch size)
+          const baseProgress = 50;
+          const processingShare = 32; // from 50% to 82%
+          // Since we dont know total rows yet, we use a logarithmic scale or just emit counts
+          emitProgress(uploadId, { 
+              stage: "parsing", 
+              progress: Math.min(81, baseProgress + Math.floor(Math.log10(totalParsedCount + 1) * 5)), 
+              datasetId, 
+              detail: `processed-${totalParsedCount}-rows` 
+          });
         }
       });
       emitProgress(uploadId, { stage: "quarantine", progress: 82, datasetId });
