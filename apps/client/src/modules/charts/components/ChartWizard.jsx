@@ -72,8 +72,8 @@ export default function ChartWizard({ isOpen, onClose, onComplete }) {
           orderBy: measures.length > 0 ? [{ field: measures[0], direction: "desc" }] : []
         };
       }
-      const results = await queryDataset(selectedDatasetId, query);
-      setPreviewData(results);
+      const response = await queryDataset(selectedDatasetId, query);
+      setPreviewData(response.results || []);
     } catch (err) {
       setError("Failed to generate chart preview data");
       console.error(err);

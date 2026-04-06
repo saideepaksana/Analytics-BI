@@ -14,6 +14,7 @@ function App() {
   const [activeDatasetId, setActiveDatasetId] = useState("");
   const [activeView, setActiveView] = useState("home"); // home | ingestion | review | datasets
   const [reviewModalDatasetId, setReviewModalDatasetId] = useState(null);
+  const [chartsExploreMode, setChartsExploreMode] = useState(false);
   
   // defaulting to dark mode for Midnight Aurora aesthetic, persisting in localStorage
   const [theme, setTheme] = useState(() => {
@@ -102,7 +103,7 @@ function App() {
       </aside>
 
       <main className="app-shell">
-        {activeHeader && (
+        {activeHeader && !chartsExploreMode && (
           <header className="app-header">
             <h1>{activeHeader.title}</h1>
             <p>{activeHeader.subtitle}</p>
@@ -135,7 +136,7 @@ function App() {
           />
         ) : null}
 
-        {activeView === "charts" ? <ChartsPage /> : null}
+        {activeView === "charts" ? <ChartsPage onExploreMode={setChartsExploreMode} /> : null}
 
         {activeView === "dashboards" ? <DashboardsPage /> : null}
       </main>

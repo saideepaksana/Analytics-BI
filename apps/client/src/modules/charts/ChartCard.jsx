@@ -3,7 +3,7 @@ import { Edit2, Eye, Trash2, Loader2, Maximize2 } from "lucide-react";
 import ChartPreview from "./components/ChartPreview";
 import { queryDataset } from "../../services/charts.service";
 
-export default function ChartCard({ chart, onDelete }) {
+export default function ChartCard({ chart, onDelete, onEdit }) {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -34,7 +34,7 @@ export default function ChartCard({ chart, onDelete }) {
         }
 
         const results = await queryDataset(datasetId, query);
-        setData(results);
+        setData(results.results || []);
       } catch (err) {
         setError("Failed to load chart data");
         console.error(err);
@@ -75,10 +75,10 @@ export default function ChartCard({ chart, onDelete }) {
       </div>
 
       <div className="chart-card-actions">
-        <button className="chart-action-btn" title="View Details">
+        <button className="chart-action-btn" title="View Details" onClick={onEdit}>
           <Eye size={16} />
         </button>
-        <button className="chart-action-btn" title="Edit Chart">
+        <button className="chart-action-btn" title="Edit Chart" onClick={onEdit}>
           <Edit2 size={16} />
         </button>
         <button 

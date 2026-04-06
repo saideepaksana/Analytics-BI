@@ -401,12 +401,23 @@ exports.restoreAllValidQuarantinedRows = async (req, res) => {
 
 /**
  * POST /api/datasets/:datasetId/query
+ * Enhanced to support COUNT(*), configurable limits, execution timing, and contribution mode.
  */
 exports.queryDatasetData = async (req, res) => {
   try {
+    const startTime = Date.now();
     const { datasetId } = req.params;
-    const { dimensions = [], measures = [], filters = [], orderBy = [], raw = false } = req.body;
+    const {
+      dimensions = [], measures = [], filters = [], orderBy = [], sortBy = [],
+      raw = false,
+      rowLimit = 10000,
+      seriesLimit = 0,
+      contributionMode = "none"
+    } = req.body;
     if (!datasetId) return res.status(400).json({ message: "datasetId is required" });
+
+    const effectiveRowLimit = Math.min(Math.max(parseInt(rowLimit, 10) || 10000, 1), 50000);
+    const effectiveSeriesLimit = Math.max(parseInt(seriesLimit, 10) || 0, 0);
 
     const pipeline = [];
     const matchStage = { datasetId };
@@ -414,9 +425,14 @@ exports.queryDatasetData = async (req, res) => {
       filters.forEach(f => {
         if (f.field && f.operator) {
           const key = `data.${f.field}`;
-          if (f.operator === "=") matchStage[key] = f.value;
+          if (f.operator === "=" || f.operator === "==") matchStage[key] = f.value;
+          else if (f.operator === "!=") matchStage[key] = { $ne: f.value };
           else if (f.operator === ">") matchStage[key] = { $gt: f.value };
+          else if (f.operator === ">=") matchStage[key] = { $gte: f.value };
           else if (f.operator === "<") matchStage[key] = { $lt: f.value };
+          else if (f.operator === "<=") matchStage[key] = { $lte: f.value };
+          else if (f.operator === "IN" && Array.isArray(f.value)) matchStage[key] = { $in: f.value };
+          else if (f.operator === "NOT IN" && Array.isArray(f.value)) matchStage[key] = { $nin: f.value };
         }
       });
     }
@@ -427,43 +443,96 @@ exports.queryDatasetData = async (req, res) => {
       const projectStage = { _id: 0 };
       const allFields = [
         ...dimensions.map(d => (typeof d === "string" ? d : d.field)),
-        ...measures.map(m => m.field)
+        ...measures.map(m => m.field).filter(f => f && f !== "*")
       ].filter(Boolean);
       allFields.forEach(f => { projectStage[f] = `$data.${f}`; });
       pipeline.push({ $project: projectStage });
-      pipeline.push({ $limit: 1000 });
+      pipeline.push({ $limit: effectiveRowLimit });
     } else {
-      // Aggregated mode: group and aggregate (for bar, line, pie, area)
+      // Aggregated mode: group and aggregate
       const groupStage = { _id: {} };
+      const metricKeys = [];
       dimensions.forEach(dim => {
         const f = typeof dim === "string" ? dim : dim.field;
         if (f) groupStage._id[f] = `$data.${f}`;
       });
+
+      // Track metric output keys for project stage
       measures.forEach(m => {
-        if (m.field && m.aggregation) {
-          const op = m.aggregation.toUpperCase();
-          if (op === "COUNT") groupStage[m.field] = { $sum: 1 };
-          else groupStage[m.field] = { [`$${op.toLowerCase()}`]: `$data.${m.field}` };
+        const agg = (m.aggregation || "SUM").toUpperCase();
+        if (m.field === "*" || agg === "COUNT") {
+          // COUNT(*) — count all matching documents
+          const outputKey = m.label || "COUNT(*)"; 
+          groupStage[outputKey] = { $sum: 1 };
+          metricKeys.push(outputKey);
+        } else if (m.field) {
+          const outputKey = m.label || m.field;
+          if (agg === "SUM") groupStage[outputKey] = { $sum: `$data.${m.field}` };
+          else if (agg === "AVG") groupStage[outputKey] = { $avg: `$data.${m.field}` };
+          else if (agg === "MIN") groupStage[outputKey] = { $min: `$data.${m.field}` };
+          else if (agg === "MAX") groupStage[outputKey] = { $max: `$data.${m.field}` };
+          else groupStage[outputKey] = { $sum: `$data.${m.field}` };
+          metricKeys.push(outputKey);
         }
       });
-      if (Object.keys(groupStage._id).length === 0 && Object.keys(groupStage).length === 1) groupStage.count = { $sum: 1 };
+
+      if (Object.keys(groupStage._id).length === 0 && metricKeys.length === 0) {
+        groupStage["count"] = { $sum: 1 };
+        metricKeys.push("count");
+      }
       pipeline.push({ $group: groupStage });
 
       const projectStage = { _id: 0 };
       Object.keys(groupStage._id).forEach(k => { projectStage[k] = `$_id.${k}`; });
-      Object.keys(groupStage).forEach(k => { if (k !== "_id") projectStage[k] = 1; });
+      metricKeys.forEach(k => { projectStage[k] = 1; });
       pipeline.push({ $project: projectStage });
 
-      if (Array.isArray(orderBy) && orderBy.length > 0) {
+      // Sort
+      const sortFields = sortBy.length > 0 ? sortBy : orderBy;
+      if (Array.isArray(sortFields) && sortFields.length > 0) {
         const sortStage = {};
-        orderBy.forEach(o => { if (o.field) sortStage[o.field] = o.direction === "desc" ? -1 : 1; });
+        sortFields.forEach(o => { if (o.field) sortStage[o.field] = o.direction === "desc" ? -1 : 1; });
         pipeline.push({ $sort: sortStage });
       }
-      pipeline.push({ $limit: 1000 });
+
+      // Series limit (if > 0, limit number of distinct groups)
+      if (effectiveSeriesLimit > 0) {
+        pipeline.push({ $limit: effectiveSeriesLimit });
+      } else {
+        pipeline.push({ $limit: effectiveRowLimit });
+      }
+
+      // Expose metric keys outside the aggregation branch for contribution mode.
+      req._metricKeys = metricKeys;
     }
 
     const results = await CleanRecord.aggregate(pipeline);
-    return res.json({ results });
+
+    // Contribution mode: calculate percentage of total
+    let processedResults = results;
+    const metricKeys = req._metricKeys || [];
+    if (contributionMode === "row" && metricKeys.length > 0) {
+      const totals = {};
+      metricKeys.forEach(k => {
+        totals[k] = results.reduce((sum, r) => sum + (Number(r[k]) || 0), 0);
+      });
+      processedResults = results.map(r => {
+        const row = { ...r };
+        metricKeys.forEach(k => {
+          if (totals[k] !== 0) {
+            row[k] = Number(((Number(r[k]) || 0) / totals[k] * 100).toFixed(2));
+          }
+        });
+        return row;
+      });
+    }
+
+    const executionTimeMs = Date.now() - startTime;
+    return res.json({
+      results: processedResults,
+      rowCount: processedResults.length,
+      executionTimeMs
+    });
   } catch (error) {
     logger.error(`queryDatasetData error: ${error.message}`, "Datasets");
     return res.status(500).json({ message: "Internal server error" });

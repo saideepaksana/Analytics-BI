@@ -1,15 +1,15 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { PlusCircle, BarChart3, Plus, Loader2 } from "lucide-react";
 import ChartCard from "./ChartCard";
-import ChartWizard from "./components/ChartWizard";
+import ChartExplore from "./components/ChartExplore";
 import { fetchCharts, deleteChartData } from "../../services/charts.service";
 import "./styles/charts.css";
 
-export default function ChartsPage() {
+export default function ChartsPage({ onExploreMode }) {
   const [charts, setCharts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [error, setError] = useState(null);
+  const [exploreChartId, setExploreChartId] = useState(null); // null = grid, "new" = new chart, <id> = edit
 
   const loadCharts = useCallback(async () => {
     setLoading(true);
@@ -29,9 +29,10 @@ export default function ChartsPage() {
     loadCharts();
   }, [loadCharts]);
 
-  const handleCreateChart = () => {
-    setIsWizardOpen(true);
-  };
+  // Signal parent when we're in explore mode
+  useEffect(() => {
+    onExploreMode?.(exploreChartId !== null);
+  }, [exploreChartId, onExploreMode]);
 
   const handleDeleteChart = async (id) => {
     try {
@@ -42,11 +43,22 @@ export default function ChartsPage() {
     }
   };
 
-  const handleWizardComplete = () => {
-    loadCharts();
-    setIsWizardOpen(false);
+  const handleBackFromExplore = () => {
+    setExploreChartId(null);
+    loadCharts(); // Refresh list after editing
   };
 
+  // ── Explore View ──
+  if (exploreChartId !== null) {
+    return (
+      <ChartExplore
+        chartId={exploreChartId}
+        onBack={handleBackFromExplore}
+      />
+    );
+  }
+
+  // ── Loading ──
   if (loading) {
     return (
       <div className="charts-page loading-center">
@@ -56,7 +68,8 @@ export default function ChartsPage() {
     );
   }
 
-  if (charts.length === 0 && !isWizardOpen) {
+  // ── Empty State ──
+  if (charts.length === 0) {
     return (
       <div className="charts-page">
         <div className="empty-charts-container">
@@ -68,27 +81,21 @@ export default function ChartsPage() {
             Create your first data visualization by selecting a dataset and 
             configuring your chart settings.
           </p>
-
-          <button className="create-chart-btn" onClick={handleCreateChart}>
+          <button className="create-chart-btn" onClick={() => setExploreChartId("new")}>
             <PlusCircle size={20} />
             Create your first chart
           </button>
         </div>
-        
-        <ChartWizard 
-          isOpen={isWizardOpen} 
-          onClose={() => setIsWizardOpen(false)}
-          onComplete={handleWizardComplete}
-        />
       </div>
     );
   }
 
+  // ── Grid View ──
   return (
     <div className="charts-page">
       <div className="charts-grid-header">
         <h3>Saved Charts ({charts.length})</h3>
-        <button className="create-chart-btn" onClick={handleCreateChart} style={{ padding: "8px 16px" }}>
+        <button className="create-chart-btn" onClick={() => setExploreChartId("new")} style={{ padding: "8px 16px" }}>
           <Plus size={18} />
           New Chart
         </button>
@@ -102,15 +109,10 @@ export default function ChartsPage() {
             key={chart.chartId || chart._id} 
             chart={chart} 
             onDelete={() => handleDeleteChart(chart.chartId || chart._id)}
+            onEdit={() => setExploreChartId(chart.chartId || chart._id)}
           />
         ))}
       </div>
-
-      <ChartWizard 
-        isOpen={isWizardOpen} 
-        onClose={() => setIsWizardOpen(false)}
-        onComplete={handleWizardComplete}
-      />
     </div>
   );
 }
