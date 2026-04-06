@@ -7,6 +7,7 @@ const path = require("path");
 const os = require("os");
 const logger = require("../../core/logger");
 const { validateRow, cleanAndNormalizeRow, semanticValidateRow } = require("../../pipelines/dts/index");
+const schemaValidator = require("../../core/SchemaValidator");
 
 const findQuarantineRowByIndexOrNumber = async (datasetId, rawIndex) => {
   const parsed = Number.parseInt(rawIndex, 10);
@@ -626,6 +627,53 @@ exports.queryDatasetData = async (req, res) => {
     });
   } catch (error) {
     logger.error(`queryDatasetData error: ${error.message}`, "Datasets");
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+// POST /api/datasets/:datasetId/validate-payload
+exports.validatePayload = async (req, res) => {
+  try {
+    const { datasetId } = req.params;
+    const records = req.body;
+
+    if (!Array.isArray(records)) {
+      return res.status(400).json({ message: "Payload must be an array of records" });
+    }
+
+    const metadataDoc = await Metadata.findOne({ datasetId });
+    if (!metadataDoc) {
+      return res.status(404).json({ message: "Dataset not found" });
+    }
+
+    const jsonSchema = metadataDoc.toJSONSchema();
+    const validatorFunc = schemaValidator.compile(jsonSchema);
+    
+    const validationReport = [];
+    let validCount = 0;
+    
+    records.forEach((record, index) => {
+      const result = validatorFunc(record);
+      if (result.valid) {
+        validCount++;
+      } else {
+        validationReport.push({
+          row: index,
+          errors: result.errors
+        });
+      }
+    });
+
+    return res.json({
+      message: "Validation complete",
+      totalProcessed: records.length,
+      validCount,
+      errorCount: validationReport.length,
+      isValid: validationReport.length === 0,
+      report: validationReport.slice(0, 100)
+    });
+  } catch (error) {
+    logger.error(`validatePayload error: ${error.message}`, "Datasets");
     return res.status(500).json({ message: "Internal server error" });
   }
 };

@@ -22,7 +22,9 @@ const ColumnSchema = new mongoose.Schema(
         },
         sampleValues: [mongoose.Schema.Types.Mixed],        // like a vector in cpp of any data type, used for schema inference and UI previews.
         nullCount: { type: Number, default: 0 },            // Number of null/empty values in the sample (for data quality insights).
-        uniqueCount: { type: Number, default: 0 }           // Number of unique values in the sample (for cardinality estimation).
+        uniqueCount: { type: Number, default: 0 },           // Number of unique values in the sample (for cardinality estimation).
+        nullable: { type: Boolean, default: true },
+        constraints: { type: mongoose.Schema.Types.Mixed, default: {} }
     },
     { _id: false }
 );
@@ -85,5 +87,50 @@ const MetadataSchema = new mongoose.Schema(
 
 MetadataSchema.index({ createdAt: -1 });
 MetadataSchema.index({ updatedAt: -1 });
+MetadataSchema.index({ fileName: "text" });
+
+MetadataSchema.methods.toJSONSchema = function () {
+    const requiredFields = [];
+    const properties = {};
+
+    (this.schema || []).forEach((col) => {
+        const typeStr = (col.type || col.dataType || "string").toLowerCase();
+        let jsonType = "string";
+        let format = undefined;
+
+        if (typeStr === "number" || typeStr === "integer" || typeStr === "float" || typeStr === "decimal") {
+            jsonType = "number";
+        } else if (typeStr === "boolean") {
+            jsonType = "boolean";
+        } else if (typeStr === "date" || typeStr === "datetime" || typeStr === "timestamp") {
+            jsonType = "string";
+            format = "date-time";
+        }
+
+        const isNullable = col.nullable !== false;
+        const _type = isNullable ? [jsonType, "null"] : jsonType;
+
+        const propDef = { type: _type };
+        if (format) propDef.format = format;
+        
+        if (col.constraints && typeof col.constraints === 'object') {
+            Object.assign(propDef, col.constraints);
+        }
+
+        properties[col.name] = propDef;
+
+        if (!isNullable) {
+            requiredFields.push(col.name);
+        }
+    });
+
+    return {
+        $schema: "http://json-schema.org/draft-07/schema#",
+        type: "object",
+        properties,
+        required: requiredFields.length > 0 ? requiredFields : undefined,
+        additionalProperties: true // Typically true to allow extra fields or change based on strictness
+    };
+};
 
 module.exports = mongoose.model("Metadata", MetadataSchema);        // Export the Mongoose model for Metadata, which includes column-level schema details and inferred relationships.

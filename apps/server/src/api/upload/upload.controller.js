@@ -243,7 +243,8 @@ exports.uploadFile = async (req, res) => {
 
     const { fields, uploadMeta } = await parseUploadRequest(req, bucket);
 
-    uploadId = typeof fields.uploadId === "string" ? fields.uploadId.trim() : "";
+    const { randomUUID } = require("crypto");
+    uploadId = typeof fields.uploadId === "string" && fields.uploadId.trim() ? fields.uploadId.trim() : randomUUID();
     const validModes = ["new", "append", "replace"];
     const mode = fields.mode || "new";
     const requestedDatasetId = typeof fields.datasetId === "string" ? fields.datasetId.trim() : "";

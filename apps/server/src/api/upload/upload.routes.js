@@ -1,5 +1,6 @@
 const express = require("express");
 const { uploadFile, getActiveJobs } = require("./upload.controller");
+const idempotency = require("../../middleware/idempotency");
 
 const router = express.Router();
 
@@ -7,6 +8,6 @@ const router = express.Router();
 router.get("/active-jobs", getActiveJobs);
 
 // Multipart parsing is handled in controller with Busboy for streaming to GridFS.
-router.post("/", uploadFile);
+router.post("/", idempotency, uploadFile);
 
 module.exports = router;
