@@ -42,11 +42,11 @@ function HomePage({ onNavigate }) {
         <h1>
           Welcome to <span className="gradient-text">Analytics BI</span>
         </h1>
-        <p>
+        {/* <p>
           Upload, transform, and explore your datasets with a powerful data
           ingestion pipeline. Review schemas, manage quarantined records, and
           build insights — all in one place.
-        </p>
+        </p> */}
       </section>
 
       {/* ── Quick Actions ── */}
