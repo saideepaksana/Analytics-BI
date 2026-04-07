@@ -57,6 +57,10 @@ const MetadataSchema = new mongoose.Schema(
 
         // Inferred schema columns (new pipeline uses `schema`).
         schema: { type: [ColumnSchema], default: [] },          // like vector<ColumnSchema> in cpp, stores inferred schema details for each column.
+        
+        // Designated time-series column for truncation operations mapping.
+        timeSeriesField: { type: String, default: null },
+
         rowCount: { type: Number, default: 0 },
         quarantinedCount: { type: Number, default: 0 },
         sourceFileId: { type: String, default: "" },

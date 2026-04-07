@@ -34,36 +34,6 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
-.home-hero-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 14px;
-  border-radius: 999px;
-  background: rgba(34, 197, 94, 0.08);
-  color: #4ade80;
-  font-size: 12px;
-  font-weight: 600;
-  border: 1px solid rgba(34, 197, 94, 0.2);
-  margin-bottom: 22px;
-  letter-spacing: 0.3px;
-  animation: hero-item 500ms ease-out 100ms both;
-}
-
-.pulse-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #4ade80;
-  box-shadow: 0 0 8px rgba(34, 197, 94, 0.6);
-  animation: pulse-glow 2s ease-in-out infinite;
-}
-
-@keyframes pulse-glow {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
-}
-
 .home-hero h1 {
   font-size: clamp(28px, 4vw, 44px);
   font-weight: 900;

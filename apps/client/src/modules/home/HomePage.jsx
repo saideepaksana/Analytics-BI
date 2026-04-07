@@ -1,15 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import {
-  Database,
   Upload,
-  BarChart3,
-  AlertTriangle,
   Zap,
   FolderOpen,
   LayoutDashboard,
-  Code2,
-  MessageSquare,
-  Layers,
   ArrowRight,
   PieChart,
 } from "lucide-react";
@@ -37,11 +31,6 @@ function HomePage({ onNavigate }) {
     fetchStats();
   }, [fetchStats]);
 
-  const totalDatasets = datasets.length;
-  const totalRows = datasets.reduce((sum, d) => sum + (d.rowCount ?? 0), 0);
-  const totalQuarantined = datasets.reduce((sum, d) => sum + (d.quarantinedCount ?? 0), 0);
-  const totalUploads = datasets.length; // each dataset = at least one upload
-
   const recentDatasets = [...datasets]
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
     .slice(0, 5);
@@ -50,10 +39,6 @@ function HomePage({ onNavigate }) {
     <div className="home-page">
       {/* ── Hero Section ── */}
       <section className="home-hero">
-        <div className="home-hero-badge">
-          <span className="pulse-dot" />
-          Platform Active
-        </div>
         <h1>
           Welcome to <span className="gradient-text">Analytics BI</span>
         </h1>
@@ -62,40 +47,6 @@ function HomePage({ onNavigate }) {
           ingestion pipeline. Review schemas, manage quarantined records, and
           build insights — all in one place.
         </p>
-      </section>
-
-      {/* ── Stats Grid ── */}
-      <section className="home-stats-grid">
-        <div className="stat-card">
-          <div className="stat-card-icon">
-            <Database size={20} />
-          </div>
-          <div className="stat-card-value">{loading ? "—" : totalDatasets}</div>
-          <div className="stat-card-label">Datasets</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-card-icon">
-            <Upload size={20} />
-          </div>
-          <div className="stat-card-value">{loading ? "—" : totalUploads}</div>
-          <div className="stat-card-label">Uploads</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-card-icon">
-            <BarChart3 size={20} />
-          </div>
-          <div className="stat-card-value">
-            {loading ? "—" : totalRows.toLocaleString()}
-          </div>
-          <div className="stat-card-label">Clean Records</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-card-icon">
-            <AlertTriangle size={20} />
-          </div>
-          <div className="stat-card-value">{loading ? "—" : totalQuarantined}</div>
-          <div className="stat-card-label">Quarantined</div>
-        </div>
       </section>
 
       {/* ── Quick Actions ── */}
@@ -161,41 +112,6 @@ function HomePage({ onNavigate }) {
             </div>
             <ArrowRight size={16} style={{ color: "var(--muted)", flexShrink: 0 }} />
           </button>
-        </div>
-      </section>
-
-      {/* ── Coming Soon Features ── */}
-      <section>
-        <h2 className="home-section-title">
-          <Layers size={18} className="section-icon" />
-          Platform Capabilities
-        </h2>
-        <div className="home-features-grid">
-
-          <div className="feature-card">
-            <div className="feature-card-icon cyan">
-              <BarChart3 size={22} />
-            </div>
-            <h4>Query Builder</h4>
-            <p>Create complex queries with a visual no-code interface</p>
-            <span className="coming-soon-badge">Coming Soon</span>
-          </div>
-          <div className="feature-card">
-            <div className="feature-card-icon orange">
-              <Code2 size={22} />
-            </div>
-            <h4>SQL Editor</h4>
-            <p>Write and execute SQL queries with AI-powered suggestions</p>
-            <span className="coming-soon-badge">Coming Soon</span>
-          </div>
-          <div className="feature-card">
-            <div className="feature-card-icon pink">
-              <MessageSquare size={22} />
-            </div>
-            <h4>AI Chatbot</h4>
-            <p>Ask questions about your data in natural language</p>
-            <span className="coming-soon-badge">Coming Soon</span>
-          </div>
         </div>
       </section>
 

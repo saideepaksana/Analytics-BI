@@ -17,13 +17,43 @@ const DLQRecordSchema = new Schema(
       type: Schema.Types.Mixed,
       required: true
     },
+    cleanedData: {
+      type: Schema.Types.Mixed,
+      default: null
+    },
     errorMessages: {
       type: [String],
       default: []
     },
+    errorCategory: {
+      type: String,
+      enum: ["structural", "validation", "unknown"],
+      default: "unknown"
+    },
+    suggestion: {
+      type: String,
+      default: ""
+    },
+    severity: {
+      type: String,
+      enum: ["low", "medium", "high", "critical"],
+      default: "medium"
+    },
     status: {
       type: String,
       default: "QUARANTINED"
+    },
+    attemptedRestores: {
+      type: Number,
+      default: 0
+    },
+    manualEdits: {
+      type: Number,
+      default: 0
+    },
+    lastModifiedBy: {
+      type: String,
+      default: "system"
     }
   },
   {
@@ -33,5 +63,6 @@ const DLQRecordSchema = new Schema(
 
 DLQRecordSchema.index({ datasetId: 1, rowNumber: 1 }, { unique: true });
 DLQRecordSchema.index({ datasetId: 1, createdAt: -1 });
+DLQRecordSchema.index({ errorMessages: "text" });
 
 module.exports = mongoose.model("DLQRecord", DLQRecordSchema);

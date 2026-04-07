@@ -619,41 +619,13 @@ exports.queryDatasetData = async (req, res) => {
       pipeline.push({ $limit: effectiveRowLimit });
     } else {
       // Aggregated mode: group and aggregate
-      const groupStage = { _id: {} };
-      normalizedDimensions.forEach(dim => {
-        const f = typeof dim === "string" ? dim : dim.field;
-        if (f) groupStage._id[f] = `$data.${f}`;
-      });
+      const { buildGroupAndProjectStages } = require("./groupStageBuilder");
+      const stages = buildGroupAndProjectStages(normalizedDimensions, normalizedMeasures);
+      
+      metricKeys.push(...stages.metricKeys);
 
-      // Track metric output keys for project stage
-      normalizedMeasures.forEach(m => {
-        const agg = (m.aggregation || "SUM").toUpperCase();
-        if (m.field === "*" || agg === "COUNT") {
-          // COUNT(*) — count all matching documents
-          const outputKey = m.label || "COUNT(*)"; 
-          groupStage[outputKey] = { $sum: 1 };
-          metricKeys.push(outputKey);
-        } else if (m.field) {
-          const outputKey = m.label || m.field;
-          if (agg === "SUM") groupStage[outputKey] = { $sum: `$data.${m.field}` };
-          else if (agg === "AVG") groupStage[outputKey] = { $avg: `$data.${m.field}` };
-          else if (agg === "MIN") groupStage[outputKey] = { $min: `$data.${m.field}` };
-          else if (agg === "MAX") groupStage[outputKey] = { $max: `$data.${m.field}` };
-          else groupStage[outputKey] = { $sum: `$data.${m.field}` };
-          metricKeys.push(outputKey);
-        }
-      });
-
-      if (Object.keys(groupStage._id).length === 0 && metricKeys.length === 0) {
-        groupStage["count"] = { $sum: 1 };
-        metricKeys.push("count");
-      }
-      pipeline.push({ $group: groupStage });
-
-      const projectStage = { _id: 0 };
-      Object.keys(groupStage._id).forEach(k => { projectStage[k] = `$_id.${k}`; });
-      metricKeys.forEach(k => { projectStage[k] = 1; });
-      pipeline.push({ $project: projectStage });
+      pipeline.push({ $group: stages.groupStage });
+      pipeline.push({ $project: stages.projectStage });
 
       // Sort
       const sortFields = normalizedSortBy.length > 0 ? normalizedSortBy : normalizedOrderBy;
@@ -700,6 +672,29 @@ exports.queryDatasetData = async (req, res) => {
   } catch (error) {
     logger.error(`queryDatasetData error: ${error.message}`, "Datasets");
     return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+// POST /api/datasets/:datasetId/query/preview-stage
+exports.previewGroupStage = async (req, res) => {
+  try {
+    const { dimensions = [], measures = [] } = req.body;
+    const { buildGroupAndProjectStages } = require("./groupStageBuilder");
+    
+    // Normalize body structure if needed (similar to full query)
+    const normalizedDimensions = Array.isArray(dimensions) ? dimensions : [];
+    const normalizedMeasures = Array.isArray(measures) ? measures : [];
+
+    const stages = buildGroupAndProjectStages(normalizedDimensions, normalizedMeasures);
+    return res.json({
+        message: "Aggregation preview generated successfully.",
+        pipeline: [
+            { $group: stages.groupStage },
+            { $project: stages.projectStage }
+        ]
+    });
+  } catch (err) {
+    return res.status(400).json({ message: "Could not build pipeline preview", error: err.message });
   }
 };
 
