@@ -1,7 +1,7 @@
 import React, { useMemo } from "react";
 import ReactECharts from "echarts-for-react";
 
-const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style = {} }) => {
+const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style = {}, annotations = [] }) => {
   const option = useMemo(() => {
     if (!data || data.length === 0) {
       return {
@@ -35,7 +35,7 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
         .map(item => [Number(item[xField]), Number(item[yField])])
         .filter(pair => !isNaN(pair[0]) && !isNaN(pair[1]));
 
-      return {
+      const baseScatter = {
         backgroundColor: "transparent",
         tooltip: {
           ...darkTooltip,
@@ -68,13 +68,25 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
           emphasis: { itemStyle: { shadowBlur: 10, shadowColor: "rgba(99, 102, 241, 0.5)" } }
         }]
       };
+
+      if (annotations && annotations.length > 0) {
+        baseScatter.graphic = annotations.map(a => ({
+          type: 'circle',
+          left: `${a.x}%`,
+          top: `${a.y}%`,
+          shape: { r: 5 },
+          style: { fill: '#f59e0b', stroke: '#fff', lineWidth: 1.5 },
+          tooltip: { content: a.text }
+        }));
+      }
+      return baseScatter;
     }
 
     // --- PIE CHART ---
     if (type === "pie") {
       const xAxisField = dimensions[0] || Object.keys(data[0])[0];
       const yAxisField = getMeasureKey(measures[0]) || Object.keys(data[0]).find(k => k !== xAxisField);
-      return {
+      const basePie = {
         backgroundColor: "transparent",
         tooltip: { ...darkTooltip, trigger: "item" },
         legend: { show: style.showLegend !== false, textStyle: { color: "#94a3b8" }, bottom: 0 },
@@ -90,6 +102,18 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
           data: data.map(item => ({ value: item[yAxisField], name: item[xAxisField] }))
         }]
       };
+
+      if (annotations && annotations.length > 0) {
+        basePie.graphic = annotations.map(a => ({
+          type: 'circle',
+          left: `${a.x}%`,
+          top: `${a.y}%`,
+          shape: { r: 5 },
+          style: { fill: '#f59e0b', stroke: '#fff', lineWidth: 1.5 },
+          tooltip: { content: a.text }
+        }));
+      }
+      return basePie;
     }
 
     // --- BAR / LINE / AREA ---
@@ -104,7 +128,7 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
       emphasis: { focus: "series" }
     }));
 
-    return {
+    const baseOption = {
       backgroundColor: "transparent",
       tooltip: { ...darkTooltip, trigger: "axis" },
       legend: { show: style.showLegend !== false, textStyle: { color: "#94a3b8" }, bottom: 0 },
@@ -128,7 +152,19 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
       color: colors,
       series: seriesData
     };
-  }, [type, data, dimensions, measures, style]);
+
+    if (annotations && annotations.length > 0) {
+      baseOption.graphic = annotations.map(a => ({
+        type: 'circle',
+        left: `${a.x}%`,
+        top: `${a.y}%`,
+        shape: { r: 5 },
+        style: { fill: '#f59e0b', stroke: '#fff', lineWidth: 1.5 },
+        tooltip: { content: a.text }
+      }));
+    }
+    return baseOption;
+  }, [type, data, dimensions, measures, style, annotations]);
 
   return (
     <div className="chart-preview-wrapper" style={{ height: "400px", width: "100%" }}>

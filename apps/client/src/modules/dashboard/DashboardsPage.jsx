@@ -1,55 +1,95 @@
-import React, { useState } from "react";
-import { PlusCircle, LayoutDashboard, Plus } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { Plus, LayoutDashboard } from "lucide-react";
 import DashboardCard from "./DashboardCard";
+import DashboardBuilder from "./components/DashboardBuilder";
+import { loadDashboardsFromStorage, saveDashboardsToStorage } from "../../services/dashboard.service";
 import "./styles/dashboards.css";
 
 export default function DashboardsPage() {
   const [dashboards, setDashboards] = useState([]);
+  const [activeDashboardId, setActiveDashboardId] = useState(null);
+
+  useEffect(() => {
+    setDashboards(loadDashboardsFromStorage());
+  }, []);
 
   const handleCreateDashboard = () => {
-    // Randomly generate a mock dashboard for frontend demonstration
     const newDashboard = {
-      id: Math.random().toString(36).substr(2, 9),
-      title: `Sample Dashboard ${dashboards.length + 1}`,
-      widgetCount: Math.floor(Math.random() * 8) + 2, // e.g. "4 widgets"
-      updatedAt: "Just now",
+      id: crypto.randomUUID(),
+      title: "New Dashboard",
+      description: "",
+      layout: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     };
-    setDashboards([newDashboard, ...dashboards]);
+    const next = [newDashboard, ...dashboards];
+    setDashboards(next);
+    saveDashboardsToStorage(next);
   };
 
-  if (dashboards.length === 0) {
-    return (
-      <div className="dashboards-page">
-        <div className="empty-dashboards-container">
-          <div className="empty-dashboards-icon">
-            <LayoutDashboard size={64} opacity={0.8} />
-          </div>
-          <h2>No dashboards created yet</h2>
+  const handleUpdateDashboard = (updatedDashboard) => {
+    const next = dashboards.map((d) => d.id === updatedDashboard.id ? updatedDashboard : d);
+    setDashboards(next);
+    saveDashboardsToStorage(next);
+  };
 
-          <button className="create-dashboard-btn" onClick={handleCreateDashboard}>
-            <PlusCircle size={20} />
-            Create your dashboard
-          </button>
-        </div>
-      </div>
+  const handleDelete = (id) => {
+    if (window.confirm("Are you sure you want to delete this dashboard?")) {
+      const next = dashboards.filter((d) => d.id !== id);
+      setDashboards(next);
+      saveDashboardsToStorage(next);
+      if (activeDashboardId === id) setActiveDashboardId(null);
+    }
+  };
+
+  const activeDashboard = dashboards.find((d) => d.id === activeDashboardId);
+
+  if (activeDashboard) {
+    return (
+      <DashboardBuilder
+        dashboard={activeDashboard}
+        onBack={() => setActiveDashboardId(null)}
+        onSave={(updated) => {
+          updated.updatedAt = new Date().toISOString();
+          handleUpdateDashboard(updated);
+          setActiveDashboardId(null);
+        }}
+      />
     );
   }
 
   return (
-    <div className="dashboards-page">
-      <div className="dashboards-grid-header">
-        <h3>Saved Dashboards ({dashboards.length})</h3>
-        <button className="create-dashboard-btn" onClick={handleCreateDashboard} style={{ padding: "8px 16px" }}>
+    <div className="dashboards-page" style={{ padding: "32px", maxWidth: "1200px", margin: "0 auto", width: "100%" }}>
+      <div className="dashboards-grid-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "32px" }}>
+        <h3 style={{ fontSize: "24px", color: "#f8fafc", margin: 0 }}>Saved Dashboards ({dashboards.length})</h3>
+        <button
+          className="create-dashboard-btn"
+          onClick={handleCreateDashboard}
+          style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 20px", borderRadius: "8px", backgroundColor: "#4f46e5", color: "#fff", border: "none", cursor: "pointer", fontWeight: 500, transition: "background-color 0.2s" }}
+        >
           <Plus size={18} />
           New Dashboard
         </button>
       </div>
 
-      <div className="dashboards-grid">
-        {dashboards.map((dashboard) => (
-          <DashboardCard key={dashboard.id} dashboard={dashboard} />
-        ))}
-      </div>
+      {dashboards.length === 0 ? (
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "64px 0", color: "#94a3b8" }}>
+          <LayoutDashboard size={48} opacity={0.5} style={{ marginBottom: "16px" }} />
+          <p>No dashboards created yet.</p>
+        </div>
+      ) : (
+        <div className="dashboards-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "24px" }}>
+          {dashboards.map((dashboard) => (
+            <DashboardCard
+              key={dashboard.id}
+              dashboard={dashboard}
+              onUpdate={handleUpdateDashboard}
+              onDelete={() => handleDelete(dashboard.id)}
+              onClick={() => setActiveDashboardId(dashboard.id)}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

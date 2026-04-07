@@ -27,6 +27,17 @@ export default function ChartExplore({ chartId, onBack }) {
   // ── Query config ──
   const [chartType, setChartType] = useState("bar");
   const [chartName, setChartName] = useState("Untitled Chart");
+
+  const handleSetChartType = useCallback((newType) => {
+    setChartType(newType);
+    setMetrics([]);
+    setXAxis(null);
+    setDimensionsList([]);
+    setResultData([]);
+    setRowCount(0);
+    setIsDirty(false);
+    setError(null);
+  }, []);
   const [xAxis, setXAxis] = useState(null);
   const [xAxisSortBy, setXAxisSortBy] = useState(null);
   const [metrics, setMetrics] = useState([]);
@@ -55,6 +66,7 @@ export default function ChartExplore({ chartId, onBack }) {
 
   // Track if initial load from editing
   const initialLoadDone = useRef(false);
+  const [schemaLoaded, setSchemaLoaded] = useState(false);
 
   // ── Load datasets ──
   useEffect(() => {
@@ -126,7 +138,7 @@ export default function ChartExplore({ chartId, onBack }) {
         setSampleData(data.preview || []);
 
         // Auto-select first dimension and metric for new charts
-        if (!isEditing || !initialLoadDone.current) {
+        if (!schemaLoaded && (!isEditing || !initialLoadDone.current)) {
           const schema = data.schema || [];
           const numericCols = schema.filter((col) => {
             const t = (col.type || "").toLowerCase();
@@ -140,6 +152,7 @@ export default function ChartExplore({ chartId, onBack }) {
           if (metrics.length === 0) {
             setMetrics([{ field: "*", aggregation: "COUNT", label: "COUNT(*)" }]);
           }
+          setSchemaLoaded(true);
         }
       } catch (err) {
         console.error("Failed to fetch schema", err);
@@ -147,7 +160,7 @@ export default function ChartExplore({ chartId, onBack }) {
         setLoadingSchema(false);
       }
     })();
-  }, [selectedDatasetId]);
+  }, [selectedDatasetId, isEditing, schemaLoaded, xAxis, metrics]);
 
   // ── Mark dirty when config changes ──
   useEffect(() => {
@@ -332,6 +345,29 @@ export default function ChartExplore({ chartId, onBack }) {
     }
   }, [metrics, xAxis, dimensionsList, pendingMetricAggregation, chartType]);
 
+  const CHART_CONSTRAINTS = {
+    bar:     { minDim: 1, maxDim: null, minMeas: 1, maxMeas: null },
+    line:    { minDim: 1, maxDim: null, minMeas: 1, maxMeas: null },
+    area:    { minDim: 1, maxDim: null, minMeas: 1, maxMeas: null },
+    pie:     { minDim: 1, maxDim: 1,    minMeas: 1, maxMeas: 1    },
+    scatter: { minDim: 0, maxDim: null, minMeas: 2, maxMeas: 2    },
+    table:   { minDim: 0, maxDim: null, minMeas: 0, maxMeas: null },
+  };
+
+  const c = CHART_CONSTRAINTS[chartType];
+  let exploreValidationError = null;
+  if (c) {
+    const dimCount = xAxis ? 1 + dimensionsList.length : dimensionsList.length;
+    if (c.maxDim !== null && dimCount > c.maxDim)
+      exploreValidationError = `${chartType} supports at most ${c.maxDim} dimension(s).`;
+    else if (c.maxMeas !== null && metrics.length > c.maxMeas)
+      exploreValidationError = `${chartType} supports at most ${c.maxMeas} measure(s).`;
+    else if (c.minMeas > 0 && metrics.length < c.minMeas)
+      exploreValidationError = `Add ${c.minMeas - metrics.length} more measure(s) for ${chartType}.`;
+    else if (c.minDim > 0 && dimCount < c.minDim)
+      exploreValidationError = `Add at least ${c.minDim} dimension for ${chartType}.`;
+  }
+
   // ── Loading state ──
   if (loadingDatasets) {
     return (
@@ -379,7 +415,8 @@ export default function ChartExplore({ chartId, onBack }) {
 
         <QueryPanel
           chartType={chartType}
-          onSetChartType={setChartType}
+          onSetChartType={handleSetChartType}
+          validationError={exploreValidationError}
           columns={columns}
           xAxis={xAxis}
           onSetXAxis={(v) => setXAxis(v)}

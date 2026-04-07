@@ -10,6 +10,7 @@ import {
   PieChart,
   ScatterChart,
   Table2,
+  AlertTriangle,
 } from "lucide-react";
 
 const AGGREGATIONS = ["COUNT", "SUM", "AVG", "MIN", "MAX"];
@@ -43,6 +44,7 @@ export default function QueryPanel({
   onUpdateFilter,
   onUpdateChart,
   isLoading = false,
+  validationError,
   // Customize tab
   showLegend = true,
   onToggleLegend,
@@ -189,6 +191,12 @@ export default function QueryPanel({
       <div className="query-panel-body">
         {activeTab === "data" ? (
           <>
+            {validationError && (
+              <div style={{ padding: "8px 12px", marginBottom: "12px", backgroundColor: "rgba(239, 68, 68, 0.1)", color: "#ef4444", borderRadius: "6px", display: "flex", alignItems: "center", gap: "8px", fontSize: "0.8rem" }}>
+                <AlertTriangle size={16} />
+                {validationError}
+              </div>
+            )}
             {/* Query Section Header */}
             <div
               className="query-section-header"
@@ -535,7 +543,7 @@ export default function QueryPanel({
             <button
               className="query-update-btn"
               onClick={onUpdateChart}
-              disabled={isLoading}
+              disabled={isLoading || !!validationError}
             >
               {isLoading ? (
                 <>

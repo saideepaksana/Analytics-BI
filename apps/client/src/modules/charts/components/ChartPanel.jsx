@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import {
   Table2, AlertTriangle, BarChart2
 } from "lucide-react";
@@ -22,6 +22,21 @@ export default function ChartPanel({
   sampleData = [],
 }) {
   const [bottomTab, setBottomTab] = useState("results");
+  const echartsRef = useRef(null);
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const ro = new ResizeObserver(() => {
+      try {
+        echartsRef.current?.getEchartsInstance()?.resize();
+      } catch (e) {
+        // ignore if instance isn't ready
+      }
+    });
+    ro.observe(containerRef.current);
+    return () => ro.disconnect();
+  }, []);
 
   // Format execution time
   const formatTime = (ms) => {
@@ -34,6 +49,17 @@ export default function ChartPanel({
   const chartOption = useMemo(() => {
     if (!data || data.length === 0 || chartType === "table") {
       return null;
+    }
+
+    if (metrics.length === 0) {
+      return {
+        title: {
+          text: "Select at least one metric to render chart",
+          left: "center",
+          top: "center",
+          textStyle: { color: "#94a3b8", fontSize: 14, fontWeight: "normal" }
+        }
+      };
     }
 
     const colors = ["#6366f1", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4"];
@@ -126,7 +152,7 @@ export default function ChartPanel({
     const seriesData = metrics.map((m) => {
       const fieldKey = m.label || m.field;
       return {
-        name: fieldKey,
+        name: m.label || (m.field === '*' ? 'COUNT(*)' : m.field),
         type: chartType === "area" ? "line" : chartType,
         data: data.map((item) => item[fieldKey]),
         areaStyle: chartType === "area" ? { opacity: 0.3 } : undefined,
@@ -140,7 +166,7 @@ export default function ChartPanel({
       backgroundColor: "transparent",
       tooltip: { ...darkTooltip, trigger: "axis" },
       legend: {
-        show: showLegend && metrics.length > 1,
+        show: showLegend && metrics.length >= 1,
         textStyle: { color: "#94a3b8" },
         bottom: 0,
         type: "scroll",
@@ -222,12 +248,15 @@ export default function ChartPanel({
             )}
           </div>
         ) : chartOption ? (
-          <ReactECharts
-            option={chartOption}
-            style={{ height: "100%", width: "100%" }}
-            notMerge={true}
-            lazyUpdate={true}
-          />
+          <div ref={containerRef} style={{ width: "100%", height: "100%" }}>
+            <ReactECharts
+              ref={echartsRef}
+              option={chartOption}
+              style={{ height: "100%", width: "100%" }}
+              notMerge={true}
+              lazyUpdate={true}
+            />
+          </div>
         ) : (
           <div className="chart-empty-state">
             <BarChart2 size={48} />

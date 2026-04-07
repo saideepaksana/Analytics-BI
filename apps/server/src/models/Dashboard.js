@@ -9,7 +9,7 @@ const DashboardSchema = new Schema(
     tags: { type: [String], default: [] },
     isFavorite: { type: Boolean, default: false },
     status: { type: String, enum: ["draft", "published"], default: "draft" },
-    layout: { type: Schema.Types.Mixed, default: {} },
+    layout: { type: Schema.Types.Mixed, default: [] },
     chartRefs: [{ type: Schema.Types.ObjectId, ref: "Chart" }],
     createdBy: { type: String, default: "anonymous" },
     updatedBy: { type: String, default: "anonymous" },
