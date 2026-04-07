@@ -47,7 +47,7 @@ exports.saveDashboardLayout = async (req, res) => {
     const dashboard = await Dashboard.findByIdAndUpdate(
       req.params.dashboardId,
       { $set: { layout, updatedBy: req.user?.id || 'anonymous' } },
-      { new: true, runValidators: false }
+      { returnDocument: 'after', runValidators: false }
     ).lean();
     if (!dashboard) return res.status(404).json({ message: 'Dashboard not found' });
     return res.json({ dashboard });
@@ -106,7 +106,7 @@ exports.patchDashboardMetadata = async (req, res) => {
     const dashboard = await Dashboard.findByIdAndUpdate(
       dashboardId,
       { $set: setObj },
-      { new: true, runValidators: true }
+      { returnDocument: 'after', runValidators: true }
     ).lean();
 
     if (!dashboard) {

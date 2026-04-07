@@ -28,13 +28,38 @@ export default function ChartExplore({ chartId, onBack }) {
   const [chartType, setChartType] = useState("bar");
   const [chartName, setChartName] = useState("Untitled Chart");
 
-  const handleSetChartType = useCallback((newType) => {
+  // Store selections per chart type to restore when returning
+  const chartSelections = useRef({
+    bar: { xAxis: null, metrics: [] },
+    line: { xAxis: null, metrics: [] },
+    area: { xAxis: null, metrics: [] },
+    pie: { xAxis: null, metrics: [] },
+    scatter: { xAxis: null, metrics: [] },
+  });
+
+  const handleSetChartType = useCallback((newType, currentType, currentXAxis, currentMetrics) => {
+    // Save current selections before switching
+    if (currentType && chartSelections.current[currentType]) {
+      chartSelections.current[currentType] = {
+        xAxis: currentXAxis,
+        metrics: currentMetrics,
+      };
+    }
+
+    // Restore saved selections for new chart type if they exist
+    const savedSelections = chartSelections.current[newType] || { xAxis: null, metrics: [] };
+    if (savedSelections.xAxis) {
+      setXAxis(savedSelections.xAxis);
+    }
+    if (savedSelections.metrics && savedSelections.metrics.length > 0) {
+      setMetrics(savedSelections.metrics);
+    }
+
     setChartType(newType);
-    setMetrics([]);
-    setXAxis(null);
     setDimensionsList([]);
     setResultData([]);
     setRowCount(0);
+    setExecutionTimeMs(0);
     setIsDirty(false);
     setError(null);
   }, []);
@@ -242,12 +267,17 @@ export default function ChartExplore({ chartId, onBack }) {
       const isScatter = chartType === "scatter";
       const isLineOrArea = chartType === "line" || chartType === "area";
       const isLineAreaRaw = isLineOrArea && metrics.some((m) => (m.aggregation || "").toUpperCase() === "RAW");
+      const isXAxisNumeric = NUMERIC_TYPE_REGEX.test(
+        String(columns.find((col) => col.name === xAxis)?.type || "").toLowerCase()
+      );
       const payload = {
         ...(savedChartId ? { chartId: savedChartId } : {}),
         name: chartName || "Untitled Chart",
         dataSource: { datasetId: selectedDatasetId, table: "cleaned_records" },
         query: {
-          dimensions: (xAxis ? [{ field: xAxis, type: "categorical" }] : []),
+          dimensions: (xAxis
+            ? [{ field: xAxis, type: isXAxisNumeric ? "continuous" : "categorical" }]
+            : []),
           measures: metrics.map((m) => ({
             field: m.field,
             aggregation: m.aggregation,
@@ -281,7 +311,7 @@ export default function ChartExplore({ chartId, onBack }) {
     } finally {
       setIsSaving(false);
     }
-  }, [savedChartId, chartName, selectedDatasetId, chartType, xAxis, metrics, dimensionsList, filters, sortBy, showLegend, showGrid]);
+  }, [savedChartId, chartName, selectedDatasetId, chartType, xAxis, metrics, dimensionsList, filters, sortBy, showLegend, showGrid, columns]);
 
   // ── Handle column click from source panel ──
   const handleColumnClick = useCallback((col, role) => {
@@ -345,28 +375,8 @@ export default function ChartExplore({ chartId, onBack }) {
     }
   }, [metrics, xAxis, dimensionsList, pendingMetricAggregation, chartType]);
 
-  const CHART_CONSTRAINTS = {
-    bar:     { minDim: 1, maxDim: null, minMeas: 1, maxMeas: null },
-    line:    { minDim: 1, maxDim: null, minMeas: 1, maxMeas: null },
-    area:    { minDim: 1, maxDim: null, minMeas: 1, maxMeas: null },
-    pie:     { minDim: 1, maxDim: 1,    minMeas: 1, maxMeas: 1    },
-    scatter: { minDim: 0, maxDim: null, minMeas: 2, maxMeas: 2    },
-    table:   { minDim: 0, maxDim: null, minMeas: 0, maxMeas: null },
-  };
-
-  const c = CHART_CONSTRAINTS[chartType];
-  let exploreValidationError = null;
-  if (c) {
-    const dimCount = xAxis ? 1 + dimensionsList.length : dimensionsList.length;
-    if (c.maxDim !== null && dimCount > c.maxDim)
-      exploreValidationError = `${chartType} supports at most ${c.maxDim} dimension(s).`;
-    else if (c.maxMeas !== null && metrics.length > c.maxMeas)
-      exploreValidationError = `${chartType} supports at most ${c.maxMeas} measure(s).`;
-    else if (c.minMeas > 0 && metrics.length < c.minMeas)
-      exploreValidationError = `Add ${c.minMeas - metrics.length} more measure(s) for ${chartType}.`;
-    else if (c.minDim > 0 && dimCount < c.minDim)
-      exploreValidationError = `Add at least ${c.minDim} dimension for ${chartType}.`;
-  }
+  // Validation disabled for now
+  const exploreValidationError = null;
 
   // ── Loading state ──
   if (loadingDatasets) {
@@ -415,7 +425,7 @@ export default function ChartExplore({ chartId, onBack }) {
 
         <QueryPanel
           chartType={chartType}
-          onSetChartType={handleSetChartType}
+          onSetChartType={(newType) => handleSetChartType(newType, chartType, xAxis, metrics)}
           validationError={exploreValidationError}
           columns={columns}
           xAxis={xAxis}

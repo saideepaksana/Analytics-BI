@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import {
-  Table2, AlertTriangle, BarChart2
+  AlertTriangle, BarChart2
 } from "lucide-react";
 import ReactECharts from "echarts-for-react";
 
@@ -47,7 +47,7 @@ export default function ChartPanel({
 
   // Build ECharts option
   const chartOption = useMemo(() => {
-    if (!data || data.length === 0 || chartType === "table") {
+    if (!data || data.length === 0) {
       return null;
     }
 
@@ -148,13 +148,46 @@ export default function ChartPanel({
     // BAR / LINE / AREA
     const catField = xAxis || Object.keys(data[0])[0];
     const xAxisData = data.map((item) => item[catField]);
+    const isLineOrArea = chartType === "line" || chartType === "area";
+    const hasNumericXAxis =
+      isLineOrArea &&
+      xAxisData.length > 0 &&
+      xAxisData.every((value) => value !== null && value !== "" && Number.isFinite(Number(value)));
 
     const seriesData = metrics.map((m) => {
       const fieldKey = m.label || m.field;
+      const rawSeries = data.map((item) => item[fieldKey]);
+
+      let renderedSeriesData = rawSeries;
+      if (hasNumericXAxis) {
+        const points = data
+          .map((item) => [Number(item[catField]), Number(item[fieldKey])])
+          .filter((pair) => Number.isFinite(pair[0]) && Number.isFinite(pair[1]));
+
+        // If multiple rows share the same X, reduce to one point per X to avoid vertical strokes.
+        const groupedByX = new Map();
+        points.forEach(([x, y]) => {
+          const bucket = groupedByX.get(x) || [];
+          bucket.push(y);
+          groupedByX.set(x, bucket);
+        });
+
+        const aggregation = String(m.aggregation || "AVG").toUpperCase();
+        renderedSeriesData = Array.from(groupedByX.entries())
+          .map(([x, ys]) => {
+            if (aggregation === "SUM") return [x, ys.reduce((acc, v) => acc + v, 0)];
+            if (aggregation === "MIN") return [x, Math.min(...ys)];
+            if (aggregation === "MAX") return [x, Math.max(...ys)];
+            if (aggregation === "COUNT") return [x, ys.length];
+            return [x, ys.reduce((acc, v) => acc + v, 0) / ys.length];
+          })
+          .sort((a, b) => a[0] - b[0]);
+      }
+
       return {
         name: m.label || (m.field === '*' ? 'COUNT(*)' : m.field),
         type: chartType === "area" ? "line" : chartType,
-        data: data.map((item) => item[fieldKey]),
+        data: renderedSeriesData,
         areaStyle: chartType === "area" ? { opacity: 0.3 } : undefined,
         smooth: chartType === "line" || chartType === "area",
         emphasis: { focus: "series" },
@@ -181,10 +214,13 @@ export default function ChartPanel({
         borderColor: "rgba(148,163,184,0.06)",
       },
       xAxis: {
-        type: "category",
-        data: xAxisData,
+        type: hasNumericXAxis ? "value" : "category",
+        data: hasNumericXAxis ? undefined : xAxisData,
+        name: hasNumericXAxis ? catField : undefined,
+        nameTextStyle: hasNumericXAxis ? { color: "#94a3b8" } : undefined,
         axisLine: { lineStyle: { color: "#334155" } },
         axisLabel: { color: "#94a3b8", rotate: xAxisData.length > 12 ? 35 : 0 },
+        splitLine: { show: false },
       },
       yAxis: {
         type: "value",
@@ -219,35 +255,7 @@ export default function ChartPanel({
 
       {/* Chart area */}
       <div className="chart-render-area">
-        {chartType === "table" ? (
-          <div className="results-table-wrap" style={{ width: "100%", height: "100%" }}>
-            {data.length > 0 ? (
-              <table className="results-table">
-                <thead>
-                  <tr>
-                    {tableColumns.map((col) => (
-                      <th key={col}>{col}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.map((row, i) => (
-                    <tr key={i}>
-                      {tableColumns.map((col) => (
-                        <td key={col}>{row[col] != null ? String(row[col]) : ""}</td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <div className="chart-empty-state">
-                <Table2 size={48} />
-                <p>No data to display. Configure your query and click "Update chart".</p>
-              </div>
-            )}
-          </div>
-        ) : chartOption ? (
+        {chartOption ? (
           <div ref={containerRef} style={{ width: "100%", height: "100%" }}>
             <ReactECharts
               ref={echartsRef}

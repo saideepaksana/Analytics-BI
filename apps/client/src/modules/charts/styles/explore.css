@@ -1098,9 +1098,18 @@
   min-width: 60px;
 }
 
+.filter-row select option {
+  background: #1e293b;
+  color: #e2e8f0;
+}
+
 .filter-row input {
   flex: 1;
   min-width: 60px;
+}
+
+.filter-row input::placeholder {
+  color: var(--text-secondary, #94a3b8);
 }
 
 .filter-row select:focus,
@@ -1189,12 +1198,46 @@
   color: #0f172a;
 }
 
+[data-theme="light"] .filter-row select option {
+  background: #ffffff;
+  color: #0f172a;
+}
+
+[data-theme="light"] .filter-row input::placeholder {
+  color: #64748b;
+}
+
 [data-theme="light"] .query-chip-placeholder,
 [data-theme="light"] .filter-add-btn,
 [data-theme="light"] .filter-remove-btn,
 [data-theme="light"] .source-search-wrapper svg,
 [data-theme="light"] .query-section-chevron {
   color: #64748b;
+}
+
+[data-theme="light"] .filter-add-btn {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #334155;
+}
+
+[data-theme="light"] .filter-add-btn:hover {
+  background: #eff6ff;
+  border-color: #93c5fd;
+  color: #1d4ed8;
+}
+
+[data-theme="light"] .filter-remove-btn {
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #f8fafc;
+  color: #475569;
+}
+
+[data-theme="light"] .filter-remove-btn:hover {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #dc2626;
 }
 
 [data-theme="light"] .metric-picker {

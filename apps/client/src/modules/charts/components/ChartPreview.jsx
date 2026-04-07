@@ -119,14 +119,48 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
     // --- BAR / LINE / AREA ---
     const xAxisField = dimensions[0] || Object.keys(data[0])[0];
     const xAxisData = data.map(item => item[xAxisField]);
-    const seriesData = measures.map(m => ({
-      name: m.label || m.field,
-      type: type === "area" ? "line" : type,
-      data: data.map(item => item[getMeasureKey(m)]),
-      areaStyle: type === "area" ? {} : undefined,
-      smooth: true,
-      emphasis: { focus: "series" }
-    }));
+    const isLineOrArea = type === "line" || type === "area";
+    const hasNumericXAxis =
+      isLineOrArea &&
+      xAxisData.length > 0 &&
+      xAxisData.every((value) => value !== null && value !== "" && Number.isFinite(Number(value)));
+
+    const seriesData = measures.map((m) => {
+      let renderedSeriesData = data.map(item => item[getMeasureKey(m)]);
+
+      if (hasNumericXAxis) {
+        const points = data
+          .map((item) => [Number(item[xAxisField]), Number(item[getMeasureKey(m)])])
+          .filter((pair) => Number.isFinite(pair[0]) && Number.isFinite(pair[1]));
+
+        const groupedByX = new Map();
+        points.forEach(([x, y]) => {
+          const bucket = groupedByX.get(x) || [];
+          bucket.push(y);
+          groupedByX.set(x, bucket);
+        });
+
+        const aggregation = String(m.aggregation || "AVG").toUpperCase();
+        renderedSeriesData = Array.from(groupedByX.entries())
+          .map(([x, ys]) => {
+            if (aggregation === "SUM") return [x, ys.reduce((acc, v) => acc + v, 0)];
+            if (aggregation === "MIN") return [x, Math.min(...ys)];
+            if (aggregation === "MAX") return [x, Math.max(...ys)];
+            if (aggregation === "COUNT") return [x, ys.length];
+            return [x, ys.reduce((acc, v) => acc + v, 0) / ys.length];
+          })
+          .sort((a, b) => a[0] - b[0]);
+      }
+
+      return {
+        name: m.label || m.field,
+        type: type === "area" ? "line" : type,
+        data: renderedSeriesData,
+        areaStyle: type === "area" ? {} : undefined,
+        smooth: true,
+        emphasis: { focus: "series" }
+      };
+    });
 
     const baseOption = {
       backgroundColor: "transparent",
@@ -139,10 +173,13 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
         borderColor: "rgba(148, 163, 184, 0.1)"
       },
       xAxis: {
-        type: "category",
-        data: xAxisData,
+        type: hasNumericXAxis ? "value" : "category",
+        data: hasNumericXAxis ? undefined : xAxisData,
+        name: hasNumericXAxis ? xAxisField : undefined,
+        nameTextStyle: hasNumericXAxis ? { color: "#94a3b8" } : undefined,
         axisLine: { lineStyle: { color: "#334155" } },
-        axisLabel: { color: "#94a3b8" }
+        axisLabel: { color: "#94a3b8" },
+        splitLine: { show: false }
       },
       yAxis: {
         type: "value",

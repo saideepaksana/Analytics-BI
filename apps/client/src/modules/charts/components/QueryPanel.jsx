@@ -9,7 +9,6 @@ import {
   AreaChart,
   PieChart,
   ScatterChart,
-  Table2,
   AlertTriangle,
 } from "lucide-react";
 
@@ -22,7 +21,6 @@ const CHART_TYPES = [
   { id: "scatter", icon: ScatterChart, label: "Scatter Plot" },
   { id: "area", icon: AreaChart, label: "Area Chart" },
   { id: "pie", icon: PieChart, label: "Pie Chart" },
-  { id: "table", icon: Table2, label: "Table View" },
 ];
 
 /**

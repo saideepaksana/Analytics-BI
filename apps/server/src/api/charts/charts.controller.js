@@ -130,7 +130,7 @@ exports.saveChart = async (req, res) => {
         },
         $setOnInsert: { createdBy: actor }
       },
-      { upsert: true, new: true, runValidators: true }
+      { upsert: true, returnDocument: 'after', runValidators: true }
     );
 
     return res.json({
