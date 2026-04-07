@@ -12,11 +12,13 @@ const {
   deleteDataset,
   queryDatasetData,
   validatePayload,
+  previewGroupStage,
 } = require("./datasets.controller");
 
 router.get("/", listDatasets);
 router.get("/:datasetId/metadata", getDatasetMetadata);
 router.post("/:datasetId/query", queryDatasetData);
+router.post("/:datasetId/query/preview-stage", previewGroupStage);
 router.post("/:datasetId/validate-payload", validatePayload);
 router.patch("/:datasetId/schema/:columnName", updateSchemaColumn);
 router.delete("/:datasetId/quarantine/:rowIndex", deleteQuarantinedRow);
