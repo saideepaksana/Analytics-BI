@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Grip, Loader2, Save, PlusCircle, Trash2, X } from "lucide-react";
+import { ArrowLeft, Grip, Loader2, MoveDiagonal2, Pencil, Plus, PlusCircle, Save, Trash2, X } from "lucide-react";
 import ChartPreview from "../../charts/components/ChartPreview";
 import { queryDataset } from "../../../services/charts.service";
 
@@ -7,14 +7,81 @@ const ROW_HEIGHT = 42;
 const MIN_WIDGET_W = 4;
 const MIN_WIDGET_H = 5;
 
+const previewDataCache = new Map();
+const previewRequestCache = new Map();
+
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+
+const rectanglesOverlap = (a, b) => {
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+};
+
+const canPlaceWidget = (widgets, widgetId, candidate) => {
+  return !widgets.some((item) => {
+    if (item.id === widgetId) return false;
+    return rectanglesOverlap(candidate, item);
+  });
+};
+
+const findFirstFit = (widgets, width, height, columns) => {
+  const safeWidth = Math.min(width, columns);
+  const maxRowsToScan = 220;
+  for (let y = 0; y <= maxRowsToScan; y += 1) {
+    for (let x = 0; x <= columns - safeWidth; x += 1) {
+      const candidate = { x, y, w: safeWidth, h: height };
+      if (canPlaceWidget(widgets, "__new__", candidate)) {
+        return candidate;
+      }
+    }
+  }
+
+  const maxY = widgets.reduce((acc, widget) => Math.max(acc, widget.y + widget.h), 0);
+  return { x: 0, y: maxY, w: safeWidth, h: height };
+};
 
 const normalizeDimensions = (dimensions = []) => dimensions.map((dimension) => dimension.field || dimension);
 
+const getMeasuresFromChart = (chart) => {
+  if (Array.isArray(chart?.query?.measures) && chart.query.measures.length > 0) {
+    return chart.query.measures;
+  }
+
+  if (chart?.y) {
+    return [{
+      field: chart.y.field || chart.y,
+      aggregation: chart.y.aggregation || "SUM",
+      label: chart.y.label,
+    }];
+  }
+
+  return [];
+};
+
+const getDimensionsFromChart = (chart) => {
+  if (Array.isArray(chart?.query?.dimensions) && chart.query.dimensions.length > 0) {
+    return chart.query.dimensions;
+  }
+
+  if (chart?.x) {
+    return [{ field: chart.x.field || chart.x, type: chart.x.type || "categorical" }];
+  }
+
+  return [];
+};
+
 const buildChartQuery = (chart) => {
-  const query = chart.query || {};
-  const isScatter = chart.visualization?.type === "scatter";
-  const isLineOrArea = chart.visualization?.type === "line" || chart.visualization?.type === "area";
+  const measures = getMeasuresFromChart(chart);
+  const dimensions = getDimensionsFromChart(chart);
+  const query = chart.query || {
+    dimensions,
+    measures,
+    filters: chart.filters || [],
+    groupBy: chart.groupBy || dimensions.map((dimension) => dimension.field || dimension),
+    orderBy: chart.orderBy || [],
+  };
+  const chartType = chart.visualization?.type || chart.type;
+  const isScatter = chartType === "scatter";
+  const isLineOrArea = chartType === "line" || chartType === "area";
   const hasRawMetric = (query.measures || []).some(
     (measure) => (measure.aggregation || "").toUpperCase() === "RAW"
   );
@@ -23,10 +90,18 @@ const buildChartQuery = (chart) => {
     return {
       ...query,
       raw: true,
-      dimensions: query.dimensions || [],
-      measures: query.measures || [],
+      dimensions: query.dimensions || dimensions,
+      measures: query.measures || measures,
       groupBy: [],
       orderBy: [],
+    };
+  }
+
+  if (!Array.isArray(query.measures) || query.measures.length === 0) {
+    return {
+      ...query,
+      dimensions,
+      measures,
     };
   }
 
@@ -51,9 +126,28 @@ function DashboardWidgetChart({ chart }) {
           throw new Error("No dataset found");
         }
 
-        const response = await queryDataset(datasetId, buildChartQuery(chart));
+        const query = buildChartQuery(chart);
+        const cacheKey = `${chart.chartId || chart._id || chart.name || "chart"}:${JSON.stringify(query)}`;
+
+        if (previewDataCache.has(cacheKey)) {
+          if (!cancelled) {
+            setData(previewDataCache.get(cacheKey));
+            setLoading(false);
+          }
+          return;
+        }
+
+        let request = previewRequestCache.get(cacheKey);
+        if (!request) {
+          request = queryDataset(datasetId, query).then((response) => response.results || []);
+          previewRequestCache.set(cacheKey, request);
+        }
+
+        const results = await request;
+        previewRequestCache.delete(cacheKey);
+        previewDataCache.set(cacheKey, results);
         if (!cancelled) {
-          setData(response.results || []);
+          setData(results);
         }
       } catch {
         if (!cancelled) {
@@ -91,21 +185,14 @@ function DashboardWidgetChart({ chart }) {
     <ChartPreview
       type={chart.visualization?.type || chart.type}
       data={data}
-      dimensions={normalizeDimensions(chart.query?.dimensions || [])}
-      measures={chart.query?.measures || []}
+      dimensions={normalizeDimensions(getDimensionsFromChart(chart))}
+      measures={getMeasuresFromChart(chart)}
       style={chart.style}
     />
   );
 }
 
-function DashboardWidget({
-  widget,
-  chart,
-  layout,
-  readOnly,
-  onRemove,
-  onDragStart,
-}) {
+function DashboardWidget({ widget, chart, layout, readOnly, onRemove, onDragStart, onResizeStart }) {
   const style = {
     left: `${layout.left}px`,
     top: `${layout.top}px`,
@@ -126,41 +213,70 @@ function DashboardWidget({
           <Grip size={14} />
           <h5>{chart?.name || "Missing chart"}</h5>
         </div>
-        {!readOnly ? (
-          <button
-            type="button"
-            className="dashboard-widget-icon-btn danger"
-            onClick={() => onRemove(widget.id)}
-            title="Close chart"
-          >
-            <X size={14} />
-          </button>
-        ) : null}
+        <div className="dashboard-widget-actions">
+          {!readOnly ? (
+            <button
+              type="button"
+              className="dashboard-widget-icon-btn danger"
+              onMouseDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation();
+                onRemove(widget.id);
+              }}
+              title="Remove chart"
+            >
+              <X size={13} />
+            </button>
+          ) : null}
+        </div>
       </header>
 
       <div className="dashboard-widget-body">
         {chart ? <DashboardWidgetChart chart={chart} /> : <div className="dashboard-widget-error">Chart not found</div>}
       </div>
 
+      {!readOnly ? (
+        <button
+          type="button"
+          className="dashboard-widget-resize"
+          aria-label="Resize widget"
+          title="Resize"
+          onMouseDown={(event) => {
+            event.stopPropagation();
+            onResizeStart(event, widget.id);
+          }}
+        >
+          <MoveDiagonal2 size={12} />
+        </button>
+      ) : null}
     </article>
   );
 }
 
-export default function DashboardEditor({
-  mode,
-  dashboard,
-  charts,
-  saving,
-  onBack,
-  onSave,
-  onDelete,
-}) {
+export default function DashboardEditor({ mode, dashboard, charts, saving, onBack, onSave, onDelete }) {
   const readOnly = mode === "view";
+  const [isEditMode, setIsEditMode] = useState(mode !== "view");
   const [name, setName] = useState(dashboard?.name || "Untitled Dashboard");
-  const [widgets, setWidgets] = useState(Array.isArray(dashboard?.widgets) ? dashboard.widgets : []);
+  const [widgets, setWidgets] = useState(() => {
+    if (Array.isArray(dashboard?.widgets) && dashboard.widgets.length > 0) {
+      return dashboard.widgets;
+    }
+
+    if (Array.isArray(dashboard?.sections) && dashboard.sections.length > 0) {
+      const activeSection = dashboard.sections.find((section) => section.id === dashboard.activeSectionId);
+      return activeSection?.widgets || dashboard.sections[0]?.widgets || [];
+    }
+
+    return [];
+  });
   const [action, setAction] = useState(null);
+  const [showChartLibrary, setShowChartLibrary] = useState(false);
   const canvasRef = useRef(null);
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
+
+  useEffect(() => {
+    setIsEditMode(mode !== "view");
+  }, [mode]);
 
   useEffect(() => {
     if (!canvasRef.current) return undefined;
@@ -178,7 +294,12 @@ export default function DashboardEditor({
   const cellWidth = canvasSize.width > 0 ? canvasSize.width / columns : 0;
 
   const chartMap = useMemo(() => {
-    return new Map((charts || []).map((chart) => [chart.chartId || chart._id, chart]));
+    const map = new Map();
+    (charts || []).forEach((chart) => {
+      if (chart.chartId) map.set(chart.chartId, chart);
+      if (chart._id) map.set(chart._id, chart);
+    });
+    return map;
   }, [charts]);
 
   const maxGridRows = useMemo(() => {
@@ -198,31 +319,30 @@ export default function DashboardEditor({
     }));
   }, [widgets, cellWidth]);
 
-  const addChartWidget = useCallback(
-    (chartId) => {
-      const defaultW = columns >= 20 ? 8 : 6;
-      const defaultH = 8;
-      const maxY = widgets.reduce((acc, widget) => Math.max(acc, (widget.y || 0) + (widget.h || defaultH)), 0);
+  const addChartWidget = useCallback((chartId) => {
+    const defaultW = columns >= 20 ? 8 : 6;
+    const defaultH = 8;
+    setWidgets((previous) => {
+      const nextPosition = findFirstFit(previous, defaultW, defaultH, columns);
       const nextWidget = {
         id: `widget-${Date.now()}-${Math.round(Math.random() * 10000)}`,
         chartId,
-        x: 0,
-        y: maxY,
-        w: defaultW,
-        h: defaultH,
+        x: nextPosition.x,
+        y: nextPosition.y,
+        w: nextPosition.w,
+        h: nextPosition.h,
       };
-
-      setWidgets((previous) => [...previous, nextWidget]);
-    },
-    [columns, widgets]
-  );
+      return [...previous, nextWidget];
+    });
+    setShowChartLibrary(false);
+  }, [columns]);
 
   const removeWidget = useCallback((widgetId) => {
     setWidgets((previous) => previous.filter((widget) => widget.id !== widgetId));
   }, []);
 
   useEffect(() => {
-    if (!action) return undefined;
+    if (!action || !isEditMode) return undefined;
 
     const onMouseMove = (event) => {
       if (!cellWidth) return;
@@ -239,7 +359,10 @@ export default function DashboardEditor({
           const movedPixelsY = event.clientY - action.startClientY;
           const nextX = clamp(action.originX + Math.round(movedPixelsX / cellWidth), 0, columns - current.w);
           const nextY = Math.max(0, action.originY + Math.round(movedPixelsY / ROW_HEIGHT));
-          updated[index] = { ...current, x: nextX, y: nextY };
+          const candidate = { ...current, x: nextX, y: nextY };
+          if (canPlaceWidget(previous, current.id, candidate)) {
+            updated[index] = candidate;
+          }
         }
 
         if (action.type === "resize") {
@@ -247,7 +370,10 @@ export default function DashboardEditor({
           const movedPixelsY = event.clientY - action.startClientY;
           const nextW = clamp(action.originW + Math.round(movedPixelsX / cellWidth), MIN_WIDGET_W, columns - current.x);
           const nextH = Math.max(MIN_WIDGET_H, action.originH + Math.round(movedPixelsY / ROW_HEIGHT));
-          updated[index] = { ...current, w: nextW, h: nextH };
+          const candidate = { ...current, w: nextW, h: nextH };
+          if (canPlaceWidget(previous, current.id, candidate)) {
+            updated[index] = candidate;
+          }
         }
 
         return updated;
@@ -264,9 +390,10 @@ export default function DashboardEditor({
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("mouseup", onMouseUp);
     };
-  }, [action, cellWidth, columns]);
+  }, [action, cellWidth, columns, isEditMode]);
 
   const startDrag = (event, widgetId) => {
+    if (!isEditMode) return;
     event.preventDefault();
     const widget = widgets.find((item) => item.id === widgetId);
     if (!widget) return;
@@ -282,6 +409,7 @@ export default function DashboardEditor({
   };
 
   const startResize = (event, widgetId) => {
+    if (!isEditMode) return;
     event.preventDefault();
     const widget = widgets.find((item) => item.id === widgetId);
     if (!widget) return;
@@ -324,13 +452,25 @@ export default function DashboardEditor({
         </div>
 
         <div className="dashboard-editor-actions">
-          {!readOnly ? (
+          {!readOnly && !isEditMode ? (
+            <button type="button" className="dashboard-secondary-btn" onClick={() => setIsEditMode(true)}>
+              <Pencil size={16} />
+              Edit dashboard
+            </button>
+          ) : null}
+          {isEditMode ? (
+            <button type="button" className="dashboard-secondary-btn" onClick={() => setShowChartLibrary((prev) => !prev)}>
+              <Plus size={16} />
+              Add charts
+            </button>
+          ) : null}
+          {isEditMode ? (
             <button type="button" className="create-chart-btn" onClick={submitSave} disabled={saving}>
               {saving ? <Loader2 size={16} className="spinner" /> : <Save size={16} />}
               Save dashboard
             </button>
           ) : null}
-          {!readOnly && dashboard?.id ? (
+          {!readOnly && dashboard?.id && isEditMode ? (
             <button type="button" className="dashboard-danger-btn" onClick={() => onDelete?.(dashboard.id)}>
               <Trash2 size={16} />
               Delete
@@ -340,11 +480,52 @@ export default function DashboardEditor({
       </div>
 
       <div className="dashboard-editor-content">
-        {!readOnly ? (
-          <aside className="dashboard-chart-library">
-            <h4>Charts Gallery</h4>
-            <p>Add charts and place them in your dashboard grid.</p>
+        <section className="dashboard-canvas-pane">
+          <div className="dashboard-canvas-wrapper" ref={canvasRef}>
+            <div
+              className="dashboard-canvas-grid"
+              style={{
+                minHeight: `${canvasMinHeight}px`,
+                backgroundSize: `${Math.max(cellWidth, 24)}px ${ROW_HEIGHT}px`,
+              }}
+            >
+              {widgetLayout.map((widget) => (
+                <DashboardWidget
+                  key={widget.id}
+                  widget={widget}
+                  chart={chartMap.get(widget.chartId)}
+                  layout={widget}
+                  readOnly={!isEditMode}
+                  onRemove={removeWidget}
+                  onDragStart={startDrag}
+                  onResizeStart={startResize}
+                />
+              ))}
+              {widgetLayout.length === 0 ? (
+                <div className="dashboard-canvas-empty">
+                  <h3>{readOnly ? "This dashboard is empty" : "Build this dashboard"}</h3>
+                  <p>
+                    {readOnly
+                      ? "No charts were added to this dashboard yet."
+                      : "Use Add charts, then drag and resize without overlaps."}
+                  </p>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </section>
+      </div>
 
+      {isEditMode && showChartLibrary ? (
+        <div className="dashboard-library-drawer-overlay" onClick={() => setShowChartLibrary(false)}>
+          <aside className="dashboard-library-drawer" onClick={(event) => event.stopPropagation()}>
+            <div className="dashboard-library-drawer-head">
+              <h4>Charts Gallery</h4>
+              <button type="button" className="dashboard-widget-icon-btn" onClick={() => setShowChartLibrary(false)}>
+                <X size={13} />
+              </button>
+            </div>
+            <p>Add a chart to this dashboard</p>
             <div className="dashboard-library-list">
               {(charts || []).map((chart) => {
                 const id = chart.chartId || chart._id;
@@ -366,48 +547,8 @@ export default function DashboardEditor({
               {(charts || []).length === 0 ? <p className="library-empty">Create charts first to build dashboards.</p> : null}
             </div>
           </aside>
-        ) : null}
-
-        <section className="dashboard-canvas-pane">
-          <div className="dashboard-canvas-toolbar">
-            <span>
-              Grid: {columns} columns • Drag chart headers to move • Use corner handle to resize
-            </span>
-          </div>
-
-          <div className="dashboard-canvas-wrapper" ref={canvasRef}>
-            <div
-              className="dashboard-canvas-grid"
-              style={{
-                minHeight: `${canvasMinHeight}px`,
-                backgroundSize: `${Math.max(cellWidth, 24)}px ${ROW_HEIGHT}px`,
-              }}
-            >
-              {widgetLayout.map((widget) => (
-                <DashboardWidget
-                  key={widget.id}
-                  widget={widget}
-                  chart={chartMap.get(widget.chartId)}
-                  layout={widget}
-                  readOnly={readOnly}
-                  onRemove={removeWidget}
-                  onDragStart={startDrag}
-                />
-              ))}
-              {widgetLayout.length === 0 ? (
-                <div className="dashboard-canvas-empty">
-                  <h3>{readOnly ? "This dashboard is empty" : "Build your dashboard layout"}</h3>
-                  <p>
-                    {readOnly
-                      ? "No chart widgets were added to this dashboard yet."
-                      : "Add charts from the gallery, drag to position, and resize to fit your story."}
-                  </p>
-                </div>
-              ) : null}
-            </div>
-          </div>
-        </section>
-      </div>
+        </div>
+      ) : null}
     </div>
   );
 }

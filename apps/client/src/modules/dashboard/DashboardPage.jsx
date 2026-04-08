@@ -156,11 +156,12 @@ export default function DashboardPage({ onEditorMode }) {
 
       {error ? <div className="page-error">{error}</div> : null}
 
-      <div className="dashboards-grid">
+      <div className="dashboards-grid charts-grid">
         {dashboards.map((dashboard) => (
           <DashboardCard
             key={dashboard.id}
             dashboard={dashboard}
+            charts={charts}
             onView={() => openViewDashboard(dashboard)}
             onEdit={() => openEditDashboard(dashboard)}
             onDelete={() => handleDeleteDashboard(dashboard.id)}

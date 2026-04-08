@@ -3,6 +3,9 @@ import { Edit2, Eye, Trash2, Loader2, Maximize2 } from "lucide-react";
 import ChartPreview from "./components/ChartPreview";
 import { queryDataset } from "../../services/charts.service";
 
+const cardDataCache = new Map();
+const cardRequestCache = new Map();
+
 export default function ChartCard({ chart, onDelete, onEdit, onView }) {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -34,8 +37,23 @@ export default function ChartCard({ chart, onDelete, onEdit, onView }) {
           query = chart.query;
         }
 
-        const results = await queryDataset(datasetId, query);
-        setData(results.results || []);
+        const cacheKey = `${chart.chartId || chart._id || chart.name || "chart"}:${JSON.stringify(query || {})}`;
+
+        if (cardDataCache.has(cacheKey)) {
+          setData(cardDataCache.get(cacheKey));
+          return;
+        }
+
+        let request = cardRequestCache.get(cacheKey);
+        if (!request) {
+          request = queryDataset(datasetId, query).then((results) => results.results || []);
+          cardRequestCache.set(cacheKey, request);
+        }
+
+        const previewData = await request;
+        cardRequestCache.delete(cacheKey);
+        cardDataCache.set(cacheKey, previewData);
+        setData(previewData);
       } catch (err) {
         setError("Failed to load chart data");
         console.error(err);
