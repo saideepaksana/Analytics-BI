@@ -192,7 +192,7 @@ function DashboardWidgetChart({ chart }) {
   );
 }
 
-function DashboardWidget({ widget, chart, layout, readOnly, onRemove, onDragStart, onResizeStart }) {
+function DashboardWidget({ widget, chart, layout, readOnly, onRemove, onDragStart, onResizeStart, isDragging, isResizing }) {
   const style = {
     left: `${layout.left}px`,
     top: `${layout.top}px`,
@@ -200,8 +200,10 @@ function DashboardWidget({ widget, chart, layout, readOnly, onRemove, onDragStar
     height: `${layout.height}px`,
   };
 
+  const activeClass = isDragging ? "is-dragging" : isResizing ? "is-resizing" : "";
+
   return (
-    <article className="dashboard-widget" style={style}>
+    <article className={`dashboard-widget ${activeClass}`} style={style}>
       <header
         className={`dashboard-widget-header ${readOnly ? "read-only" : ""}`}
         onMouseDown={(event) => {
@@ -273,6 +275,8 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
   const [showChartLibrary, setShowChartLibrary] = useState(false);
   const canvasRef = useRef(null);
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
+  const mousePosRef = useRef(null);
+  const scrollIntervalRef = useRef(null);
 
   useEffect(() => {
     setIsEditMode(mode !== "view");
@@ -290,8 +294,8 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
     return () => observer.disconnect();
   }, []);
 
-  const columns = canvasSize.width < 900 ? 12 : 24;
-  const cellWidth = canvasSize.width > 0 ? canvasSize.width / columns : 0;
+  const baseColumns = canvasSize.width < 900 ? 12 : 24;
+  const cellWidth = canvasSize.width > 0 ? canvasSize.width / baseColumns : 0;
 
   const chartMap = useMemo(() => {
     const map = new Map();
@@ -302,28 +306,75 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
     return map;
   }, [charts]);
 
-  const maxGridRows = useMemo(() => {
-    const maxY = widgets.reduce((acc, widget) => Math.max(acc, (widget.y || 0) + (widget.h || MIN_WIDGET_H)), 0);
-    return Math.max(maxY + 2, 14);
-  }, [widgets]);
+  const maxGridCols = useMemo(() => {
+    let maxX = widgets.reduce((acc, widget) => Math.max(acc, (widget.x || 0) + (widget.w || MIN_WIDGET_W)), baseColumns);
+    if (action && action.targetX !== undefined && action.targetW !== undefined) {
+      maxX = Math.max(maxX, action.targetX + action.targetW);
+    }
+    return Math.max(maxX + 4, baseColumns);
+  }, [widgets, action, baseColumns]);
 
+  const maxGridRows = useMemo(() => {
+    let maxY = widgets.reduce((acc, widget) => Math.max(acc, (widget.y || 0) + (widget.h || MIN_WIDGET_H)), 0);
+    
+    // Auto-extend vertically while dragging or resizing
+    if (action && action.targetY !== undefined && action.targetH !== undefined) {
+      maxY = Math.max(maxY, action.targetY + action.targetH);
+    }
+    
+    // Add extra padding rows so the user has breathing room to drag lower
+    return Math.max(maxY + 10, 14);
+  }, [widgets, action]);
+
+  const canvasMinWidth = Math.max(canvasSize.width, maxGridCols * cellWidth);
   const canvasMinHeight = Math.max(canvasSize.height, maxGridRows * ROW_HEIGHT);
 
   const widgetLayout = useMemo(() => {
-    return widgets.map((widget) => ({
-      ...widget,
-      left: widget.x * cellWidth,
-      top: widget.y * ROW_HEIGHT,
-      width: widget.w * cellWidth,
-      height: widget.h * ROW_HEIGHT,
-    }));
-  }, [widgets, cellWidth]);
+    return widgets.map((widget) => {
+      const isActionTarget = action?.widgetId === widget.id;
+      if (isActionTarget && action?.type === "drag") {
+        return {
+          ...widget,
+          left: (widget.x * cellWidth) + action.deltaX,
+          top: (widget.y * ROW_HEIGHT) + action.deltaY,
+          width: widget.w * cellWidth,
+          height: widget.h * ROW_HEIGHT,
+        };
+      }
+      if (isActionTarget && action?.type === "resize") {
+        return {
+          ...widget,
+          left: widget.x * cellWidth,
+          top: widget.y * ROW_HEIGHT,
+          width: Math.max((widget.w * cellWidth) + action.deltaX, MIN_WIDGET_W * cellWidth),
+          height: Math.max((widget.h * ROW_HEIGHT) + action.deltaY, MIN_WIDGET_H * ROW_HEIGHT),
+        };
+      }
+      return {
+        ...widget,
+        left: widget.x * cellWidth,
+        top: widget.y * ROW_HEIGHT,
+        width: widget.w * cellWidth,
+        height: widget.h * ROW_HEIGHT,
+      };
+    });
+  }, [widgets, cellWidth, action]);
+
+  const dropPlaceholder = useMemo(() => {
+    if (!action || !action.widgetId || action.targetX === undefined) return null;
+    return {
+      left: action.targetX * cellWidth,
+      top: action.targetY * ROW_HEIGHT,
+      width: action.targetW * cellWidth,
+      height: action.targetH * ROW_HEIGHT,
+    };
+  }, [action, cellWidth]);
 
   const addChartWidget = useCallback((chartId) => {
-    const defaultW = columns >= 20 ? 8 : 6;
+    const defaultW = baseColumns >= 20 ? 8 : 6;
     const defaultH = 8;
     setWidgets((previous) => {
-      const nextPosition = findFirstFit(previous, defaultW, defaultH, columns);
+      const nextPosition = findFirstFit(previous, defaultW, defaultH, baseColumns);
       const nextWidget = {
         id: `widget-${Date.now()}-${Math.round(Math.random() * 10000)}`,
         chartId,
@@ -335,7 +386,7 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
       return [...previous, nextWidget];
     });
     setShowChartLibrary(false);
-  }, [columns]);
+  }, [baseColumns]);
 
   const removeWidget = useCallback((widgetId) => {
     setWidgets((previous) => previous.filter((widget) => widget.id !== widgetId));
@@ -344,44 +395,108 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
   useEffect(() => {
     if (!action || !isEditMode) return undefined;
 
-    const onMouseMove = (event) => {
-      if (!cellWidth) return;
+    const simulateMove = (clientX, clientY) => {
+      setAction((prev) => {
+        if (!prev) return prev;
+        const currentScrollTop = canvasRef.current?.scrollTop || 0;
+        const currentScrollLeft = canvasRef.current?.scrollLeft || 0;
+        const deltaX = (clientX + currentScrollLeft) - (prev.startClientX + (prev.startScrollLeft || 0));
+        const deltaY = (clientY + currentScrollTop) - (prev.startClientY + (prev.startScrollTop || 0));
 
-      setWidgets((previous) => {
-        const index = previous.findIndex((widget) => widget.id === action.widgetId);
-        if (index === -1) return previous;
+        let nextX = prev.originX;
+        let nextY = prev.originY;
+        let nextW = prev.originW || MIN_WIDGET_W;
+        let nextH = prev.originH || MIN_WIDGET_H;
 
-        const current = previous[index];
-        const updated = [...previous];
+        const current = widgets.find((w) => w.id === prev.widgetId);
+        if (!current) return prev;
 
-        if (action.type === "drag") {
-          const movedPixelsX = event.clientX - action.startClientX;
-          const movedPixelsY = event.clientY - action.startClientY;
-          const nextX = clamp(action.originX + Math.round(movedPixelsX / cellWidth), 0, columns - current.w);
-          const nextY = Math.max(0, action.originY + Math.round(movedPixelsY / ROW_HEIGHT));
-          const candidate = { ...current, x: nextX, y: nextY };
-          if (canPlaceWidget(previous, current.id, candidate)) {
-            updated[index] = candidate;
-          }
+        if (prev.type === "drag") {
+          nextX = Math.max(0, prev.originX + Math.round(deltaX / cellWidth));
+          nextY = Math.max(0, prev.originY + Math.round(deltaY / ROW_HEIGHT));
+        } else if (prev.type === "resize") {
+          nextW = Math.max(MIN_WIDGET_W, prev.originW + Math.round(deltaX / cellWidth));
+          nextH = Math.max(MIN_WIDGET_H, prev.originH + Math.round(deltaY / ROW_HEIGHT));
         }
 
-        if (action.type === "resize") {
-          const movedPixelsX = event.clientX - action.startClientX;
-          const movedPixelsY = event.clientY - action.startClientY;
-          const nextW = clamp(action.originW + Math.round(movedPixelsX / cellWidth), MIN_WIDGET_W, columns - current.x);
-          const nextH = Math.max(MIN_WIDGET_H, action.originH + Math.round(movedPixelsY / ROW_HEIGHT));
-          const candidate = { ...current, w: nextW, h: nextH };
-          if (canPlaceWidget(previous, current.id, candidate)) {
-            updated[index] = candidate;
-          }
-        }
+        const candidate = { ...current, x: nextX, y: nextY, w: nextW, h: nextH };
+        const canPlace = canPlaceWidget(widgets, current.id, candidate);
 
-        return updated;
+        return {
+          ...prev,
+          deltaX,
+          deltaY,
+          targetX: canPlace ? nextX : prev.targetX,
+          targetY: canPlace ? nextY : prev.targetY,
+          targetW: canPlace ? nextW : prev.targetW,
+          targetH: canPlace ? nextH : prev.targetH,
+        };
       });
     };
 
+    const processEdgeScrolling = (clientX, clientY) => {
+      if (scrollIntervalRef.current) {
+        clearInterval(scrollIntervalRef.current);
+        scrollIntervalRef.current = null;
+      }
+
+      const container = canvasRef.current;
+      if (!container) return;
+
+      const rect = container.getBoundingClientRect();
+      const threshold = 60;
+      let scrollSpeedY = 0;
+      let scrollSpeedX = 0;
+
+      if (clientY > rect.bottom - threshold) {
+        scrollSpeedY = 15;
+      } else if (clientY < rect.top + threshold) {
+        scrollSpeedY = -15;
+      }
+
+      if (clientX > rect.right - threshold) {
+        scrollSpeedX = 15;
+      } else if (clientX < rect.left + threshold) {
+        scrollSpeedX = -15;
+      }
+
+      if (scrollSpeedY !== 0 || scrollSpeedX !== 0) {
+        scrollIntervalRef.current = setInterval(() => {
+          if (container) {
+            container.scrollTop += scrollSpeedY;
+            container.scrollLeft += scrollSpeedX;
+            if (mousePosRef.current) simulateMove(mousePosRef.current.x, mousePosRef.current.y);
+          }
+        }, 16);
+      }
+    };
+
+    const onMouseMove = (event) => {
+      if (!cellWidth) return;
+      mousePosRef.current = { x: event.clientX, y: event.clientY };
+      processEdgeScrolling(event.clientX, event.clientY);
+      simulateMove(event.clientX, event.clientY);
+    };
+
     const onMouseUp = () => {
-      setAction(null);
+      if (scrollIntervalRef.current) {
+        clearInterval(scrollIntervalRef.current);
+        scrollIntervalRef.current = null;
+      }
+      mousePosRef.current = null;
+      
+      setAction((prev) => {
+        if (prev && prev.targetX !== undefined) {
+          setWidgets((prevWidgets) =>
+            prevWidgets.map((w) =>
+              w.id === prev.widgetId
+                ? { ...w, x: prev.targetX, y: prev.targetY, w: prev.targetW, h: prev.targetH }
+                : w
+            )
+          );
+        }
+        return null;
+      });
     };
 
     window.addEventListener("mousemove", onMouseMove);
@@ -390,7 +505,7 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("mouseup", onMouseUp);
     };
-  }, [action, cellWidth, columns, isEditMode]);
+  }, [action?.type, action?.widgetId, cellWidth, baseColumns, isEditMode, widgets]);
 
   const startDrag = (event, widgetId) => {
     if (!isEditMode) return;
@@ -403,8 +518,18 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
       widgetId,
       startClientX: event.clientX,
       startClientY: event.clientY,
+      startScrollTop: canvasRef.current?.scrollTop || 0,
+      startScrollLeft: canvasRef.current?.scrollLeft || 0,
       originX: widget.x,
       originY: widget.y,
+      originW: widget.w,
+      originH: widget.h,
+      targetX: widget.x,
+      targetY: widget.y,
+      targetW: widget.w,
+      targetH: widget.h,
+      deltaX: 0,
+      deltaY: 0,
     });
   };
 
@@ -419,8 +544,18 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
       widgetId,
       startClientX: event.clientX,
       startClientY: event.clientY,
+      startScrollTop: canvasRef.current?.scrollTop || 0,
+      startScrollLeft: canvasRef.current?.scrollLeft || 0,
+      originX: widget.x,
+      originY: widget.y,
       originW: widget.w,
       originH: widget.h,
+      targetX: widget.x,
+      targetY: widget.y,
+      targetW: widget.w,
+      targetH: widget.h,
+      deltaX: 0,
+      deltaY: 0,
     });
   };
 
@@ -486,9 +621,21 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
               className="dashboard-canvas-grid"
               style={{
                 minHeight: `${canvasMinHeight}px`,
+                minWidth: `${canvasMinWidth}px`,
                 backgroundSize: `${Math.max(cellWidth, 24)}px ${ROW_HEIGHT}px`,
               }}
             >
+              {dropPlaceholder ? (
+                <div
+                  className="dashboard-widget-placeholder"
+                  style={{
+                    left: `${dropPlaceholder.left}px`,
+                    top: `${dropPlaceholder.top}px`,
+                    width: `${dropPlaceholder.width}px`,
+                    height: `${dropPlaceholder.height}px`,
+                  }}
+                />
+              ) : null}
               {widgetLayout.map((widget) => (
                 <DashboardWidget
                   key={widget.id}
@@ -499,6 +646,8 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
                   onRemove={removeWidget}
                   onDragStart={startDrag}
                   onResizeStart={startResize}
+                  isDragging={action?.widgetId === widget.id && action?.type === "drag"}
+                  isResizing={action?.widgetId === widget.id && action?.type === "resize"}
                 />
               ))}
               {widgetLayout.length === 0 ? (
