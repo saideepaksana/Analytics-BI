@@ -161,6 +161,7 @@
   place-items: center;
   padding: 4px;
 }
+
 .dashboard-topbar-back-btn:hover {
   color: #fff;
 }
@@ -588,8 +589,9 @@
   border: none;
   color: #6b7280;
 }
+
 .dashboard-widget-icon-btn.subtle:hover {
-  background: rgba(255,255,255,0.1);
+  background: rgba(255, 255, 255, 0.1);
   color: #e5e5e5;
 }
 
@@ -650,6 +652,7 @@
 .dashboard-widget-body {
   flex: 1;
   min-height: 0;
+  overflow: hidden;
 }
 
 .dashboard-widget-body .chart-preview-wrapper {

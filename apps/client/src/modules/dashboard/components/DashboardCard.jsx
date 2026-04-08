@@ -132,6 +132,7 @@ function PreviewWidgetTile({ chart, style }) {
             dimensions={normalizeDimensions(getDimensionsFromChart(chart))}
             measures={getMeasuresFromChart(chart)}
             style={chart.style}
+            isPreview={true}
           />
         </div>
       ) : (
@@ -173,30 +174,19 @@ export default function DashboardCard({ dashboard, charts = [], onView, onEdit, 
       </div>
 
       <div className="dashboard-card-body">
-        <div className="dashboard-card-preview">
-          <div className="preview-pill" />
-          <div className="preview-layout-grid">
-            {previewWidgets.map((widget, index) => {
-              const left = ((widget.x || 0) / previewCols) * 100;
-              const top = ((widget.y || 0) / previewRows) * 100;
-              const width = ((widget.w || 4) / previewCols) * 100;
-              const height = ((widget.h || 5) / previewRows) * 100;
-
-              return (
-                <PreviewWidgetTile
-                  key={`${dashboard.id}-preview-${widget.id || index}`}
-                  chart={chartMap.get(widget.chartId)}
-                  style={{ left: `${left}%`, top: `${top}%`, width: `${width}%`, height: `${height}%` }}
-                />
-              );
-            })}
-          </div>
-          {widgetCount === 0 ? (
+        <div className="dashboard-card-preview" style={{ padding: 0, overflow: 'hidden' }}>
+          {dashboard.thumbnail ? (
+            <img 
+              src={dashboard.thumbnail} 
+              alt="Dashboard Preview" 
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+            />
+          ) : (
             <div className="preview-empty-state">
               <LayoutDashboard size={18} />
-              <span>No charts added yet</span>
+              <span>No preview available</span>
             </div>
-          ) : null}
+          )}
         </div>
       </div>
 

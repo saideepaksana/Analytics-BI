@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Grip, Loader2, MoveDiagonal2, Pencil, Plus, PlusCircle, Save, Trash2, X, MoreVertical, Star, User, Clock } from "lucide-react";
+import html2canvas from "html2canvas";
 import ChartPreview from "../../charts/components/ChartPreview";
 import { queryDataset } from "../../../services/charts.service";
 
@@ -187,7 +188,7 @@ function DashboardWidgetChart({ chart }) {
       data={data}
       dimensions={normalizeDimensions(getDimensionsFromChart(chart))}
       measures={getMeasuresFromChart(chart)}
-      style={chart.style}
+      style={{ ...chart.style, minHeight: "0px" }}
     />
   );
 }
@@ -264,6 +265,7 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
   const [isEditMode, setIsEditMode] = useState(isNewOrEmpty);
   const readOnly = !isEditMode;
   const [name, setName] = useState(dashboard?.name || "Untitled Dashboard");
+  const [savingLocal, setSavingLocal] = useState(false);
   const [widgets, setWidgets] = useState(() => {
     if (Array.isArray(dashboard?.widgets) && dashboard.widgets.length > 0) {
       return dashboard.widgets;
@@ -322,12 +324,12 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
 
   const maxGridRows = useMemo(() => {
     let maxY = widgets.reduce((acc, widget) => Math.max(acc, (widget.y || 0) + (widget.h || MIN_WIDGET_H)), 0);
-    
+
     // Auto-extend vertically while dragging or resizing
     if (action && action.targetY !== undefined && action.targetH !== undefined) {
       maxY = Math.max(maxY, action.targetY + action.targetH);
     }
-    
+
     return Math.max(maxY, Math.ceil(canvasSize.height / ROW_HEIGHT));
   }, [widgets, action, canvasSize.height]);
 
@@ -489,7 +491,7 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
         scrollIntervalRef.current = null;
       }
       mousePosRef.current = null;
-      
+
       setAction((prev) => {
         if (prev && prev.targetX !== undefined) {
           setWidgets((prevWidgets) =>
@@ -564,13 +566,40 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
     });
   };
 
-  const submitSave = () => {
+  const submitSave = async () => {
+    setSavingLocal(true);
+    let thumbnail = dashboard?.thumbnail || null;
+
+    try {
+      const gridEl = document.querySelector(".dashboard-canvas-grid");
+      if (gridEl) {
+        await new Promise(r => setTimeout(r, 100)); // wait for redraw
+
+        const canvas = await html2canvas(gridEl, {
+          scale: 0.5,
+          useCORS: true,
+          backgroundColor: "#181b1f",
+          ignoreElements: (element) =>
+            element.classList.contains("dashboard-widget-resize") ||
+            element.classList.contains("dashboard-widget-placeholder") ||
+            element.classList.contains("dashboard-canvas-toolbar")
+        });
+        thumbnail = canvas.toDataURL("image/jpeg", 0.6);
+      }
+    } catch (err) {
+      console.warn("Failed to generate dashboard thumbnail", err);
+    }
+
     onSave({
       id: dashboard?.id,
       name,
       widgets,
+      thumbnail
     });
+    setSavingLocal(false);
   };
+
+  const isSaving = saving || savingLocal;
 
   return (
     <div className="dashboard-editor-page">
@@ -617,8 +646,8 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
                   Delete
                 </button>
               )}
-              <button type="button" className="dashboard-primary-btn" onClick={submitSave} disabled={saving}>
-                {saving ? <Loader2 size={14} className="spinner" /> : "Save"}
+              <button type="button" className="dashboard-primary-btn" onClick={submitSave} disabled={isSaving}>
+                {isSaving ? <Loader2 size={14} className="spinner" /> : "Save"}
               </button>
               <button type="button" className="dashboard-secondary-btn discard" onClick={() => setIsEditMode(false)}>
                 Discard
@@ -647,13 +676,13 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
                     top: `${dropPlaceholder.top}px`,
                     width: `${dropPlaceholder.width}px`,
                     height: `${dropPlaceholder.height}px`,
-                }}
-              />
-            ) : null}
-            {cellWidth > 0 && widgetLayout.map((widget) => (
-              <DashboardWidget
-                key={widget.id}
-                widget={widget}
+                  }}
+                />
+              ) : null}
+              {cellWidth > 0 && widgetLayout.map((widget) => (
+                <DashboardWidget
+                  key={widget.id}
+                  widget={widget}
                   chart={chartMap.get(widget.chartId)}
                   layout={widget}
                   readOnly={!isEditMode}

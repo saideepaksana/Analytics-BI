@@ -1,7 +1,7 @@
 import React, { useMemo } from "react";
 import ReactECharts from "echarts-for-react";
 
-const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style = {}, annotations = [] }) => {
+const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style = {}, annotations = [], isPreview = false }) => {
   const option = useMemo(() => {
     if (!data || data.length === 0) {
       return {
@@ -37,13 +37,14 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
 
       const baseScatter = {
         backgroundColor: "transparent",
-        tooltip: {
+        tooltip: isPreview ? { show: false } : {
           ...darkTooltip,
           trigger: "item",
           formatter: (p) => `${xField}: ${p.value[0]}<br/>${yField}: ${p.value[1]}`
         },
-        grid: { top: "12%", left: "3%", right: "4%", bottom: "12%", containLabel: true },
+        grid: isPreview ? { top: 0, left: 0, right: 0, bottom: 0 } : { top: "12%", left: "3%", right: "4%", bottom: "12%", containLabel: true },
         xAxis: {
+          show: !isPreview,
           type: "value",
           name: xField,
           nameTextStyle: { color: "#94a3b8" },
@@ -52,6 +53,7 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
           splitLine: { lineStyle: { color: "rgba(148, 163, 184, 0.1)" } }
         },
         yAxis: {
+          show: !isPreview,
           type: "value",
           name: yField,
           nameTextStyle: { color: "#94a3b8" },
@@ -88,8 +90,8 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
       const yAxisField = getMeasureKey(measures[0]) || Object.keys(data[0]).find(k => k !== xAxisField);
       const basePie = {
         backgroundColor: "transparent",
-        tooltip: { ...darkTooltip, trigger: "item" },
-        legend: { show: style.showLegend !== false, textStyle: { color: "#94a3b8" }, bottom: 0 },
+        tooltip: isPreview ? { show: false } : { ...darkTooltip, trigger: "item" },
+        legend: { show: isPreview ? false : style.showLegend !== false, textStyle: { color: "#94a3b8" }, bottom: 0 },
         color: colors,
         series: [{
           name: xAxisField,
@@ -164,15 +166,16 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
 
     const baseOption = {
       backgroundColor: "transparent",
-      tooltip: { ...darkTooltip, trigger: "axis" },
-      legend: { show: style.showLegend !== false, textStyle: { color: "#94a3b8" }, bottom: 0 },
-      grid: {
+      tooltip: isPreview ? { show: false } : { ...darkTooltip, trigger: "axis" },
+      legend: { show: isPreview ? false : style.showLegend !== false, textStyle: { color: "#94a3b8" }, bottom: 0 },
+      grid: isPreview ? { top: '5%', left: '5%', right: '5%', bottom: '5%' } : {
         top: "10%", left: "3%", right: "4%", bottom: "15%",
         containLabel: true,
         show: style.showGrid !== false,
         borderColor: "rgba(148, 163, 184, 0.1)"
       },
       xAxis: {
+        show: !isPreview,
         type: hasNumericXAxis ? "value" : "category",
         data: hasNumericXAxis ? undefined : xAxisData,
         name: hasNumericXAxis ? xAxisField : undefined,
@@ -182,6 +185,7 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
         splitLine: { show: false }
       },
       yAxis: {
+        show: !isPreview,
         type: "value",
         splitLine: { lineStyle: { color: "rgba(148, 163, 184, 0.1)" } },
         axisLabel: { color: "#94a3b8" }
@@ -204,7 +208,7 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
   }, [type, data, dimensions, measures, style, annotations]);
 
   return (
-    <div className="chart-preview-wrapper" style={{ height: "400px", width: "100%" }}>
+    <div className="chart-preview-wrapper" style={{ height: "100%", width: "100%", minHeight: isPreview ? "0px" : (style?.minHeight !== undefined ? style.minHeight : "400px") }}>
       <ReactECharts
         option={option}
         style={{ height: "100%", width: "100%" }}
