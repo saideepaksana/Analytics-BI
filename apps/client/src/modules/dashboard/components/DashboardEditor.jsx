@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Grip, Loader2, Save, PlusCircle, Trash2 } from "lucide-react";
+import { ArrowLeft, Grip, Loader2, Save, PlusCircle, Trash2, X } from "lucide-react";
 import ChartPreview from "../../charts/components/ChartPreview";
 import { queryDataset } from "../../../services/charts.service";
 
@@ -105,7 +105,6 @@ function DashboardWidget({
   readOnly,
   onRemove,
   onDragStart,
-  onResizeStart,
 }) {
   const style = {
     left: `${layout.left}px`,
@@ -132,9 +131,9 @@ function DashboardWidget({
             type="button"
             className="dashboard-widget-icon-btn danger"
             onClick={() => onRemove(widget.id)}
-            title="Remove chart"
+            title="Close chart"
           >
-            <Trash2 size={14} />
+            <X size={14} />
           </button>
         ) : null}
       </header>
@@ -143,15 +142,6 @@ function DashboardWidget({
         {chart ? <DashboardWidgetChart chart={chart} /> : <div className="dashboard-widget-error">Chart not found</div>}
       </div>
 
-      {!readOnly ? (
-        <button
-          type="button"
-          className="dashboard-widget-resize"
-          aria-label="Resize widget"
-          title="Resize"
-          onMouseDown={(event) => onResizeStart(event, widget.id)}
-        />
-      ) : null}
     </article>
   );
 }
@@ -402,7 +392,6 @@ export default function DashboardEditor({
                   readOnly={readOnly}
                   onRemove={removeWidget}
                   onDragStart={startDrag}
-                  onResizeStart={startResize}
                 />
               ))}
               {widgetLayout.length === 0 ? (

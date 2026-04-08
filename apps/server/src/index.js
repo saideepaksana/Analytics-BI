@@ -148,16 +148,50 @@ app.get("/", (req, res) => {
   res.send("Analytics BI Server is Running!!");
 });
 
-//Start the server
-const PORT = process.env.PORT || 5000;
+// Start the server with auto-port fallback when default is busy.
+const START_PORT = Number(process.env.PORT) || 5000;
+const PORT_SEARCH_LIMIT = Number(process.env.PORT_SEARCH_LIMIT) || 20;
+let activePort = START_PORT;
 
-server.listen(PORT, () => {
-  logger.info(`Server running on port ${PORT}`, "Server");
-});
+const startServer = (port, attempt = 0) => {
+  const onListening = () => {
+    server.off("error", onError);
+    activePort = port;
+    logger.info(`Server running on port ${activePort}`, "Server");
+  };
+
+  const onError = (err) => {
+    server.off("listening", onListening);
+    server.off("error", onError);
+
+    if (err?.code === "EADDRINUSE" && attempt < PORT_SEARCH_LIMIT) {
+      const nextPort = port + 1;
+      logger.warn(`Port ${port} in use. Retrying on ${nextPort}...`, "Server");
+      startServer(nextPort, attempt + 1);
+      return;
+    }
+
+    logger.error(`Failed to start server: ${err.message}`, "Server");
+    process.exit(1);
+  };
+
+  server.once("listening", onListening);
+  server.once("error", onError);
+  server.listen(port);
+};
+
+startServer(START_PORT);
 
 // Graceful shutdown handling
-const shutdown = async () => {
-  logger.warn("Graceful shutdown initiated...", "Server");
+let shuttingDown = false;
+const shutdown = async (signal = "SIGTERM") => {
+  if (shuttingDown) return;
+  shuttingDown = true;
+
+  logger.warn(`Graceful shutdown initiated (${signal})...`, "Server");
+
+  const isRestartSignal = signal === "SIGUSR2";
+
   try {
     try {
       const { shutdownWorkers } = require("./jobs/worker");
@@ -171,11 +205,27 @@ const shutdown = async () => {
     logger.error(`Error during shutdown: ${err.message}`, "Server");
   } finally {
     server.close(() => {
+      if (isRestartSignal) {
+        logger.info("Server closed for nodemon restart.", "Server");
+        process.kill(process.pid, "SIGUSR2");
+        return;
+      }
+
       logger.info("Server closed.", "Server");
       process.exit(0);
     });
+
+    // Safety timeout in case server.close never resolves.
+    setTimeout(() => {
+      if (isRestartSignal) {
+        process.kill(process.pid, "SIGUSR2");
+        return;
+      }
+      process.exit(1);
+    }, 5000).unref();
   }
 };
 
-process.on("SIGINT", shutdown);
-process.on("SIGTERM", shutdown);
+process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGUSR2", () => shutdown("SIGUSR2"));
