@@ -17,12 +17,18 @@ const ChartSchema = new Schema(
         {
           field: { type: String },
           type: { type: String },
+          label: { type: String },
+          format: { type: Schema.Types.Mixed },
+          meta: { type: Schema.Types.Mixed },
         },
       ],
       measures: [
         {
           field: { type: String },
           aggregation: { type: String },
+          label: { type: String },
+          format: { type: Schema.Types.Mixed },
+          meta: { type: Schema.Types.Mixed },
         },
       ],
       filters: [

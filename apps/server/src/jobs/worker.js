@@ -19,10 +19,10 @@
  *   5. shutdownWorkers() drains in-flight jobs cleanly before exit.
  */
 
-const { Worker } = require("bullmq");
+const { Worker, DelayedError } = require("bullmq");
 const { redisConfig } = require("../core/redis");
 const { QUEUE_NAMES, backgroundTasksQueue, bulkIngestionQueue } = require("./queue");
-const { RETRY_POLICIES, isPermanentFailure, PermanentError } = require("./retryPolicy");
+const { RETRY_POLICIES, isPermanentFailure, PermanentError, TransientError } = require("./retryPolicy");
 const { sendToDLQ, attachDLQListener } = require("./dlq");
 const { getConcurrency, globalSemaphore } = require("./orchestrator");
 const logger = require("../core/logger");
@@ -38,6 +38,18 @@ const workers = {};
 // Add a new case here when you introduce a new job type.
 // ---------------------------------------------------------------------------
 const { runUploadProcessor } = require("./uploadProcessor");
+
+function ensurePermanentError(err) {
+  if (!err) return new PermanentError("Unknown permanent error");
+  if (err instanceof PermanentError || err?.name === "PermanentError" || err?.permanent === true) return err;
+  return new PermanentError(err.message || "Permanent error", { cause: err });
+}
+
+function ensureTransientError(err) {
+  if (!err) return new TransientError("Unknown transient error");
+  if (err instanceof TransientError || err?.name === "TransientError") return err;
+  return new TransientError(err.message || "Transient error", { cause: err });
+}
 
 /**
  * Dispatch table for background-tasks queue.
@@ -98,9 +110,8 @@ const makeProcessor = (handlerMap) => async (job) => {
         `Re-queuing job ${job.id} ("${job.name}") after ${Math.round(waitMs)}ms.`,
       "Worker"
     );
-    throw Object.assign(new Error("Global concurrency limit reached — will retry"), {
-      delay: waitMs,
-    });
+    await job.moveToDelayed(Date.now() + waitMs, job.token);
+    throw new DelayedError();
   }
 
   try {
@@ -133,7 +144,7 @@ const makeProcessor = (handlerMap) => async (job) => {
 
       // Return without re-throwing so BullMQ marks it failed-without-retry
       // (BullMQ will still move it to the failed set; DLQ has the full record).
-      throw err; // We still throw — but the DLQ already has the copy.
+      throw ensurePermanentError(err);
     }
 
     // Transient error — log and re-throw so BullMQ applies exponential backoff
@@ -142,7 +153,7 @@ const makeProcessor = (handlerMap) => async (job) => {
         `attempt ${job.attemptsMade + 1}. BullMQ will retry. Error: ${err.message}`,
       "Worker"
     );
-    throw err;
+    throw ensureTransientError(err);
   } finally {
     // 4. Always release the global semaphore slot
     globalSemaphore.release();

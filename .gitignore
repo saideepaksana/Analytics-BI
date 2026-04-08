@@ -24,3 +24,7 @@ Thumbs.db
 .idea/
 
 backend/.env
+.aider*
+
+# Local caches
+apps/server/.cache/

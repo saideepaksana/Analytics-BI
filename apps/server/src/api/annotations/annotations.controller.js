@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const crypto = require('crypto');
 const Annotation = require('../../models/Annotation');
 const Chart = require('../../models/Chart');
 const Dashboard = require('../../models/Dashboard');
@@ -39,12 +40,26 @@ function handleError(res, error) {
 }
 
 function getActorId(req) {
-  return req.user?.id || 'anonymous';
+  if (req.user?.id) return req.user.id;
+
+  // Unauthenticated mode: derive a stable per-client identifier so anonymous users
+  // cannot modify each other's annotations.
+  const ip = String(req.ip || req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+  const ua = String(req.headers['user-agent'] || '');
+  if (!ip && !ua) return 'anonymous';
+
+  const hash = crypto
+    .createHash('sha256')
+    .update(`${ip}::${ua}`)
+    .digest('hex')
+    .slice(0, 24);
+  return `anon:${hash}`;
 }
 
 function assertCanMutate({ actorId, annotation }) {
-  // If the system is running unauthenticated, treat everything as anonymous-owned.
-  if (!actorId || actorId === 'anonymous') return;
+  if (!actorId) {
+    throw Object.assign(new Error('Forbidden'), { status: 403 });
+  }
   if (annotation.authorId !== actorId) {
     throw Object.assign(new Error('Forbidden: only the author can modify this annotation'), {
       status: 403,

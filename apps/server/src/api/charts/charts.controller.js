@@ -1,47 +1,7 @@
 const Chart = require("../../models/Chart");
-const crypto = require("crypto");
 const logger = require("../../core/logger");
-
-/**
- * Maps incoming request body to the professional Chart schema.
- * Provides defaults for missing nested fields.
- */
-const mapToChartSchema = (body = {}) => {
-  return {
-    chartId: body.chartId || crypto.randomUUID(),
-    name: body.name || body.title || "Untitled Chart",
-
-    dataSource: {
-      datasetId: body.dataSource?.datasetId || body.datasetId || "",
-      table: body.dataSource?.table || body.table || "",
-    },
-
-    query: {
-      dimensions: Array.isArray(body.query?.dimensions) ? body.query.dimensions : [],
-      measures: Array.isArray(body.query?.measures) ? body.query.measures : [],
-      filters: Array.isArray(body.query?.filters) ? body.query.filters : [],
-      groupBy: Array.isArray(body.query?.groupBy) ? body.query.groupBy : [],
-      orderBy: Array.isArray(body.query?.orderBy) ? body.query.orderBy : [],
-    },
-
-    visualization: {
-      type: body.visualization?.type || body.chartType || "bar",
-      xAxis: body.visualization?.xAxis || "",
-      yAxis: body.visualization?.yAxis || "",
-      series: body.visualization?.series || {},
-    },
-
-    style: {
-      colorPalette: body.style?.colorPalette || ["#5470C6"],
-      showLegend: body.style?.showLegend !== false,
-      showGrid: body.style?.showGrid !== false,
-    },
-
-    state: {
-      validation: body.state?.validation || "valid",
-    },
-  };
-};
+const chartMapper = require("./chartMapper");
+const { validateChart, ChartValidationError } = require("./chartValidator");
 
 /**
  * GET /api/charts
@@ -68,7 +28,7 @@ exports.listCharts = async (req, res) => {
     ]);
 
     return res.json({
-      charts,
+      charts: charts.map(chartMapper.fromDB),
       pagination: {
         total,
         limit,
@@ -101,7 +61,7 @@ exports.getChartById = async (req, res) => {
       return res.status(404).json({ message: "Chart not found" });
     }
 
-    return res.json({ chart });
+    return res.json({ chart: chartMapper.fromDB(chart) });
   } catch (error) {
     logger.error(`Get chart failed: ${error.message}`, "ChartsController");
     return res.status(500).json({ message: "Internal server error" });
@@ -114,7 +74,11 @@ exports.getChartById = async (req, res) => {
  */
 exports.saveChart = async (req, res) => {
   try {
-    const payload = mapToChartSchema(req.body);
+    // 1. Validation Logic
+    await validateChart(req.body);
+
+    // 2. Map frontend -> DB
+    const payload = chartMapper.toDB(req.body);
     const actor = req.user?.id || "anonymous";
 
     if (!payload.dataSource.datasetId) {
@@ -135,9 +99,12 @@ exports.saveChart = async (req, res) => {
 
     return res.json({
       message: "Chart saved successfully",
-      chart,
+      chart: chartMapper.fromDB(chart.toJSON()),
     });
   } catch (error) {
+    if (error instanceof ChartValidationError) {
+      return res.status(422).json({ message: error.message, error: "ValidationError" });
+    }
     logger.error(`Save chart failed: ${error.message}`, "ChartsController");
     return res.status(500).json({ message: "Internal server error", detail: error.message });
   }

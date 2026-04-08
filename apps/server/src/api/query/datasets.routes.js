@@ -3,6 +3,7 @@ const router = express.Router();
 const {
   listDatasets,
   getDatasetMetadata,
+  getDatasetSchema,
   updateSchemaColumn,
   deleteQuarantinedRow,
   deleteAllQuarantinedRows,
@@ -17,6 +18,7 @@ const {
 
 router.get("/", listDatasets);
 router.get("/:datasetId/metadata", getDatasetMetadata);
+router.get("/:datasetId/schema", getDatasetSchema);
 router.post("/:datasetId/query", queryDatasetData);
 router.post("/:datasetId/query/preview-stage", previewGroupStage);
 router.post("/:datasetId/validate-payload", validatePayload);

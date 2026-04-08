@@ -131,6 +131,46 @@ exports.getDatasetMetadata = async (req, res) => {
   }
 };
 
+// GET /api/datasets/:datasetId/schema
+// Task #232: Data Source Explorer BE — classification into dimension / measure
+exports.getDatasetSchema = async (req, res) => {
+  try {
+    const { datasetId } = req.params;
+    const metadata = await Metadata.findOne({ datasetId }).lean();
+    if (!metadata) {
+      return res.status(404).json({ message: "Dataset not found" });
+    }
+
+    const typeClassification = {
+      measure: ["int", "float", "number", "decimal", "double", "numeric", "real", "long"],
+      dimension: ["string", "text", "categorical", "bool", "boolean", "date", "timestamp", "time"],
+    };
+
+    const isNumeric = (type = "") => typeClassification.measure.some((t) => type.toLowerCase().includes(t));
+
+    const columns = (metadata.schema || []).map((col) => {
+      const fieldType = col.type || col.dataType || "string";
+      const classification = isNumeric(fieldType) ? "measure" : "dimension";
+
+      return {
+        name: col.name,
+        type: fieldType,
+        classification,
+        nullable: col.nullable === true,
+      };
+    });
+
+    return res.json({
+      dataset: metadata.fileName,
+      datasetId: metadata.datasetId,
+      columns,
+    });
+  } catch (error) {
+    logger.error(`getDatasetSchema error: ${error.message}`, "Datasets");
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
 // PATCH /api/datasets/:datasetId/schema/:columnName
 exports.updateSchemaColumn = async (req, res) => {
   try {

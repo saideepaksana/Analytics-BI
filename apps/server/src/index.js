@@ -12,6 +12,8 @@ const uploadRoutes = require("./api/upload/upload.routes");
 const datasetsRoutes = require("./api/query/datasets.routes");
 const exportRoutes = require("./export/exportRoutes");
 const chartsRoutes = require("./api/charts/charts.routes");
+const dashboardRoutes = require("./api/dashboard/dashboard.routes");
+const annotationsRoutes = require("./api/annotations/annotations.routes");
 const { setIO } = require("./core/socket");
 const logger = require("./core/logger");
 
@@ -93,6 +95,10 @@ io.on("connection", (socket) => {
 app.use("/api/upload", uploadRoutes);
 app.use("/api/datasets", datasetsRoutes);
 app.use("/api/charts", chartsRoutes);
+app.use("/api/dashboard", dashboardRoutes);
+// Alias for consistency with newer clients/specs
+app.use("/api/dashboards", dashboardRoutes);
+app.use("/api/annotations", annotationsRoutes);
 app.use("/api/export", exportRoutes);
 
 // ── Job testing routes (remove these in production) ──────────────────────────

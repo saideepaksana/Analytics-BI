@@ -17,10 +17,17 @@
  * Throw a PermanentError to skip retries entirely and fail immediately.
  */
 class PermanentError extends Error {
-  constructor(message) {
-    super(message);
+  constructor(message, options = {}) {
+    super(message, options);
     this.name = "PermanentError";
     this.permanent = true;
+  }
+}
+
+class TransientError extends Error {
+  constructor(message, options = {}) {
+    super(message, options);
+    this.name = "TransientError";
   }
 }
 
@@ -110,5 +117,6 @@ const isPermanentFailure = (error) => {
 module.exports = {
   RETRY_POLICIES,
   PermanentError,
+  TransientError,
   isPermanentFailure,
 };
