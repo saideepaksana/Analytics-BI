@@ -147,9 +147,64 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 10px 14px;
+  padding: 12px 18px;
   border-bottom: 1px solid #2b313d;
-  background: #141821;
+  background: #1a1a24;
+}
+
+.dashboard-topbar-back-btn {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 4px;
+}
+.dashboard-topbar-back-btn:hover {
+  color: #fff;
+}
+
+.dashboard-superset-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.dashboard-superset-title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 500;
+  color: #fff;
+  line-height: 1.2;
+}
+
+.dashboard-superset-badges {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.superset-badge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.7rem;
+  color: #94a3b8;
+  background: #2b313d;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.superset-badge.published {
+  background: transparent;
+  border: 1px solid rgba(34, 197, 94, 0.4);
+  color: #86efac;
+}
+
+.superset-badge.text-only {
+  background: transparent;
+  padding: 0;
 }
 
 .dashboard-editor-title-row {
@@ -203,19 +258,65 @@
 .dashboard-danger-btn {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  border-radius: 10px;
+  gap: 6px;
+  border-radius: 4px;
   border: 1px solid rgba(148, 163, 184, 0.32);
-  padding: 10px 14px;
+  padding: 8px 14px;
   background: rgba(15, 23, 42, 0.7);
   color: #cbd5e1;
   cursor: pointer;
-  font-weight: 600;
+  font-weight: 500;
+  font-size: 0.85rem;
 }
 
 .dashboard-danger-btn {
   border-color: rgba(244, 63, 94, 0.45);
   color: #fecdd3;
+}
+
+.dashboard-primary-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 4px;
+  border: none;
+  padding: 8px 16px;
+  background: #20a7c9;
+  color: #fff;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.dashboard-primary-btn:hover {
+  background: #1c92b0;
+}
+
+.dashboard-icon-only-btn {
+  background: transparent;
+  border: 1px solid #2b313d;
+  color: #94a3b8;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.dashboard-icon-only-btn:hover {
+  background: #2b313d;
+  color: #fff;
+}
+
+.dashboard-secondary-btn.discard {
+  background: transparent;
+  border-color: transparent;
+}
+
+.dashboard-secondary-btn.discard:hover {
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .dashboard-editor-content {
@@ -375,26 +476,31 @@
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 8px;
-  background: #0f1117;
+  padding: 16px;
+  background: #181b1f;
 }
 
 .dashboard-canvas-grid {
   position: relative;
-  border: 1px solid #2b313d;
-  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 0;
   background-image: linear-gradient(to right, rgba(71, 85, 105, 0.12) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(71, 85, 105, 0.12) 1px, transparent 1px);
-  background-color: #0d1220;
+  background-color: transparent;
   overflow: hidden;
+}
+
+.dashboard-canvas-grid.view-mode {
+  background-image: none;
+  border-color: transparent;
 }
 
 .dashboard-widget {
   position: absolute;
-  border: 1px solid #343f52;
-  border-radius: 8px;
-  overflow: hidden;
-  background: #111723;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+  background: #20232a;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
   display: flex;
   flex-direction: column;
   transition: left 0.2s cubic-bezier(0.2, 0, 0.2, 1), top 0.2s cubic-bezier(0.2, 0, 0.2, 1), width 0.2s cubic-bezier(0.2, 0, 0.2, 1), height 0.2s cubic-bezier(0.2, 0, 0.2, 1);
@@ -404,16 +510,16 @@
 .dashboard-widget.is-resizing {
   transition: none;
   z-index: 100;
-  box-shadow: 0 12px 32px -8px rgba(0, 0, 0, 0.5);
-  border-color: rgba(56, 189, 248, 0.6);
+  box-shadow: 0 12px 32px -8px rgba(0, 0, 0, 0.6);
+  border-color: rgba(56, 189, 248, 0.4);
   opacity: 0.95;
 }
 
 .dashboard-widget-placeholder {
   position: absolute;
-  border: 2px dashed rgba(56, 189, 248, 0.5);
-  background: rgba(56, 189, 248, 0.1);
-  border-radius: 8px;
+  border: 2px dashed rgba(56, 189, 248, 0.4);
+  background: rgba(56, 189, 248, 0.08);
+  border-radius: 4px;
   transition: left 0.2s cubic-bezier(0.2, 0, 0.2, 1), top 0.2s cubic-bezier(0.2, 0, 0.2, 1), width 0.2s cubic-bezier(0.2, 0, 0.2, 1), height 0.2s cubic-bezier(0.2, 0, 0.2, 1);
   z-index: 50;
   pointer-events: none;
@@ -421,13 +527,12 @@
 
 .dashboard-widget-header {
   position: relative;
-  padding: 7px 9px;
-  border-bottom: 1px solid #2f3848;
+  padding: 10px 14px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   cursor: move;
-  background: #1a2234;
+  background: transparent;
 }
 
 .dashboard-widget-header.read-only {
@@ -438,15 +543,23 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  color: #dae3f2;
+  color: #e5e5e5;
   min-width: 0;
-  padding-right: 56px;
+}
+
+.dashboard-widget-drag-handle {
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  margin: 0;
 }
 
 .dashboard-widget-title-wrap h5 {
   margin: 0;
-  font-size: 0.78rem;
-  font-weight: 600;
+  font-size: 0.9rem;
+  font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -454,21 +567,30 @@
 
 .dashboard-widget-actions {
   display: inline-flex;
-  display: inline-flex;
   align-items: center;
   gap: 4px;
 }
 
 .dashboard-widget-icon-btn {
   border: 1px solid rgba(148, 163, 184, 0.26);
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 22px;
   display: grid;
   place-items: center;
-  border-radius: 999px;
+  padding: 0;
+  border-radius: 4px;
   background: transparent;
   color: #92a0b9;
   cursor: pointer;
+}
+
+.dashboard-widget-icon-btn.subtle {
+  border: none;
+  color: #6b7280;
+}
+.dashboard-widget-icon-btn.subtle:hover {
+  background: rgba(255,255,255,0.1);
+  color: #e5e5e5;
 }
 
 .dashboard-library-drawer-overlay {
@@ -558,6 +680,8 @@
   color: rgba(167, 180, 255, 0.95);
   display: grid;
   place-items: center;
+  padding: 0;
+  margin: 0;
   cursor: nwse-resize;
 }
 

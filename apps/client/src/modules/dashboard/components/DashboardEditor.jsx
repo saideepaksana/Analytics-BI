@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Grip, Loader2, MoveDiagonal2, Pencil, Plus, PlusCircle, Save, Trash2, X } from "lucide-react";
+import { ArrowLeft, Grip, Loader2, MoveDiagonal2, Pencil, Plus, PlusCircle, Save, Trash2, X, MoreVertical, Star, User, Clock } from "lucide-react";
 import ChartPreview from "../../charts/components/ChartPreview";
 import { queryDataset } from "../../../services/charts.service";
 
@@ -212,7 +212,7 @@ function DashboardWidget({ widget, chart, layout, readOnly, onRemove, onDragStar
         }}
       >
         <div className="dashboard-widget-title-wrap">
-          <Grip size={14} />
+          {!readOnly && <Grip size={14} className="dashboard-widget-drag-handle" />}
           <h5>{chart?.name || "Missing chart"}</h5>
         </div>
         <div className="dashboard-widget-actions">
@@ -227,9 +227,13 @@ function DashboardWidget({ widget, chart, layout, readOnly, onRemove, onDragStar
               }}
               title="Remove chart"
             >
-              <X size={13} />
+              <Trash2 size={13} />
             </button>
-          ) : null}
+          ) : (
+            <button type="button" className="dashboard-widget-icon-btn subtle">
+              <MoreVertical size={14} />
+            </button>
+          )}
         </div>
       </header>
 
@@ -256,8 +260,9 @@ function DashboardWidget({ widget, chart, layout, readOnly, onRemove, onDragStar
 }
 
 export default function DashboardEditor({ mode, dashboard, charts, saving, onBack, onSave, onDelete }) {
-  const readOnly = mode === "view";
-  const [isEditMode, setIsEditMode] = useState(mode !== "view");
+  const isNewOrEmpty = !dashboard?.id || (Array.isArray(dashboard?.widgets) && dashboard.widgets.length === 0);
+  const [isEditMode, setIsEditMode] = useState(isNewOrEmpty);
+  const readOnly = !isEditMode;
   const [name, setName] = useState(dashboard?.name || "Untitled Dashboard");
   const [widgets, setWidgets] = useState(() => {
     if (Array.isArray(dashboard?.widgets) && dashboard.widgets.length > 0) {
@@ -279,7 +284,8 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
   const scrollIntervalRef = useRef(null);
 
   useEffect(() => {
-    setIsEditMode(mode !== "view");
+    // Intentionally left blank:
+    // User wants edit mode ONLY when toggled or when initializing a brand new/empty dashboard.
   }, [mode]);
 
   useEffect(() => {
@@ -307,11 +313,11 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
   }, [charts]);
 
   const maxGridCols = useMemo(() => {
-    let maxX = widgets.reduce((acc, widget) => Math.max(acc, (widget.x || 0) + (widget.w || MIN_WIDGET_W)), baseColumns);
+    let maxX = widgets.reduce((acc, widget) => Math.max(acc, (widget.x || 0) + (widget.w || MIN_WIDGET_W)), 0);
     if (action && action.targetX !== undefined && action.targetW !== undefined) {
       maxX = Math.max(maxX, action.targetX + action.targetW);
     }
-    return Math.max(maxX + 4, baseColumns);
+    return Math.max(maxX, baseColumns);
   }, [widgets, action, baseColumns]);
 
   const maxGridRows = useMemo(() => {
@@ -322,9 +328,8 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
       maxY = Math.max(maxY, action.targetY + action.targetH);
     }
     
-    // Add extra padding rows so the user has breathing room to drag lower
-    return Math.max(maxY + 10, 14);
-  }, [widgets, action]);
+    return Math.max(maxY, Math.ceil(canvasSize.height / ROW_HEIGHT));
+  }, [widgets, action, canvasSize.height]);
 
   const canvasMinWidth = Math.max(canvasSize.width, maxGridCols * cellWidth);
   const canvasMinHeight = Math.max(canvasSize.height, maxGridRows * ROW_HEIGHT);
@@ -571,46 +576,55 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
     <div className="dashboard-editor-page">
       <div className="dashboard-editor-topbar">
         <div className="dashboard-editor-title-row">
-          <button type="button" className="dashboard-secondary-btn" onClick={onBack}>
-            <ArrowLeft size={16} />
-            Back
+          <button type="button" className="dashboard-topbar-back-btn" onClick={onBack} title="Back">
+            <ArrowLeft size={18} />
           </button>
 
-          <input
-            type="text"
-            className="dashboard-name-input"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            disabled={readOnly}
-            placeholder="Dashboard name"
-          />
+          {isEditMode ? (
+            <input
+              type="text"
+              className="dashboard-name-input"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="Dashboard name"
+            />
+          ) : (
+            <div className="dashboard-superset-title-group">
+              <h1 className="dashboard-superset-title">{name}</h1>
+            </div>
+          )}
         </div>
 
         <div className="dashboard-editor-actions">
-          {!readOnly && !isEditMode ? (
-            <button type="button" className="dashboard-secondary-btn" onClick={() => setIsEditMode(true)}>
-              <Pencil size={16} />
-              Edit dashboard
-            </button>
-          ) : null}
-          {isEditMode ? (
-            <button type="button" className="dashboard-secondary-btn" onClick={() => setShowChartLibrary((prev) => !prev)}>
-              <Plus size={16} />
-              Add charts
-            </button>
-          ) : null}
-          {isEditMode ? (
-            <button type="button" className="create-chart-btn" onClick={submitSave} disabled={saving}>
-              {saving ? <Loader2 size={16} className="spinner" /> : <Save size={16} />}
-              Save dashboard
-            </button>
-          ) : null}
-          {!readOnly && dashboard?.id && isEditMode ? (
-            <button type="button" className="dashboard-danger-btn" onClick={() => onDelete?.(dashboard.id)}>
-              <Trash2 size={16} />
-              Delete
-            </button>
-          ) : null}
+          {!isEditMode ? (
+            <>
+              <button type="button" className="dashboard-primary-btn" onClick={() => setIsEditMode(true)}>
+                Edit dashboard
+              </button>
+              <button type="button" className="dashboard-icon-only-btn">
+                <MoreVertical size={16} />
+              </button>
+            </>
+          ) : (
+            <>
+              <button type="button" className="dashboard-secondary-btn" onClick={() => setShowChartLibrary((prev) => !prev)}>
+                <Plus size={14} />
+                Add chart
+              </button>
+              {dashboard?.id && (
+                <button type="button" className="dashboard-danger-btn" onClick={() => onDelete?.(dashboard.id)}>
+                  <Trash2 size={14} />
+                  Delete
+                </button>
+              )}
+              <button type="button" className="dashboard-primary-btn" onClick={submitSave} disabled={saving}>
+                {saving ? <Loader2 size={14} className="spinner" /> : "Save"}
+              </button>
+              <button type="button" className="dashboard-secondary-btn discard" onClick={() => setIsEditMode(false)}>
+                Discard
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -618,7 +632,7 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
         <section className="dashboard-canvas-pane">
           <div className="dashboard-canvas-wrapper" ref={canvasRef}>
             <div
-              className="dashboard-canvas-grid"
+              className={`dashboard-canvas-grid ${!isEditMode ? "view-mode" : ""}`}
               style={{
                 minHeight: `${canvasMinHeight}px`,
                 minWidth: `${canvasMinWidth}px`,
@@ -633,13 +647,13 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
                     top: `${dropPlaceholder.top}px`,
                     width: `${dropPlaceholder.width}px`,
                     height: `${dropPlaceholder.height}px`,
-                  }}
-                />
-              ) : null}
-              {widgetLayout.map((widget) => (
-                <DashboardWidget
-                  key={widget.id}
-                  widget={widget}
+                }}
+              />
+            ) : null}
+            {cellWidth > 0 && widgetLayout.map((widget) => (
+              <DashboardWidget
+                key={widget.id}
+                widget={widget}
                   chart={chartMap.get(widget.chartId)}
                   layout={widget}
                   readOnly={!isEditMode}

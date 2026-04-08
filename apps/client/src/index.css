@@ -53,8 +53,8 @@ html {
 
 .theme-toggle {
   position: absolute;
-  top: 24px;
-  right: 28px;
+  bottom: 24px;
+  left: 28px;
   z-index: 9999;
   background: var(--surface);
   color: var(--text);

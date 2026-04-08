@@ -86,14 +86,15 @@ export default function DashboardPage({ onEditorMode }) {
   const handleSaveDashboard = async (payload) => {
     setSaving(true);
     try {
+      let savedDashboard;
       if (payload.id) {
-        const updated = await updateDashboard(payload.id, payload);
-        setDashboards((previous) => previous.map((dashboard) => (dashboard.id === updated.id ? updated : dashboard)));
+        savedDashboard = await updateDashboard(payload.id, payload);
+        setDashboards((previous) => previous.map((dashboard) => (dashboard.id === savedDashboard.id ? savedDashboard : dashboard)));
       } else {
-        const created = await createDashboard(payload);
-        setDashboards((previous) => [created, ...previous]);
+        savedDashboard = await createDashboard(payload);
+        setDashboards((previous) => [savedDashboard, ...previous]);
       }
-      closeEditor();
+      setEditorState({ mode: "view", dashboard: savedDashboard });
     } catch (err) {
       console.error("Failed to save dashboard", err);
       setError("Unable to save dashboard. Try again.");

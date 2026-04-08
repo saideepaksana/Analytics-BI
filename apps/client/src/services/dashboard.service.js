@@ -108,10 +108,17 @@ export const updateDashboard = async (dashboardId, payload = {}) => {
   }
 
   const existingNormalized = normalizeDashboard(dashboards[index]);
-  const sections =
-    Array.isArray(payload.sections) && payload.sections.length > 0
-      ? payload.sections
-      : existingNormalized.sections;
+  
+  let sections = existingNormalized.sections;
+  if (Array.isArray(payload.sections) && payload.sections.length > 0) {
+    sections = payload.sections;
+  } else if (payload.widgets) {
+    const activeId = payload.activeSectionId || existingNormalized.activeSectionId || existingNormalized.sections[0]?.id;
+    sections = existingNormalized.sections.map(sec => 
+      sec.id === activeId ? { ...sec, widgets: payload.widgets } : sec
+    );
+    if (sections.length === 0) sections = [defaultSection(payload.widgets)];
+  }
   const activeSectionId =
     sections.some((section) => section.id === payload.activeSectionId)
       ? payload.activeSectionId
