@@ -12,13 +12,14 @@ export default function ChartCard({ chart, onDelete, onEdit, onView }) {
     const fetchChartData = async () => {
       setLoading(true);
       try {
-        const datasetId = chart.dataSource?.datasetId;
+        const datasetId = chart.dataSource?.datasetId || chart.datasetId;
         if (!datasetId) {
           setError("No data source found");
           return;
         }
 
-        const isScatter = chart.visualization?.type === "scatter";
+        const chartType = chart.visualization?.type || chart.type;
+        const isScatter = chartType === "scatter";
         let query;
         if (isScatter) {
           // Scatter needs raw individual records, not aggregated data
@@ -65,9 +66,9 @@ export default function ChartCard({ chart, onDelete, onEdit, onView }) {
           <div className="chart-error">{error}</div>
         ) : (
           <ChartPreview 
-            type={chart.visualization?.type}
+            type={chart.visualization?.type || chart.type}
             data={data}
-            dimensions={chart.query?.dimensions?.map(d => d.field) || []}
+            dimensions={chart.query?.dimensions?.map(d => d.field || d) || []}
             measures={chart.query?.measures || []}
             style={chart.style}
           />

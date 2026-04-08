@@ -59,14 +59,15 @@ export default function ChartsPage({ onExploreMode }) {
       setViewLoading(true);
       setViewError(null);
       try {
-        const datasetId = viewChart.dataSource?.datasetId;
+        const datasetId = viewChart.dataSource?.datasetId || viewChart.datasetId;
         if (!datasetId) {
           setViewError("No data source found");
           return;
         }
 
-        const isScatter = viewChart.visualization?.type === "scatter";
-        const isLineOrArea = viewChart.visualization?.type === "line" || viewChart.visualization?.type === "area";
+        const chartType = viewChart.visualization?.type || viewChart.type;
+        const isScatter = chartType === "scatter";
+        const isLineOrArea = chartType === "line" || chartType === "area";
         const hasRawMetric = (viewChart.query?.measures || []).some(
           (m) => (m.aggregation || "").toUpperCase() === "RAW"
         );
@@ -169,7 +170,7 @@ export default function ChartsPage({ onExploreMode }) {
             <div className="chart-view-header">
               <div>
                 <h3>{viewChart.name}</h3>
-                <p>{viewChart.visualization?.type || "chart"}</p>
+                <p>{viewChart.visualization?.type || viewChart.type || "chart"}</p>
               </div>
               <button
                 className="chart-view-close"
@@ -190,7 +191,7 @@ export default function ChartsPage({ onExploreMode }) {
                 <div className="chart-error">{viewError}</div>
               ) : (
                 <ChartPreview
-                  type={viewChart.visualization?.type}
+                  type={viewChart.visualization?.type || viewChart.type}
                   data={viewData}
                   dimensions={viewChart.query?.dimensions?.map((d) => d.field || d) || []}
                   measures={viewChart.query?.measures || []}

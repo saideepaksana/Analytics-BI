@@ -93,6 +93,10 @@ export default function ChartExplore({ chartId, onBack }) {
   const initialLoadDone = useRef(false);
   const [schemaLoaded, setSchemaLoaded] = useState(false);
 
+  const extractErrorMessage = (err, fallback) => {
+    return err?.response?.data?.message || err?.response?.data?.detail || err?.message || fallback;
+  };
+
   // ── Load datasets ──
   useEffect(() => {
     (async () => {
@@ -226,7 +230,7 @@ export default function ChartExplore({ chartId, onBack }) {
       setRowCount(response.rowCount || 0);
       setExecutionTimeMs(response.executionTimeMs || 0);
     } catch (err) {
-      setError("Query failed: " + (err.message || "Unknown error"));
+      setError(`Query failed: ${extractErrorMessage(err, "Unknown error")}`);
       console.error(err);
     } finally {
       setIsQuerying(false);
@@ -306,7 +310,7 @@ export default function ChartExplore({ chartId, onBack }) {
       setLastSaved(new Date().toISOString());
       setIsDirty(false);
     } catch (err) {
-      setError("Save failed: " + (err.message || "Unknown error"));
+      setError(`Save failed: ${extractErrorMessage(err, "Unknown error")}`);
       console.error(err);
     } finally {
       setIsSaving(false);
@@ -402,6 +406,8 @@ export default function ChartExplore({ chartId, onBack }) {
         onBack={onBack}
         lastSaved={lastSaved}
       />
+
+      {error ? <div className="explore-error-banner">{error}</div> : null}
 
       <div className="explore-layout">
         <SourcePanel

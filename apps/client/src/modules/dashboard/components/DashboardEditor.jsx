@@ -46,7 +46,7 @@ function DashboardWidgetChart({ chart }) {
       setError(null);
 
       try {
-        const datasetId = chart.dataSource?.datasetId;
+        const datasetId = chart.dataSource?.datasetId || chart.datasetId;
         if (!datasetId) {
           throw new Error("No dataset found");
         }
@@ -89,7 +89,7 @@ function DashboardWidgetChart({ chart }) {
 
   return (
     <ChartPreview
-      type={chart.visualization?.type}
+      type={chart.visualization?.type || chart.type}
       data={data}
       dimensions={normalizeDimensions(chart.query?.dimensions || [])}
       measures={chart.query?.measures || []}

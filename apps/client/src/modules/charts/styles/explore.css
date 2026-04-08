@@ -141,6 +141,16 @@
   overflow: hidden;
 }
 
+.explore-error-banner {
+  margin: 10px 20px 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #fecaca;
+  font-size: 0.84rem;
+}
+
 /* ── Source Panel (Left) ── */
 .source-panel {
   width: 260px;

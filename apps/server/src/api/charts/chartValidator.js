@@ -22,8 +22,23 @@ exports.validateChart = async (frontendConfig) => {
     throw new ChartValidationError("Dataset ID is required to validate chart.");
   }
 
-  const xField = frontendConfig.x?.field || frontendConfig.x || frontendConfig.visualization?.xAxis;
-  const yField = frontendConfig.y?.field || frontendConfig.y || frontendConfig.visualization?.yAxis;
+  // Prefer query dimension/measure source fields because axis labels can be display strings like SUM(field).
+  const xField =
+    frontendConfig.x?.field ||
+    frontendConfig.x ||
+    frontendConfig.query?.dimensions?.[0]?.field ||
+    frontendConfig.query?.dimensions?.[0] ||
+    frontendConfig.visualization?.xAxis;
+  const yField =
+    frontendConfig.y?.field ||
+    frontendConfig.y ||
+    frontendConfig.query?.measures?.[0]?.field ||
+    frontendConfig.visualization?.yAxis;
+
+  const yAggregation = String(
+    frontendConfig.y?.aggregation || frontendConfig.query?.measures?.[0]?.aggregation || ""
+  ).toUpperCase();
+  const isCountStarMeasure = yField === "*" && yAggregation === "COUNT";
 
   if (!xField || !yField) {
     throw new ChartValidationError(`Chart of type "${type}" requires both X and Y fields.`);
@@ -49,7 +64,7 @@ exports.validateChart = async (frontendConfig) => {
   };
 
   const xType = getColType(xField);
-  const yType = getColType(yField);
+  const yType = isCountStarMeasure ? "numeric" : getColType(yField);
 
   if (!xType) throw new ChartValidationError(`Field "${xField}" does not exist in dataset schema.`);
   if (!yType) throw new ChartValidationError(`Field "${yField}" does not exist in dataset schema.`);
