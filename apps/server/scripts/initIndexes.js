@@ -5,7 +5,6 @@ const logger = require("../src/core/logger");
 // Import all models
 const Chart = require("../src/models/Chart");
 const CleanRecord = require("../src/models/CleanRecord");
-const Dashboard = require("../src/models/Dashboard");
 const DLQRecord = require("../src/models/DLQRecord");
 const Metadata = require("../src/models/Metadata");
 const RawRecord = require("../src/models/RawRecord");
@@ -18,7 +17,7 @@ const initIndexes = async () => {
     await mongoose.connect(MONGO_URI);
     logger.success("Connected to MongoDB for index initialization", "InitIndexes");
 
-    const models = [Chart, CleanRecord, Dashboard, DLQRecord, Metadata, RawRecord, Idempotency, exportLog];
+    const models = [Chart, CleanRecord, DLQRecord, Metadata, RawRecord, Idempotency, exportLog];
     
     for (const model of models) {
       if (model && model.syncIndexes) {

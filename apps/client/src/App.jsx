@@ -8,7 +8,7 @@ import { DataReviewPage } from "./modules/data-review";
 import DataReviewModal from "./modules/data-review/DataReviewModal";
 import { DatasetsPage } from "./modules/datasets";
 import ChartsPage from "./modules/charts/ChartsPage";
-import DashboardsPage from "./modules/dashboard/DashboardsPage";
+import { DashboardPage } from "./modules/dashboard";
 import { SOCKET_URL, API_BASE_URL } from "./core/config/env";
 import SimplePopup from "./components/SimplePopup";
 import "./modules/data-review/styles/data-review.css";
@@ -19,6 +19,7 @@ function App() {
   const [activeView, setActiveView] = useState("home"); // home | ingestion | review | datasets
   const [reviewModalDatasetId, setReviewModalDatasetId] = useState(null);
   const [chartsExploreMode, setChartsExploreMode] = useState(false);
+  const [dashboardEditorMode, setDashboardEditorMode] = useState(false);
   const [activeTasks, setActiveTasks] = useState([]);
   const [completionPopup, setCompletionPopup] = useState(null);
   
@@ -83,7 +84,7 @@ function App() {
     },
     dashboards: {
       title: "Saved Dashboards",
-      subtitle: "View and organize your analytics dashboards."
+      subtitle: "Create, arrange, and manage your dashboard galleries."
     }
   };
 
@@ -141,8 +142,8 @@ function App() {
         </div>
       </aside>
 
-      <main className="app-shell">
-        {activeHeader && !chartsExploreMode && (
+      <main className={`app-shell ${dashboardEditorMode ? "app-shell-dashboard-editor" : ""}`}>
+        {activeHeader && !chartsExploreMode && !dashboardEditorMode && (
           <header className="app-header">
             <h1>{activeHeader.title}</h1>
             <p>{activeHeader.subtitle}</p>
@@ -177,8 +178,7 @@ function App() {
         ) : null}
 
         {activeView === "charts" ? <ChartsPage onExploreMode={setChartsExploreMode} /> : null}
-
-        {activeView === "dashboards" ? <DashboardsPage /> : null}
+        {activeView === "dashboards" ? <DashboardPage onEditorMode={setDashboardEditorMode} /> : null}
       </main>
 
       {/* Data Review Modal - appears as full-screen popup */}
