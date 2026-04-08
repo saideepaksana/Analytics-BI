@@ -15,6 +15,7 @@ export default function ChartPanel({
   dimensionsList = [],
   showLegend = true,
   showGrid = true,
+  colorPalette = ["#6366f1", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6"],
   rowCount = 0,
   executionTimeMs = 0,
   isDirty = false,
@@ -62,7 +63,7 @@ export default function ChartPanel({
       };
     }
 
-    const colors = ["#6366f1", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4"];
+    const colors = [...colorPalette, "#ec4899", "#06b6d4"];
     const darkTooltip = {
       backgroundColor: "rgba(15, 23, 42, 0.95)",
       borderColor: "#1e293b",
@@ -230,7 +231,7 @@ export default function ChartPanel({
       color: colors,
       series: seriesData,
     };
-  }, [chartType, data, xAxis, metrics, showLegend, showGrid]);
+  }, [chartType, data, xAxis, metrics, showLegend, showGrid, colorPalette]);
 
   // Get table columns from data
   const tableColumns = data.length > 0 ? Object.keys(data[0]) : [];

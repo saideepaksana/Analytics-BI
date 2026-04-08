@@ -48,6 +48,9 @@ export default function QueryPanel({
   onToggleLegend,
   showGrid = true,
   onToggleGrid,
+  colorScheme = "vivid",
+  onColorSchemeChange,
+  colorSchemeOptions = [],
 }) {
   const isScatter = chartType === "scatter";
   const isLineOrArea = chartType === "line" || chartType === "area";
@@ -560,19 +563,52 @@ export default function QueryPanel({
           /* Customize Tab */
           <>
             <div className="customize-section">
+              <div className="customize-section-header">
+                <p className="customize-title">Display Options</p>
+                <p className="customize-subtitle">Control chart overlays and visual guides.</p>
+              </div>
+
               <div className="customize-toggle">
-                <label>Show Legend</label>
+                <div className="customize-toggle-copy">
+                  <label>Show Legend</label>
+                  <span>Display series labels inside the chart area.</span>
+                </div>
                 <button
                   className={`toggle-switch ${showLegend ? "on" : ""}`}
                   onClick={onToggleLegend}
+                  aria-label="Toggle chart legend"
                 />
               </div>
+
               <div className="customize-toggle">
-                <label>Show Grid Lines</label>
+                <div className="customize-toggle-copy">
+                  <label>Show Grid Lines</label>
+                  <span>Show horizontal and vertical guide lines.</span>
+                </div>
                 <button
                   className={`toggle-switch ${showGrid ? "on" : ""}`}
                   onClick={onToggleGrid}
+                  aria-label="Toggle chart grid lines"
                 />
+              </div>
+
+              <div className="customize-palette-wrap">
+                <p className="customize-group-title">Color Scheme</p>
+                <div className="color-palette-grid">
+                  {colorSchemeOptions.map((scheme) => {
+                    const gradient = `linear-gradient(90deg, ${scheme.colors.slice(0, 3).join(", ")})`;
+                    return (
+                      <button
+                        key={scheme.id}
+                        className={`color-swatch ${colorScheme === scheme.id ? "active" : ""}`}
+                        style={{ background: gradient }}
+                        onClick={() => onColorSchemeChange?.(scheme.id)}
+                        title={scheme.label}
+                        aria-label={`Set color scheme to ${scheme.label}`}
+                      />
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </>

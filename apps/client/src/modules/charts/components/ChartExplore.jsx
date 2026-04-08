@@ -8,6 +8,21 @@ import { listDatasets, getDatasetMetadata } from "../../../services/datasets.ser
 import { queryDataset, saveChartData, getChartById } from "../../../services/charts.service";
 import "../styles/explore.css";
 
+const COLOR_SCHEMES = {
+  vivid: ["#6366f1", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6"],
+  ocean: ["#0284c7", "#06b6d4", "#0ea5e9", "#38bdf8", "#7dd3fc"],
+  sunset: ["#f97316", "#fb7185", "#f43f5e", "#f59e0b", "#eab308"],
+  forest: ["#14532d", "#166534", "#15803d", "#22c55e", "#86efac"],
+  mono: ["#334155", "#475569", "#64748b", "#94a3b8", "#cbd5e1"],
+};
+
+const getSchemeByPalette = (palette = []) => {
+  const entry = Object.entries(COLOR_SCHEMES).find(([, colors]) =>
+    colors.length === palette.length && colors.every((color, idx) => color === palette[idx])
+  );
+  return entry?.[0] || "vivid";
+};
+
 /**
  * ChartExplore — Full-page Superset-style chart exploration view.
  * Manages all state: dataset, schema, query config, results, timing.
@@ -77,6 +92,7 @@ export default function ChartExplore({ chartId, onBack }) {
   // ── Customize ──
   const [showLegend, setShowLegend] = useState(true);
   const [showGrid, setShowGrid] = useState(true);
+  const [colorScheme, setColorScheme] = useState("vivid");
 
   // ── Results state ──
   const [resultData, setResultData] = useState([]);
@@ -124,6 +140,7 @@ export default function ChartExplore({ chartId, onBack }) {
             setSelectedDatasetId(chart.dataSource?.datasetId || "");
             setShowLegend(chart.style?.showLegend !== false);
             setShowGrid(chart.style?.showGrid !== false);
+            setColorScheme(getSchemeByPalette(chart.style?.colorPalette || []));
             setLastSaved(chart.updatedAt);
 
             // Restore query config
@@ -196,7 +213,7 @@ export default function ChartExplore({ chartId, onBack }) {
     if (resultData.length > 0) {
       setIsDirty(true);
     }
-  }, [xAxis, xAxisSortBy, metrics, dimensionsList, contributionMode, filters, seriesLimit, sortBy, rowLimit, chartType]);
+  }, [xAxis, xAxisSortBy, metrics, dimensionsList, contributionMode, filters, seriesLimit, sortBy, rowLimit, chartType, showLegend, showGrid, colorScheme]);
 
   // ── Execute query ──
   const handleUpdateChart = useCallback(async () => {
@@ -299,7 +316,8 @@ export default function ChartExplore({ chartId, onBack }) {
           series: { stack: false, grouped: true },
         },
         style: {
-          colorPalette: ["#6366f1", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6"],
+          colorPalette: COLOR_SCHEMES[colorScheme] || COLOR_SCHEMES.vivid,
+          colorScheme,
           showLegend,
           showGrid,
         },
@@ -315,7 +333,7 @@ export default function ChartExplore({ chartId, onBack }) {
     } finally {
       setIsSaving(false);
     }
-  }, [savedChartId, chartName, selectedDatasetId, chartType, xAxis, metrics, dimensionsList, filters, sortBy, showLegend, showGrid, columns]);
+  }, [savedChartId, chartName, selectedDatasetId, chartType, xAxis, metrics, dimensionsList, filters, sortBy, showLegend, showGrid, colorScheme, columns]);
 
   // ── Handle column click from source panel ──
   const handleColumnClick = useCallback((col, role) => {
@@ -454,6 +472,13 @@ export default function ChartExplore({ chartId, onBack }) {
           onToggleLegend={() => setShowLegend((v) => !v)}
           showGrid={showGrid}
           onToggleGrid={() => setShowGrid((v) => !v)}
+          colorScheme={colorScheme}
+          onColorSchemeChange={setColorScheme}
+          colorSchemeOptions={Object.entries(COLOR_SCHEMES).map(([id, colors]) => ({
+            id,
+            label: id.charAt(0).toUpperCase() + id.slice(1),
+            colors,
+          }))}
         />
 
         <ChartPanel
@@ -464,6 +489,7 @@ export default function ChartExplore({ chartId, onBack }) {
           dimensionsList={dimensionsList}
           showLegend={showLegend}
           showGrid={showGrid}
+          colorPalette={COLOR_SCHEMES[colorScheme] || COLOR_SCHEMES.vivid}
           rowCount={rowCount}
           executionTimeMs={executionTimeMs}
           isDirty={isDirty}
