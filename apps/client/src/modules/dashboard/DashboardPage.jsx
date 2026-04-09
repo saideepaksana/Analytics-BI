@@ -83,6 +83,16 @@ export default function DashboardPage({ onEditorMode }) {
     }
   };
 
+  const handleAutoSave = async (payload) => {
+    if (!payload.id) return;
+    try {
+      const savedDashboard = await updateDashboard(payload.id, payload);
+      setDashboards((previous) => previous.map((d) => (d.id === savedDashboard.id ? savedDashboard : d)));
+    } catch (err) {
+      console.error("Auto-save failed", err);
+    }
+  };
+
   const handleSaveDashboard = async (payload) => {
     setSaving(true);
     try {
@@ -113,6 +123,7 @@ export default function DashboardPage({ onEditorMode }) {
         saving={saving}
         onBack={closeEditor}
         onSave={handleSaveDashboard}
+        onAutoSave={handleAutoSave}
         onDelete={handleDeleteDashboard}
       />
     );

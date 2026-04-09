@@ -260,7 +260,7 @@ function DashboardWidget({ widget, chart, layout, readOnly, onRemove, onDragStar
   );
 }
 
-export default function DashboardEditor({ mode, dashboard, charts, saving, onBack, onSave, onDelete }) {
+export default function DashboardEditor({ mode, dashboard, charts, saving, onBack, onSave, onAutoSave, onDelete }) {
   const isNewOrEmpty = !dashboard?.id || (Array.isArray(dashboard?.widgets) && dashboard.widgets.length === 0);
   const [isEditMode, setIsEditMode] = useState(isNewOrEmpty);
   const readOnly = !isEditMode;
@@ -284,6 +284,61 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
   const mousePosRef = useRef(null);
   const scrollIntervalRef = useRef(null);
+
+  // Track the last known saved state to avoid redundant saves
+  const lastStateRef = useRef({
+    name: dashboard?.name || "",
+    widgets: JSON.stringify(widgets || []),
+  });
+
+  // Check for meaningful changes in layout or metadata
+  const hasChanges = useCallback(() => {
+    const currentWidgetsJson = JSON.stringify(widgets || []);
+    return (
+      name !== lastStateRef.current.name ||
+      currentWidgetsJson !== lastStateRef.current.widgets
+    );
+  }, [name, widgets]);
+
+  // Validate layout for collisions and dimension constraints
+  const validateLayout = useCallback(() => {
+    if (!name || !name.trim()) return "Please provide a dashboard name";
+    
+    for (let i = 0; i < (widgets || []).length; i++) {
+      const a = widgets[i];
+      if (a.w < 1 || a.h < 1) return `Widget ${a.id || i} has invalid size`;
+      
+      for (let j = i + 1; j < widgets.length; j++) {
+        const b = widgets[j];
+        const overlap = a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+        if (overlap) return "Widgets cannot overlap. Please adjust the layout.";
+      }
+    }
+    return null;
+  }, [name, widgets]);
+
+  // Debounced auto-save effect
+  useEffect(() => {
+    if (!isEditMode || !dashboard?.id) return undefined;
+    if (!hasChanges()) return undefined;
+
+    // Only skip auto-save if validation fails; manual save will still show error alerts.
+    if (validateLayout()) return undefined;
+
+    const timer = setTimeout(() => {
+      onAutoSave?.({
+        id: dashboard.id,
+        name: name.trim(),
+        widgets,
+      });
+      lastStateRef.current = {
+        name: name.trim(),
+        widgets: JSON.stringify(widgets),
+      };
+    }, 2000);
+
+    return () => clearTimeout(timer);
+  }, [name, widgets, isEditMode, dashboard?.id, onAutoSave, hasChanges, validateLayout]);
 
   useEffect(() => {
     // Intentionally left blank:
@@ -570,6 +625,13 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
     setSavingLocal(true);
     let thumbnail = dashboard?.thumbnail || null;
 
+    const error = validateLayout();
+    if (error) {
+      alert(error);
+      setSavingLocal(false);
+      return;
+    }
+
     try {
       const gridEl = document.querySelector(".dashboard-canvas-grid");
       if (gridEl) {
@@ -592,10 +654,16 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
 
     onSave({
       id: dashboard?.id,
-      name,
+      name: name.trim(),
       widgets,
       thumbnail
     });
+    
+    lastStateRef.current = {
+      name: name.trim(),
+      widgets: JSON.stringify(widgets),
+    };
+    
     setSavingLocal(false);
   };
 

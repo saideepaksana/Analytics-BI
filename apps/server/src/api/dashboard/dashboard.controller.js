@@ -152,103 +152,44 @@ exports.patchDashboardState = async (req, res) => {
       return res.status(400).json({ message: 'Invalid dashboard autosave payload', errors: validation.errors });
     }
 
-    // Normalize: new contract can send `version`, legacy sends `__v` + `dashboardState`
-    const clientVersion =
-      typeof req.body.version === 'number' ? req.body.version : req.body.__v;
-
-    const incomingState =
-      req.body.dashboardState && typeof req.body.dashboardState === 'object'
-        ? req.body.dashboardState
-        : req.body;
+    const clientVersion = typeof req.body.version === 'number' ? req.body.version : req.body.__v;
+    const incomingState = req.body.dashboardState && typeof req.body.dashboardState === 'object' ? req.body.dashboardState : req.body;
 
     if (typeof clientVersion !== 'number') {
       return res.status(400).json({ message: 'Missing version/__v for concurrency control' });
     }
 
-    // Map frontend state -> DB normalized updates
     const mapped = dashboardMapper.toDB(incomingState);
+    const { layout } = mapped;
 
-    // Only allow a safe subset to be updated via autosave
-    const {
-      title,
-      description,
-      tags,
-      isFavorite,
-      status,
-      layout,
-      chartRefs,
-      filters,
-      metadata,
-      _rawFrontendState,
-    } = mapped;
-
-    // Only persist raw frontend state when explicitly provided by the client.
-    // To avoid divergence with normalized fields, strip keys that are stored separately.
-    let rawSnapshot;
-    if (incomingState && typeof incomingState === 'object' && Object.prototype.hasOwnProperty.call(incomingState, '_rawFrontendState')) {
-      rawSnapshot = incomingState._rawFrontendState;
-    } else if (incomingState && typeof incomingState === 'object' && _rawFrontendState !== undefined) {
-      rawSnapshot = _rawFrontendState;
+    if (layout !== undefined) {
+      const layoutError = validateLayout(layout);
+      if (layoutError) return res.status(400).json({ message: 'Invalid layout', detail: layoutError });
     }
-
-    let prunedRawSnapshot;
-    if (rawSnapshot && typeof rawSnapshot === 'object' && !Array.isArray(rawSnapshot)) {
-      prunedRawSnapshot = { ...rawSnapshot };
-      for (const key of [
-        '_id',
-        '__v',
-        'version',
-        'title',
-        'description',
-        'tags',
-        'isFavorite',
-        'status',
-        'layout',
-        'chartRefs',
-        'filters',
-        'metadata',
-        'updatedAt',
-        'createdAt',
-      ]) {
-        delete prunedRawSnapshot[key];
-      }
-      if (Object.keys(prunedRawSnapshot).length === 0) prunedRawSnapshot = null;
-    }
-
-    const safeUpdates = {
-      ...(title !== undefined ? { title } : {}),
-      ...(description !== undefined ? { description } : {}),
-      ...(tags !== undefined ? { tags } : {}),
-      ...(isFavorite !== undefined ? { isFavorite } : {}),
-      ...(status !== undefined ? { status } : {}),
-      ...(layout !== undefined ? { layout } : {}),
-      ...(chartRefs !== undefined ? { chartRefs } : {}),
-      ...(filters !== undefined ? { filters } : {}),
-      ...(metadata !== undefined ? { metadata } : {}),
-      ...(prunedRawSnapshot !== undefined ? { _rawFrontendState: prunedRawSnapshot } : {}),
-      updatedAt: new Date(),
-    };
 
     const dashboard = await Dashboard.findOneAndUpdate(
       { _id: dashboardId, __v: clientVersion },
-      {
-        $set: { ...safeUpdates, updatedBy: req.user?.id || 'anonymous' },
-        $inc: { __v: 1 },
-      },
+      { $set: { ...mapped, updatedBy: req.user?.id || 'anonymous' }, $inc: { __v: 1 } },
       { new: true, runValidators: true }
     ).lean();
 
-    if (!dashboard) {
-      // Either not found or version mismatch – treat both as conflict to be safe
-      const exists = await Dashboard.exists({ _id: dashboardId });
-      if (!exists) return res.status(404).json({ message: 'Dashboard not found' });
-      return res.status(409).json({
-        message: 'Conflict: dashboard version mismatch. Re-fetch and retry.',
-      });
-    }
-
+    if (!dashboard) return res.status(409).json({ message: 'Conflict: dashboard version mismatch.' });
     return res.json({ dashboard: dashboardMapper.fromDB(dashboard) });
   } catch (error) {
     return res.status(500).json({ message: 'Internal server error', detail: error.message });
   }
 };
+
+function validateLayout(layout) {
+  if (!Array.isArray(layout)) return 'Layout must be an array';
+  for (let i = 0; i < layout.length; i++) {
+    const a = layout[i];
+    if (a.x < 0 || a.y < 0 || a.w <= 0 || a.h <= 0) return `Widget ${a.id || i} has invalid dimensions`;
+    for (let j = i + 1; j < layout.length; j++) {
+      const b = layout[j];
+      const overlap = a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+      if (overlap) return `Collision detected between widget ${a.id || i} and ${b.id || j}`;
+    }
+  }
+  return null;
+}
