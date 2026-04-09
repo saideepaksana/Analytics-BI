@@ -1,27 +1,4 @@
-const STORAGE_KEY = "analyticsbi_dashboards_v1";
-
-const safeJsonParse = (value, fallback) => {
-  try {
-    return JSON.parse(value);
-  } catch {
-    return fallback;
-  }
-};
-
-const readDashboards = () => {
-  if (typeof window === "undefined") return [];
-  const raw = window.localStorage.getItem(STORAGE_KEY);
-  if (!raw) return [];
-  const parsed = safeJsonParse(raw, []);
-  return Array.isArray(parsed) ? parsed : [];
-};
-
-const writeDashboards = (dashboards) => {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(dashboards));
-};
-
-const nowIso = () => new Date().toISOString();
+import apiClient from "../core/http/apiClient";
 
 const defaultSection = (widgets = []) => ({
   id: `section-${Date.now()}-${Math.round(Math.random() * 10000)}`,
@@ -42,6 +19,11 @@ const normalizeSections = (dashboard) => {
 };
 
 const normalizeDashboard = (dashboard) => {
+  // If backend returns a title but no name (on fresh fetches), we map it smoothly to name.
+  if (dashboard.title && !dashboard.name) {
+    dashboard.name = dashboard.title;
+  }
+  
   const sections = normalizeSections(dashboard);
   const activeSectionId =
     sections.some((section) => section.id === dashboard.activeSectionId)
@@ -51,63 +33,59 @@ const normalizeDashboard = (dashboard) => {
 
   return {
     ...dashboard,
+    id: dashboard._id || dashboard.id,
     sections,
     activeSectionId,
     widgets,
   };
 };
 
-const newDashboardId = () => {
-  if (typeof crypto !== "undefined" && crypto.randomUUID) {
-    return crypto.randomUUID();
-  }
-  return `db-${Date.now()}-${Math.round(Math.random() * 100000)}`;
-};
-
 export const listDashboards = async () => {
-  return readDashboards()
-    .map(normalizeDashboard)
-    .sort((a, b) => new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0));
+  const response = await apiClient.get('/dashboards');
+  const dbs = response.data.dashboards || [];
+  return dbs.map(normalizeDashboard);
 };
 
 export const getDashboardById = async (dashboardId) => {
-  const found = readDashboards().find((dashboard) => dashboard.id === dashboardId);
-  return found ? normalizeDashboard(found) : null;
+  const response = await apiClient.get(`/dashboards/${dashboardId}`);
+  return normalizeDashboard(response.data.dashboard);
 };
 
 export const createDashboard = async (payload = {}) => {
-  const dashboards = readDashboards();
-  const timestamp = nowIso();
   const sections = Array.isArray(payload.sections) && payload.sections.length > 0
     ? payload.sections
     : [defaultSection(payload.widgets || [])];
+    
   const activeSectionId = sections.some((section) => section.id === payload.activeSectionId)
     ? payload.activeSectionId
     : sections[0]?.id;
-  const created = {
-    id: newDashboardId(),
-    name: payload.name?.trim() || "Untitled Dashboard",
-    description: payload.description?.trim() || "",
+    
+  const name = payload.name?.trim() || "Untitled Dashboard";
+
+  // We wrap the full UI state into _rawFrontendState so the backend persists everything.
+  const rawFrontendState = {
+    name,
     sections,
     activeSectionId,
     widgets: sections.flatMap((section) => section.widgets || []),
-    createdAt: timestamp,
-    updatedAt: timestamp,
   };
 
-  dashboards.unshift(created);
-  writeDashboards(dashboards);
-  return normalizeDashboard(created);
+  const response = await apiClient.post('/dashboards', {
+    title: name,
+    description: payload.description?.trim() || "",
+    _rawFrontendState: rawFrontendState
+  });
+  
+  return normalizeDashboard(response.data.dashboard);
 };
 
 export const updateDashboard = async (dashboardId, payload = {}) => {
-  const dashboards = readDashboards();
-  const index = dashboards.findIndex((dashboard) => dashboard.id === dashboardId);
-  if (index === -1) {
-    throw new Error("Dashboard not found");
+  // First, fetch existing to replicate the merge logic that was previously sync
+  const getRes = await apiClient.get(`/dashboards/${dashboardId}`);
+  if (!getRes.data || !getRes.data.dashboard) {
+     throw new Error("Dashboard not found");
   }
-
-  const existingNormalized = normalizeDashboard(dashboards[index]);
+  const existingNormalized = normalizeDashboard(getRes.data.dashboard);
 
   let sections = existingNormalized.sections;
   if (Array.isArray(payload.sections) && payload.sections.length > 0) {
@@ -126,25 +104,31 @@ export const updateDashboard = async (dashboardId, payload = {}) => {
         ? existingNormalized.activeSectionId
         : sections[0]?.id;
 
-  const updated = {
-    ...dashboards[index],
+  const rawFrontendState = {
+    ...existingNormalized,
     ...payload,
-    name: payload.name ? payload.name.trim() : dashboards[index].name,
-    description: payload.description !== undefined ? payload.description.trim() : dashboards[index].description,
+    name: payload.name ? payload.name.trim() : existingNormalized.name,
+    description: payload.description !== undefined ? payload.description.trim() : existingNormalized.description,
     sections,
     activeSectionId,
     widgets: sections.flatMap((section) => section.widgets || []),
-    updatedAt: nowIso(),
   };
 
-  dashboards[index] = updated;
-  writeDashboards(dashboards);
-  return normalizeDashboard(updated);
+  const clientVersion = typeof payload.__v === "number" ? payload.__v : existingNormalized.__v || 0;
+
+  const response = await apiClient.patch(`/dashboards/${dashboardId}`, {
+    __v: clientVersion,
+    dashboardState: {
+      ...rawFrontendState,
+      title: rawFrontendState.name, // send mapping for backend
+      _rawFrontendState: rawFrontendState
+    }
+  });
+
+  return normalizeDashboard(response.data.dashboard);
 };
 
 export const deleteDashboard = async (dashboardId) => {
-  const dashboards = readDashboards();
-  const filtered = dashboards.filter((dashboard) => dashboard.id !== dashboardId);
-  writeDashboards(filtered);
-  return { deleted: filtered.length !== dashboards.length };
+  const response = await apiClient.delete(`/dashboards/${dashboardId}`);
+  return { deleted: true };
 };

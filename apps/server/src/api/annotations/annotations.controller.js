@@ -177,7 +177,7 @@ exports.updateAnnotation = async (req, res) => {
     if (!existing) return res.status(404).json({ message: 'Annotation not found' });
     assertCanMutate({ actorId, annotation: existing });
 
-    const annotation = await Annotation.findByIdAndUpdate(id, { $set: updateFields }, { new: true, runValidators: true }).lean();
+    const annotation = await Annotation.findByIdAndUpdate(id, { $set: updateFields }, { returnDocument: 'after', runValidators: true }).lean();
 
     return res.json({ annotation });
   } catch (error) {

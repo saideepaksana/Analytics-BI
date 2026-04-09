@@ -16,12 +16,13 @@ exports.listDashboards = async (req, res) => {
 /** POST /api/dashboards */
 exports.createDashboard = async (req, res) => {
   try {
-    const { title = 'New Dashboard', description = '', tags = [], layout = [] } = req.body;
+    const { title = 'New Dashboard', description = '', tags = [], layout = [], _rawFrontendState = null } = req.body;
     const dashboard = await Dashboard.create({
       title,
       description,
       tags,
       layout,
+      _rawFrontendState,
       createdBy: req.user?.id || 'anonymous',
     });
     return res.status(201).json({ dashboard: dashboardMapper.fromDB(dashboard.toJSON()) });
@@ -61,7 +62,7 @@ exports.saveDashboardLayout = async (req, res) => {
     const dashboard = await Dashboard.findByIdAndUpdate(
       req.params.dashboardId,
       { $set: { layout, updatedBy: req.user?.id || 'anonymous' }, $inc: { __v: 1 } },
-      { new: true, runValidators: false }
+      { returnDocument: 'after', runValidators: false }
     ).lean();
     if (!dashboard) return res.status(404).json({ message: 'Dashboard not found' });
     return res.json({ dashboard: dashboardMapper.fromDB(dashboard) });
@@ -117,7 +118,7 @@ exports.patchDashboardMetadata = async (req, res) => {
     const dashboard = await Dashboard.findByIdAndUpdate(
       dashboardId,
       { $set: setObj, $inc: { __v: 1 } },
-      { new: true, runValidators: true }
+      { returnDocument: 'after', runValidators: true }
     ).lean();
 
     if (!dashboard) return res.status(404).json({ message: 'Dashboard not found' });
@@ -170,7 +171,7 @@ exports.patchDashboardState = async (req, res) => {
     const dashboard = await Dashboard.findOneAndUpdate(
       { _id: dashboardId, __v: clientVersion },
       { $set: { ...mapped, updatedBy: req.user?.id || 'anonymous' }, $inc: { __v: 1 } },
-      { new: true, runValidators: true }
+      { returnDocument: 'after', runValidators: true }
     ).lean();
 
     if (!dashboard) return res.status(409).json({ message: 'Conflict: dashboard version mismatch.' });
