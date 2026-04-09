@@ -8,7 +8,7 @@ const Metadata = require("../../models/Metadata");
 const { getIO } = require("../../core/socket");
 const logger = require("../../core/logger");
 
-const MAX_FILE_SIZE_BYTES = 1024 * 1024 * 1024; // 1GB
+const MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024 * 1024; // 2GB
 const allowedExtensions = new Set([".csv", ".xls", ".xlsx"]);
 
 const emitProgress = (uploadId, payload) => {
@@ -185,7 +185,7 @@ const parseUploadRequest = async (req, bucket) => {
       });
 
       fileStream.on("limit", () => {
-        parsingError = new Error("File too large. Max size is 1GB.");
+        parsingError = new Error("File too large. Max size is 2GB.");
         parsingError.sourceFileId = sourceFileId;
         fileStream.unpipe(uploadStream);
         uploadStream.destroy(parsingError);
@@ -377,7 +377,7 @@ exports.uploadFile = async (req, res) => {
 
     if (lowerMessage.includes("file too large")) {
       emitProgress(uploadId, { stage: "failed", progress: 100, detail: "File too large" });
-      return res.status(400).json({ message: "File too large. Max size is 1GB." });
+      return res.status(400).json({ message: "File too large. Max size is 2GB." });
     }
 
     if (lowerMessage.includes("invalid file type")) {

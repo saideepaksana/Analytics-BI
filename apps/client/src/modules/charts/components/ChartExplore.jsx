@@ -14,6 +14,9 @@ const COLOR_SCHEMES = {
   sunset: ["#f97316", "#fb7185", "#f43f5e", "#f59e0b", "#eab308"],
   forest: ["#14532d", "#166534", "#15803d", "#22c55e", "#86efac"],
   mono: ["#334155", "#475569", "#64748b", "#94a3b8", "#cbd5e1"],
+  cyber: ["#8b5cf6", "#c084fc", "#10b981", "#06b6d4", "#e879f9"],
+  emerald: ["#10b981", "#34d399", "#f59e0b", "#3b82f6", "#64748b"],
+  glassy: ["#0284c7", "#38bdf8", "#0ea5e9", "#7dd3fc", "#ef4444"],
 };
 
 const getSchemeByPalette = (palette = []) => {
