@@ -96,6 +96,16 @@ exports.validateChart = async (frontendConfig) => {
       x: ["categorical"],
       y: ["numeric"],
       error: "Pie charts require a categorical dimension for grouping and a numeric measure for slicing."
+    },
+    boxplot: {
+      x: ["categorical", "numeric"], // x is optional but if provided it should be categorical or numeric (though boxplot usually ignores X unless grouped)
+      y: ["numeric"],
+      error: "Box plots require a numeric measure."
+    },
+    histogram: {
+      x: ["categorical", "numeric"],
+      y: ["numeric"],
+      error: "Histograms require a numeric measure."
     }
   };
 

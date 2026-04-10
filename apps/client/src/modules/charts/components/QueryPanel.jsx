@@ -9,6 +9,8 @@ import {
   AreaChart,
   PieChart,
   ScatterChart,
+  Box,
+  BarChart,
   AlertTriangle,
 } from "lucide-react";
 
@@ -21,6 +23,8 @@ const CHART_TYPES = [
   { id: "scatter", icon: ScatterChart, label: "Scatter Plot" },
   { id: "area", icon: AreaChart, label: "Area Chart" },
   { id: "pie", icon: PieChart, label: "Pie Chart" },
+  { id: "boxplot", icon: Box, label: "Box Plot" },
+  { id: "histogram", icon: BarChart, label: "Histogram" },
 ];
 
 /**
@@ -49,10 +53,14 @@ export default function QueryPanel({
   showGrid = true,
   onToggleGrid,
   colorScheme = "vivid",
-  onColorSchemeChange,
   colorSchemeOptions = [],
+  // Distribution chart specific
+  binSize = 10,
+  onSetBinSize,
 }) {
   const isScatter = chartType === "scatter";
+  const isDistribution = chartType === "boxplot" || chartType === "histogram";
+  const isHistogram = chartType === "histogram";
   const [activeTab, setActiveTab] = useState("data");
   const [queryOpen, setQueryOpen] = useState(true);
 
@@ -146,8 +154,8 @@ export default function QueryPanel({
 
             {queryOpen && (
               <div className="query-stack">
-                {/* X-Axis: Standard dimension selection for non-scatter charts */}
-                {!isScatter && (
+                {/* X-Axis: Standard dimension selection for non-scatter and non-distribution charts */}
+                {!isScatter && !isDistribution && (
                   <div className="query-section">
                     <label className="query-section-label">
                       {chartType === "pie" ? "Dimension" : "X-axis"}
@@ -170,7 +178,7 @@ export default function QueryPanel({
                 {/* Metrics: The core data configuration section */}
                 <div className="query-section">
                   <label className="query-section-label">
-                    {isScatter ? "Axis Configuration" : (chartType === "pie" ? "Metric" : "Metrics")}
+                    {isScatter ? "Axis Configuration" : (isDistribution ? "Numeric Column" : (chartType === "pie" ? "Metric" : "Metrics"))}
                   </label>
                   
                   {isScatter ? (
@@ -214,6 +222,44 @@ export default function QueryPanel({
                           ))}
                         </select>
                       </div>
+                    </div>
+                  ) : isDistribution ? (
+                    <div className="metrics-list">
+                      {/* Only one metric allowed for boxplot/histogram */}
+                      <div className="metric-row">
+                        <select
+                          className="query-select field-select"
+                          style={{ width: "100%" }}
+                          value={metrics[0]?.field || ""}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val) {
+                              onSetMetrics([{ field: val, aggregation: "RAW", label: val }]);
+                            } else {
+                              onSetMetrics([]);
+                            }
+                          }}
+                        >
+                          <option value="">Select numeric column…</option>
+                          {columns.filter(c => NUMERIC_TYPE_REGEX.test((c.type || "").toLowerCase())).map(col => (
+                            <option key={col.name} value={col.name}>{col.name}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {isHistogram && (
+                        <div style={{ marginTop: 12 }}>
+                          <label className="sub-label">Bin Size</label>
+                          <input
+                            type="number"
+                            className="query-select"
+                            value={binSize}
+                            min="1"
+                            onChange={(e) => onSetBinSize?.(Number(e.target.value))}
+                            placeholder="Default: 10"
+                          />
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="metrics-list">

@@ -1,7 +1,7 @@
 import React, { useMemo } from "react";
 import ReactECharts from "echarts-for-react";
 
-const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style = {}, annotations = [], isPreview = false }) => {
+const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style = {}, annotations = [], isPreview = false, binSize = 10 }) => {
   const option = useMemo(() => {
     if (!data || data.length === 0) {
       return {
@@ -21,6 +21,105 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
       borderColor: "#1e293b",
       textStyle: { color: "#f8fafc" }
     };
+
+    // --- BOX PLOT ---
+    if (type === "boxplot") {
+      const field = measures[0]?.field;
+      if (!field) return null;
+
+      const rawValues = data.map(item => Number(item[field])).filter(v => !isNaN(v)).sort((a, b) => a - b);
+      if (rawValues.length === 0) return null;
+
+      const getQuartile = (arr, q) => {
+        const pos = (arr.length - 1) * q;
+        const base = Math.floor(pos);
+        const rest = pos - base;
+        return arr[base + 1] !== undefined ? arr[base] + rest * (arr[base + 1] - arr[base]) : arr[base];
+      };
+
+      const boxData = [
+        rawValues[0],
+        getQuartile(rawValues, 0.25),
+        getQuartile(rawValues, 0.5),
+        getQuartile(rawValues, 0.75),
+        rawValues[rawValues.length - 1]
+      ];
+
+      return {
+        backgroundColor: "transparent",
+        tooltip: isPreview ? { show: false } : { ...darkTooltip, trigger: "item" },
+        grid: isPreview ? { top: 0, left: 0, right: 0, bottom: 0 } : { top: "10%", left: "10%", right: "10%", bottom: "15%", containLabel: true },
+        xAxis: {
+          show: !isPreview,
+          type: "category",
+          data: [field],
+          axisLine: { lineStyle: { color: "#334155" } },
+          axisLabel: { color: "#94a3b8" }
+        },
+        yAxis: {
+          show: !isPreview,
+          type: "value",
+          splitLine: { lineStyle: { color: "rgba(148, 163, 184, 0.1)" } },
+          axisLabel: { color: "#94a3b8" }
+        },
+        series: [{
+          name: "BoxPlot",
+          type: "boxplot",
+          data: [boxData],
+          itemStyle: { color: colors[0], borderColor: colors[0], borderWidth: 2 },
+        }]
+      };
+    }
+
+    // --- HISTOGRAM ---
+    if (type === "histogram") {
+      const field = measures[0]?.field;
+      if (!field) return null;
+
+      const rawValues = data.map(item => Number(item[field])).filter(v => !isNaN(v));
+      if (rawValues.length === 0) return null;
+
+      const minVal = Math.min(...rawValues);
+      const maxVal = Math.max(...rawValues);
+      const actualBinSize = binSize || 10;
+      
+      const start = Math.floor(minVal / actualBinSize) * actualBinSize;
+      const end = Math.ceil(maxVal / actualBinSize) * actualBinSize;
+      const binCount = Math.max(1, Math.ceil((end - start) / actualBinSize));
+      
+      const bins = new Array(binCount).fill(0);
+      rawValues.forEach(v => {
+        const idx = Math.min(binCount - 1, Math.floor((v - start) / actualBinSize));
+        bins[idx]++;
+      });
+
+      const binLabels = bins.map((_, i) => isPreview ? "" : `${start + i * actualBinSize} - ${start + (i + 1) * actualBinSize}`);
+
+      return {
+        backgroundColor: "transparent",
+        tooltip: isPreview ? { show: false } : { ...darkTooltip, trigger: "axis" },
+        grid: isPreview ? { top: 0, left: 0, right: 0, bottom: 0 } : { top: "10%", left: "10%", right: "10%", bottom: "15%", containLabel: true },
+        xAxis: {
+          show: !isPreview,
+          type: "category",
+          data: binLabels,
+          axisLine: { lineStyle: { color: "#334155" } },
+          axisLabel: { color: "#94a3b8", rotate: binLabels.length > 8 ? 35 : 0 }
+        },
+        yAxis: {
+          show: !isPreview,
+          type: "value",
+          splitLine: { lineStyle: { color: "rgba(148, 163, 184, 0.1)" } },
+          axisLabel: { color: "#94a3b8" }
+        },
+        series: [{
+          name: field,
+          type: "bar",
+          data: bins,
+          itemStyle: { color: colors[0] },
+        }]
+      };
+    }
 
     // --- SCATTER PLOT ---
     if (type === "scatter") {

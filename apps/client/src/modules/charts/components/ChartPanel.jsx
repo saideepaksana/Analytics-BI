@@ -21,6 +21,7 @@ export default function ChartPanel({
   isDirty = false,
   onUpdateChart,
   sampleData = [],
+  binSize = 10,
 }) {
   const [bottomTab, setBottomTab] = useState("results");
   const echartsRef = useRef(null);
@@ -69,6 +70,108 @@ export default function ChartPanel({
       borderColor: "#1e293b",
       textStyle: { color: "#f8fafc", fontSize: 12 },
     };
+
+    // --- BOX PLOT ---
+    if (chartType === "boxplot") {
+      const field = metrics[0]?.field;
+      if (!field) return null;
+
+      const rawValues = data.map(item => Number(item[field])).filter(v => !isNaN(v)).sort((a, b) => a - b);
+      if (rawValues.length === 0) return null;
+
+      const getQuartile = (arr, q) => {
+        const pos = (arr.length - 1) * q;
+        const base = Math.floor(pos);
+        const rest = pos - base;
+        if (arr[base + 1] !== undefined) {
+          return arr[base] + rest * (arr[base + 1] - arr[base]);
+        } else {
+          return arr[base];
+        }
+      };
+
+      const boxData = [
+        rawValues[0], // min
+        getQuartile(rawValues, 0.25), // Q1
+        getQuartile(rawValues, 0.5),  // median
+        getQuartile(rawValues, 0.75), // Q3
+        rawValues[rawValues.length - 1] // max
+      ];
+
+      return {
+        backgroundColor: "transparent",
+        tooltip: { ...darkTooltip, trigger: "item" },
+        grid: { top: "10%", left: "10%", right: "10%", bottom: "15%", containLabel: true },
+        xAxis: {
+          type: "category",
+          data: [field],
+          axisLine: { lineStyle: { color: "#334155" } },
+          axisLabel: { color: "#94a3b8" }
+        },
+        yAxis: {
+          type: "value",
+          splitLine: { show: showGrid, lineStyle: { color: "rgba(148,163,184,0.08)" } },
+          axisLabel: { color: "#94a3b8" }
+        },
+        series: [{
+          name: "BoxPlot",
+          type: "boxplot",
+          data: [boxData],
+          itemStyle: { color: colors[0], borderColor: colors[0], borderWidth: 2 },
+        }]
+      };
+    }
+
+    // --- HISTOGRAM ---
+    if (chartType === "histogram") {
+      const field = metrics[0]?.field;
+      if (!field) return null;
+
+      const rawValues = data.map(item => Number(item[field])).filter(v => !isNaN(v));
+      if (rawValues.length === 0) return null;
+
+      const minVal = Math.min(...rawValues);
+      const maxVal = Math.max(...rawValues);
+      const actualBinSize = binSize || 10;
+      
+      const start = Math.floor(minVal / actualBinSize) * actualBinSize;
+      const end = Math.ceil(maxVal / actualBinSize) * actualBinSize;
+      const binCount = Math.max(1, Math.ceil((end - start) / actualBinSize));
+      
+      const bins = new Array(binCount).fill(0);
+      rawValues.forEach(v => {
+        const idx = Math.min(binCount - 1, Math.floor((v - start) / actualBinSize));
+        bins[idx]++;
+      });
+
+      const binLabels = bins.map((_, i) => `${start + i * actualBinSize} - ${start + (i + 1) * actualBinSize}`);
+
+      return {
+        backgroundColor: "transparent",
+        tooltip: { ...darkTooltip, trigger: "axis" },
+        grid: { top: "10%", left: "10%", right: "10%", bottom: "15%", containLabel: true },
+        xAxis: {
+          type: "category",
+          data: binLabels,
+          axisLine: { lineStyle: { color: "#334155" } },
+          axisLabel: { color: "#94a3b8", rotate: binLabels.length > 8 ? 35 : 0 }
+        },
+        yAxis: {
+          type: "value",
+          name: "Count",
+          nameTextStyle: { color: "#94a3b8" },
+          splitLine: { show: showGrid, lineStyle: { color: "rgba(148,163,184,0.08)" } },
+          axisLabel: { color: "#94a3b8" }
+        },
+        series: [{
+          name: field,
+          type: "bar",
+          data: bins,
+          itemStyle: { color: colors[0], borderRadius: [4, 4, 0, 0] },
+          barMaxWidth: 100,
+        }]
+      };
+    }
 
     // SCATTER
     if (chartType === "scatter") {
@@ -250,7 +353,7 @@ export default function ChartPanel({
       color: colors,
       series: seriesData,
     };
-  }, [chartType, data, xAxis, metrics, showLegend, showGrid, colorPalette]);
+  }, [chartType, data, xAxis, metrics, showLegend, showGrid, colorPalette, binSize]);
 
   // Get table columns from data
   const tableColumns = data.length > 0 ? Object.keys(data[0]) : [];

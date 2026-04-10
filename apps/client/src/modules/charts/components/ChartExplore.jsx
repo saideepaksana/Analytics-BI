@@ -53,7 +53,11 @@ export default function ChartExplore({ chartId, onBack }) {
     area: { xAxis: null, metrics: [] },
     pie: { xAxis: null, metrics: [] },
     scatter: { xAxis: null, metrics: [] },
+    boxplot: { xAxis: null, metrics: [] },
+    histogram: { xAxis: null, metrics: [] },
   });
+
+  const [binSize, setBinSize] = useState(10);
 
   const initialLoadDone = useRef(false);
 
@@ -63,16 +67,20 @@ export default function ChartExplore({ chartId, onBack }) {
       chartSelections.current[currentType] = {
         xAxis: currentXAxis,
         metrics: currentMetrics,
+        binSize: binSize,
       };
     }
 
     // Restore saved selections for new chart type if they exist
-    const savedSelections = chartSelections.current[newType] || { xAxis: null, metrics: [] };
+    const savedSelections = chartSelections.current[newType] || { xAxis: null, metrics: [], binSize: 10 };
     if (savedSelections.xAxis) {
       setXAxis(savedSelections.xAxis);
     }
     if (savedSelections.metrics && savedSelections.metrics.length > 0) {
       setMetrics(savedSelections.metrics);
+    }
+    if (savedSelections.binSize) {
+      setBinSize(savedSelections.binSize);
     }
 
     setChartType(newType);
@@ -169,6 +177,7 @@ export default function ChartExplore({ chartId, onBack }) {
             setColorScheme(getSchemeByPalette(chart.style?.colorPalette || []));
             setLastSaved(chart.updatedAt);
             setSavedChartId(chart.chartId);
+            if (chart.visualization?.binSize) setBinSize(chart.visualization.binSize);
 
             // Restore query config
             if (chart.visualization?.xAxis) setXAxis(chart.visualization.xAxis);
@@ -190,17 +199,18 @@ export default function ChartExplore({ chartId, onBack }) {
             // ── Auto-query on first load ──
             const chartTypeVal = chart.visualization?.type || "bar";
             const isScatter = chartTypeVal === "scatter";
+            const isDistribution = chartTypeVal === "boxplot" || chartTypeVal === "histogram";
             const isLineOrArea = chartTypeVal === "line" || chartTypeVal === "area";
             const isLineAreaRaw = isLineOrArea && chart.query?.measures?.some((m) => (m.aggregation || "").toUpperCase() === "RAW");
             const finalXAxis = chart.visualization?.xAxis || "";
             
             const queryPayload = {
-              dimensions: isScatter ? [] : (finalXAxis ? [finalXAxis] : []),
+              dimensions: (isScatter || isDistribution) ? [] : (finalXAxis ? [finalXAxis] : []),
               measures: chart.query?.measures || [],
               filters: (chart.query?.filters || []).filter((f) => f.field && f.operator),
               sortBy: chart.query?.sortBy || [],
               orderBy: chart.query?.orderBy || [],
-              raw: isScatter || isLineAreaRaw,
+              raw: isScatter || isDistribution || isLineAreaRaw,
               rowLimit: chart.query?.rowLimit || 10000,
               seriesLimit: chart.query?.seriesLimit || 0,
               contributionMode: chart.query?.contributionMode || "none",
@@ -272,7 +282,7 @@ export default function ChartExplore({ chartId, onBack }) {
       setIsDirty(true);
       setIsChartOutdated(true);
     }
-  }, [xAxis, xAxisSortBy, metrics, dimensionsList, contributionMode, filters, seriesLimit, sortBy, rowLimit, chartType]);
+  }, [xAxis, xAxisSortBy, metrics, dimensionsList, contributionMode, filters, seriesLimit, sortBy, rowLimit, chartType, binSize]);
 
   // Visual-only changes (no query update needed)
   useEffect(() => {
@@ -290,10 +300,11 @@ export default function ChartExplore({ chartId, onBack }) {
 
     try {
       const isScatter = chartType === "scatter";
+      const isDistribution = chartType === "boxplot" || chartType === "histogram";
       const isLineOrArea = chartType === "line" || chartType === "area";
       const isLineAreaRaw = isLineOrArea && metrics.some((m) => (m.aggregation || "").toUpperCase() === "RAW");
       const queryPayload = {
-        dimensions: isScatter ? [] : (xAxis ? [xAxis] : []),
+        dimensions: (isScatter || isDistribution) ? [] : (xAxis ? [xAxis] : []),
         measures: metrics.map((m) => ({
           field: m.field,
           aggregation: m.aggregation,
@@ -302,7 +313,7 @@ export default function ChartExplore({ chartId, onBack }) {
         filters: filters.filter((f) => f.field && f.operator),
         sortBy,
         orderBy: sortBy.length > 0 ? sortBy : (metrics.length > 0 ? [{ field: metrics[0].label || metrics[0].field, direction: "desc" }] : []),
-        raw: isScatter || isLineAreaRaw,
+        raw: isScatter || isDistribution || isLineAreaRaw,
         rowLimit,
         seriesLimit,
         contributionMode,
@@ -318,7 +329,7 @@ export default function ChartExplore({ chartId, onBack }) {
     } finally {
       setIsQuerying(false);
     }
-  }, [selectedDatasetId, chartType, xAxis, metrics, dimensionsList, filters, sortBy, rowLimit, seriesLimit, contributionMode]);
+  }, [selectedDatasetId, chartType, xAxis, metrics, dimensionsList, filters, sortBy, rowLimit, seriesLimit, contributionMode, binSize]);
 
 
 
@@ -328,13 +339,14 @@ export default function ChartExplore({ chartId, onBack }) {
     setIsSaving(true);
     try {
       const isScatter = chartType === "scatter";
+      const isDistribution = chartType === "boxplot" || chartType === "histogram";
       const isLineOrArea = chartType === "line" || chartType === "area";
       const isLineAreaRaw = isLineOrArea && metrics.some((m) => (m.aggregation || "").toUpperCase() === "RAW");
       const isXAxisNumeric = NUMERIC_TYPE_REGEX.test(
         String(columns.find((col) => col.name === xAxis)?.type || "").toLowerCase()
       );
-      const payloadXAxis = isScatter ? (metrics[0]?.field || "") : (xAxis || "");
-      const payloadYAxis = isScatter ? (metrics[1]?.field || "") : (metrics[0]?.label || metrics[0]?.field || "");
+      const payloadXAxis = (isScatter || isDistribution) ? (metrics[0]?.field || "") : (xAxis || "");
+      const payloadYAxis = (isScatter || isDistribution) ? (metrics[1]?.field || metrics[0]?.field || "") : (metrics[0]?.label || metrics[0]?.field || "");
 
       const payload = {
         ...(savedChartId ? { chartId: savedChartId } : {}),
@@ -349,9 +361,9 @@ export default function ChartExplore({ chartId, onBack }) {
             aggregation: m.aggregation,
             label: m.label,
           })),
-          raw: isScatter || isLineAreaRaw,
+          raw: isScatter || isDistribution || isLineAreaRaw,
           filters: filters.filter((f) => f.field && f.operator),
-          groupBy: !isScatter && xAxis ? [xAxis] : [],
+          groupBy: !(isScatter || isDistribution) && xAxis ? [xAxis] : [],
           orderBy: sortBy,
         },
         visualization: {
@@ -359,6 +371,7 @@ export default function ChartExplore({ chartId, onBack }) {
           xAxis: payloadXAxis,
           yAxis: payloadYAxis,
           series: { stack: false, grouped: true },
+          binSize: chartType === "histogram" ? binSize : undefined,
         },
         style: {
           colorPalette: COLOR_SCHEMES[colorScheme] || COLOR_SCHEMES.vivid,
@@ -378,7 +391,7 @@ export default function ChartExplore({ chartId, onBack }) {
     } finally {
       setIsSaving(false);
     }
-  }, [savedChartId, chartName, selectedDatasetId, chartType, xAxis, metrics, dimensionsList, filters, sortBy, showLegend, showGrid, colorScheme, columns]);
+  }, [savedChartId, chartName, selectedDatasetId, chartType, xAxis, metrics, dimensionsList, filters, sortBy, showLegend, showGrid, colorScheme, columns, binSize]);
 
   // ── Handle column click from source panel ──
   const handleColumnClick = useCallback((col, role) => {
@@ -524,6 +537,8 @@ export default function ChartExplore({ chartId, onBack }) {
             label: id.charAt(0).toUpperCase() + id.slice(1),
             colors,
           }))}
+          binSize={binSize}
+          onSetBinSize={setBinSize}
         />
 
         <ChartPanel
@@ -540,6 +555,7 @@ export default function ChartExplore({ chartId, onBack }) {
           isDirty={isChartOutdated}
           onUpdateChart={handleUpdateChart}
           sampleData={sampleData}
+          binSize={binSize}
         />
       </div>
     </div>

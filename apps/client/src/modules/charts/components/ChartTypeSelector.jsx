@@ -1,5 +1,5 @@
 import React from "react";
-import { BarChart3, LineChart, PieChart, AreaChart, ScatterChart } from "lucide-react";
+import { BarChart3, LineChart, PieChart, AreaChart, ScatterChart, Box } from "lucide-react";
 
 const CHART_TYPES = [
   { id: "bar", label: "Bar Chart", icon: BarChart3, description: "Compare categorical data using rectangular bars." },
@@ -7,6 +7,8 @@ const CHART_TYPES = [
   { id: "pie", label: "Pie Chart", icon: PieChart, description: "Show proportions of a whole across categories." },
   { id: "area", label: "Area Chart", icon: AreaChart, description: "Similar to line charts but with filled areas." },
   { id: "scatter", label: "Scatter Plot", icon: ScatterChart, description: "Identify relationships between two numeric variables." },
+  { id: "boxplot", label: "Box Plot", icon: Box, description: "Visualize data distribution through quartiles." },
+  { id: "histogram", label: "Histogram", icon: BarChart3, description: "Show frequency distribution of a numeric variable." },
 ];
 
 export default function ChartTypeSelector({ selectedType, onSelect }) {

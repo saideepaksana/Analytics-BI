@@ -23,9 +23,10 @@ export default function ChartCard({ chart, onDelete, onEdit, onView }) {
 
         const chartType = chart.visualization?.type || chart.type;
         const isScatter = chartType === "scatter";
+        const isDistribution = chartType === "boxplot" || chartType === "histogram";
         let query;
-        if (isScatter) {
-          // Scatter needs raw individual records, not aggregated data
+        if (isScatter || isDistribution) {
+          // Scatter and Distribution charts need raw individual records, not aggregated data
           query = {
             dimensions: chart.query?.dimensions || [],
             measures: chart.query?.measures || [],
@@ -89,6 +90,7 @@ export default function ChartCard({ chart, onDelete, onEdit, onView }) {
             dimensions={chart.query?.dimensions?.map(d => d.field || d) || []}
             measures={chart.query?.measures || []}
             style={chart.style}
+            binSize={chart.visualization?.binSize}
           />
         )}
       </div>
