@@ -54,6 +54,7 @@ export default function QueryPanel({
   onToggleGrid,
   colorScheme = "vivid",
   colorSchemeOptions = [],
+  onColorSchemeChange,
   // Distribution chart specific
   binSize = 10,
   onSetBinSize,
@@ -225,27 +226,38 @@ export default function QueryPanel({
                     </div>
                   ) : isDistribution ? (
                     <div className="metrics-list">
-                      {/* Only one metric allowed for boxplot/histogram */}
-                      <div className="metric-row">
-                        <select
-                          className="query-select field-select"
-                          style={{ width: "100%" }}
-                          value={metrics[0]?.field || ""}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            if (val) {
-                              onSetMetrics([{ field: val, aggregation: "RAW", label: val }]);
-                            } else {
-                              onSetMetrics([]);
-                            }
-                          }}
-                        >
-                          <option value="">Select numeric column…</option>
-                          {columns.filter(c => NUMERIC_TYPE_REGEX.test((c.type || "").toLowerCase())).map(col => (
-                            <option key={col.name} value={col.name}>{col.name}</option>
-                          ))}
-                        </select>
-                      </div>
+                      {metrics.map((m, idx) => (
+                        <div key={idx} className="metric-row">
+                          <select
+                            className="query-select field-select"
+                            style={{ width: metrics.length > 1 ? "calc(100% - 30px)" : "100%" }}
+                            value={m.field || ""}
+                            onChange={(e) => {
+                              const next = [...metrics];
+                              next[idx] = { ...next[idx], field: e.target.value, label: e.target.value, aggregation: "RAW" };
+                              onSetMetrics(next);
+                            }}
+                          >
+                            <option value="">Select numeric column…</option>
+                            {columns
+                              .filter((c) => NUMERIC_TYPE_REGEX.test((c.type || "").toLowerCase()))
+                              .map((col) => (
+                                <option key={col.name} value={col.name}>
+                                  {col.name}
+                                </option>
+                              ))}
+                          </select>
+                          {metrics.length > 1 && (
+                            <button
+                              className="filter-remove-btn"
+                              onClick={() => onRemoveMetric(idx)}
+                              title="Remove metric"
+                            >
+                              <X size={14} />
+                            </button>
+                          )}
+                        </div>
+                      ))}
 
                       {isHistogram && (
                         <div style={{ marginTop: 12 }}>
@@ -260,6 +272,26 @@ export default function QueryPanel({
                           />
                         </div>
                       )}
+
+                      <button
+                        className="filter-add-btn"
+                        style={{ marginTop: 12 }}
+                        onClick={() => {
+                          const firstNumeric = columns.find((c) =>
+                            NUMERIC_TYPE_REGEX.test((c.type || "").toLowerCase())
+                          );
+                          if (firstNumeric) {
+                            onAddMetric({
+                              field: firstNumeric.name,
+                              aggregation: "RAW",
+                              label: firstNumeric.name,
+                            });
+                          }
+                        }}
+                      >
+                        <Plus size={12} />
+                        Add Metric
+                      </button>
                     </div>
                   ) : (
                     <div className="metrics-list">

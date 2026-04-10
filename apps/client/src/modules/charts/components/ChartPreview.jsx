@@ -24,37 +24,59 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
 
     // --- BOX PLOT ---
     if (type === "boxplot") {
-      const field = measures[0]?.field;
-      if (!field) return null;
+      const boxDataList = [];
+      const axisData = [];
 
-      const rawValues = data.map(item => Number(item[field])).filter(v => !isNaN(v)).sort((a, b) => a - b);
-      if (rawValues.length === 0) return null;
+      measures.forEach((m, idx) => {
+        const field = m.field;
+        if (!field) return;
 
-      const getQuartile = (arr, q) => {
-        const pos = (arr.length - 1) * q;
-        const base = Math.floor(pos);
-        const rest = pos - base;
-        return arr[base + 1] !== undefined ? arr[base] + rest * (arr[base + 1] - arr[base]) : arr[base];
-      };
+        const rawValues = data
+          .map((item) => Number(item[field]))
+          .filter((v) => !isNaN(v))
+          .sort((a, b) => a - b);
 
-      const boxData = [
-        rawValues[0],
-        getQuartile(rawValues, 0.25),
-        getQuartile(rawValues, 0.5),
-        getQuartile(rawValues, 0.75),
-        rawValues[rawValues.length - 1]
-      ];
+        if (rawValues.length === 0) return;
+
+        const getQuartile = (arr, q) => {
+          const pos = (arr.length - 1) * q;
+          const base = Math.floor(pos);
+          const rest = pos - base;
+          return arr[base + 1] !== undefined ? arr[base] + rest * (arr[base + 1] - arr[base]) : arr[base];
+        };
+
+        const boxData = [
+          rawValues[0],
+          getQuartile(rawValues, 0.25),
+          getQuartile(rawValues, 0.5),
+          getQuartile(rawValues, 0.75),
+          rawValues[rawValues.length - 1]
+        ];
+
+        const itemColor = colors[idx % colors.length];
+        boxDataList.push({
+          value: boxData,
+          itemStyle: {
+            color: itemColor,
+            borderColor: itemColor,
+            borderWidth: 2,
+          },
+        });
+        axisData.push(m.label || field);
+      });
+
+      if (boxDataList.length === 0) return null;
 
       return {
         backgroundColor: "transparent",
         tooltip: isPreview ? { show: false } : { ...darkTooltip, trigger: "item" },
-        grid: isPreview ? { top: 0, left: 0, right: 0, bottom: 0 } : { top: "10%", left: "10%", right: "10%", bottom: "15%", containLabel: true },
+        grid: isPreview ? { top: '5%', left: '5%', right: '5%', bottom: '5%' } : { top: "10%", left: "10%", right: "10%", bottom: "15%", containLabel: true },
         xAxis: {
           show: !isPreview,
           type: "category",
-          data: [field],
+          data: axisData,
           axisLine: { lineStyle: { color: "#334155" } },
-          axisLabel: { color: "#94a3b8" }
+          axisLabel: { color: "#94a3b8", rotate: axisData.length > 5 ? 30 : 0 }
         },
         yAxis: {
           show: !isPreview,
@@ -62,43 +84,64 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
           splitLine: { lineStyle: { color: "rgba(148, 163, 184, 0.1)" } },
           axisLabel: { color: "#94a3b8" }
         },
+        color: colors,
+        legend: { show: false }, // Hide legend for box plot as per design
         series: [{
           name: "BoxPlot",
           type: "boxplot",
-          data: [boxData],
-          itemStyle: { color: colors[0], borderColor: colors[0], borderWidth: 2 },
+          data: boxDataList,
         }]
       };
     }
 
     // --- HISTOGRAM ---
     if (type === "histogram") {
-      const field = measures[0]?.field;
-      if (!field) return null;
+      const validMetrics = measures.filter((m) => m.field);
+      if (validMetrics.length === 0) return null;
 
-      const rawValues = data.map(item => Number(item[field])).filter(v => !isNaN(v));
-      if (rawValues.length === 0) return null;
+      let globalMin = Infinity;
+      let globalMax = -Infinity;
+      const metricsData = [];
 
-      const minVal = Math.min(...rawValues);
-      const maxVal = Math.max(...rawValues);
-      const actualBinSize = binSize || 10;
-      
-      const start = Math.floor(minVal / actualBinSize) * actualBinSize;
-      const end = Math.ceil(maxVal / actualBinSize) * actualBinSize;
-      const binCount = Math.max(1, Math.ceil((end - start) / actualBinSize));
-      
-      const bins = new Array(binCount).fill(0);
-      rawValues.forEach(v => {
-        const idx = Math.min(binCount - 1, Math.floor((v - start) / actualBinSize));
-        bins[idx]++;
+      validMetrics.forEach((m) => {
+        const vals = data.map((item) => Number(item[m.field])).filter((v) => !isNaN(v));
+        if (vals.length > 0) {
+          globalMin = Math.min(globalMin, ...vals);
+          globalMax = Math.max(globalMax, ...vals);
+          metricsData.push({ m, vals });
+        }
       });
 
-      const binLabels = bins.map((_, i) => isPreview ? "" : `${start + i * actualBinSize} - ${start + (i + 1) * actualBinSize}`);
+      if (metricsData.length === 0) return null;
+
+      const actualBinSize = binSize || 10;
+      const start = Math.floor(globalMin / actualBinSize) * actualBinSize;
+      const end = Math.ceil(globalMax / actualBinSize) * actualBinSize;
+      const binCount = Math.max(1, Math.ceil((end - start) / actualBinSize));
+
+      const binLabels = new Array(binCount).fill(0).map((_, i) => 
+        isPreview ? "" : `${start + i * actualBinSize} - ${start + (i + 1) * actualBinSize}`
+      );
+
+      const series = metricsData.map(({ m, vals }) => {
+        const bins = new Array(binCount).fill(0);
+        vals.forEach((v) => {
+          const idx = Math.min(binCount - 1, Math.floor((v - start) / actualBinSize));
+          bins[idx]++;
+        });
+        return {
+          name: m.label || m.field,
+          type: "bar",
+          data: bins,
+          itemStyle: { borderRadius: [4, 4, 0, 0] },
+          barMaxWidth: 100,
+        };
+      });
 
       return {
         backgroundColor: "transparent",
         tooltip: isPreview ? { show: false } : { ...darkTooltip, trigger: "axis" },
-        grid: isPreview ? { top: 0, left: 0, right: 0, bottom: 0 } : { top: "10%", left: "10%", right: "10%", bottom: "15%", containLabel: true },
+        grid: isPreview ? { top: '5%', left: '5%', right: '5%', bottom: '15%' } : { top: "10%", left: "10%", right: "10%", bottom: "15%", containLabel: true },
         xAxis: {
           show: !isPreview,
           type: "category",
@@ -112,12 +155,9 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
           splitLine: { lineStyle: { color: "rgba(148, 163, 184, 0.1)" } },
           axisLabel: { color: "#94a3b8" }
         },
-        series: [{
-          name: field,
-          type: "bar",
-          data: bins,
-          itemStyle: { color: colors[0] },
-        }]
+        color: colors,
+        legend: { show: isPreview ? false : (style.showLegend !== false), textStyle: { color: "#94a3b8" }, bottom: 0 },
+        series
       };
     }
 

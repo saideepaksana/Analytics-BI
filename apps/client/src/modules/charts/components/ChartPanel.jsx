@@ -73,30 +73,52 @@ export default function ChartPanel({
 
     // --- BOX PLOT ---
     if (chartType === "boxplot") {
-      const field = metrics[0]?.field;
-      if (!field) return null;
+      const boxDataList = [];
+      const axisData = [];
 
-      const rawValues = data.map(item => Number(item[field])).filter(v => !isNaN(v)).sort((a, b) => a - b);
-      if (rawValues.length === 0) return null;
+      metrics.forEach((m, idx) => {
+        const field = m.field;
+        if (!field) return;
 
-      const getQuartile = (arr, q) => {
-        const pos = (arr.length - 1) * q;
-        const base = Math.floor(pos);
-        const rest = pos - base;
-        if (arr[base + 1] !== undefined) {
-          return arr[base] + rest * (arr[base + 1] - arr[base]);
-        } else {
-          return arr[base];
-        }
-      };
+        const rawValues = data
+          .map((item) => Number(item[field]))
+          .filter((v) => !isNaN(v))
+          .sort((a, b) => a - b);
 
-      const boxData = [
-        rawValues[0], // min
-        getQuartile(rawValues, 0.25), // Q1
-        getQuartile(rawValues, 0.5),  // median
-        getQuartile(rawValues, 0.75), // Q3
-        rawValues[rawValues.length - 1] // max
-      ];
+        if (rawValues.length === 0) return;
+
+        const getQuartile = (arr, q) => {
+          const pos = (arr.length - 1) * q;
+          const base = Math.floor(pos);
+          const rest = pos - base;
+          if (arr[base + 1] !== undefined) {
+            return arr[base] + rest * (arr[base + 1] - arr[base]);
+          } else {
+            return arr[base];
+          }
+        };
+
+        const boxData = [
+          rawValues[0], // min
+          getQuartile(rawValues, 0.25), // Q1
+          getQuartile(rawValues, 0.5), // median
+          getQuartile(rawValues, 0.75), // Q3
+          rawValues[rawValues.length - 1], // max
+        ];
+
+        const itemColor = colors[idx % colors.length];
+        boxDataList.push({
+          value: boxData,
+          itemStyle: {
+            color: itemColor,
+            borderColor: itemColor,
+            borderWidth: 2,
+          },
+        });
+        axisData.push(m.label || field);
+      });
+
+      if (boxDataList.length === 0) return null;
 
       return {
         backgroundColor: "transparent",
@@ -104,47 +126,73 @@ export default function ChartPanel({
         grid: { top: "10%", left: "10%", right: "10%", bottom: "15%", containLabel: true },
         xAxis: {
           type: "category",
-          data: [field],
+          data: axisData,
           axisLine: { lineStyle: { color: "#334155" } },
-          axisLabel: { color: "#94a3b8" }
+          axisLabel: { color: "#94a3b8", rotate: axisData.length > 5 ? 30 : 0 },
         },
         yAxis: {
           type: "value",
           splitLine: { show: showGrid, lineStyle: { color: "rgba(148,163,184,0.08)" } },
-          axisLabel: { color: "#94a3b8" }
+          axisLabel: { color: "#94a3b8" },
         },
-        series: [{
-          name: "BoxPlot",
-          type: "boxplot",
-          data: [boxData],
-          itemStyle: { color: colors[0], borderColor: colors[0], borderWidth: 2 },
-        }]
+        color: colors,
+        legend: {
+          show: false, // User requested no legend for Box Plot
+        },
+        series: [
+          {
+            name: "BoxPlot",
+            type: "boxplot",
+            data: boxDataList,
+          },
+        ],
       };
     }
 
     // --- HISTOGRAM ---
     if (chartType === "histogram") {
-      const field = metrics[0]?.field;
-      if (!field) return null;
+      const validMetrics = metrics.filter((m) => m.field);
+      if (validMetrics.length === 0) return null;
 
-      const rawValues = data.map(item => Number(item[field])).filter(v => !isNaN(v));
-      if (rawValues.length === 0) return null;
+      // Find global min/max for consistent binning
+      let globalMin = Infinity;
+      let globalMax = -Infinity;
+      const metricsData = [];
 
-      const minVal = Math.min(...rawValues);
-      const maxVal = Math.max(...rawValues);
-      const actualBinSize = binSize || 10;
-      
-      const start = Math.floor(minVal / actualBinSize) * actualBinSize;
-      const end = Math.ceil(maxVal / actualBinSize) * actualBinSize;
-      const binCount = Math.max(1, Math.ceil((end - start) / actualBinSize));
-      
-      const bins = new Array(binCount).fill(0);
-      rawValues.forEach(v => {
-        const idx = Math.min(binCount - 1, Math.floor((v - start) / actualBinSize));
-        bins[idx]++;
+      validMetrics.forEach((m) => {
+        const vals = data.map((item) => Number(item[m.field])).filter((v) => !isNaN(v));
+        if (vals.length > 0) {
+          globalMin = Math.min(globalMin, ...vals);
+          globalMax = Math.max(globalMax, ...vals);
+          metricsData.push({ m, vals });
+        }
       });
 
-      const binLabels = bins.map((_, i) => `${start + i * actualBinSize} - ${start + (i + 1) * actualBinSize}`);
+      if (metricsData.length === 0) return null;
+
+      const actualBinSize = binSize || 10;
+      const start = Math.floor(globalMin / actualBinSize) * actualBinSize;
+      const end = Math.ceil(globalMax / actualBinSize) * actualBinSize;
+      const binCount = Math.max(1, Math.ceil((end - start) / actualBinSize));
+
+      const binLabels = new Array(binCount)
+        .fill(0)
+        .map((_, i) => `${start + i * actualBinSize} - ${start + (i + 1) * actualBinSize}`);
+
+      const series = metricsData.map(({ m, vals }) => {
+        const bins = new Array(binCount).fill(0);
+        vals.forEach((v) => {
+          const idx = Math.min(binCount - 1, Math.floor((v - start) / actualBinSize));
+          bins[idx]++;
+        });
+        return {
+          name: m.label || m.field,
+          type: "bar",
+          data: bins,
+          itemStyle: { borderRadius: [4, 4, 0, 0] },
+          barMaxWidth: 100,
+        };
+      });
 
       return {
         backgroundColor: "transparent",
@@ -154,22 +202,22 @@ export default function ChartPanel({
           type: "category",
           data: binLabels,
           axisLine: { lineStyle: { color: "#334155" } },
-          axisLabel: { color: "#94a3b8", rotate: binLabels.length > 8 ? 35 : 0 }
+          axisLabel: { color: "#94a3b8", rotate: binLabels.length > 8 ? 35 : 0 },
         },
         yAxis: {
           type: "value",
           name: "Count",
           nameTextStyle: { color: "#94a3b8" },
           splitLine: { show: showGrid, lineStyle: { color: "rgba(148,163,184,0.08)" } },
-          axisLabel: { color: "#94a3b8" }
+          axisLabel: { color: "#94a3b8" },
         },
-        series: [{
-          name: field,
-          type: "bar",
-          data: bins,
-          itemStyle: { color: colors[0], borderRadius: [4, 4, 0, 0] },
-          barMaxWidth: 100,
-        }]
+        color: colors,
+        legend: {
+          show: showLegend,
+          textStyle: { color: "#94a3b8" },
+          bottom: 0,
+        },
+        series,
       };
     }
 
