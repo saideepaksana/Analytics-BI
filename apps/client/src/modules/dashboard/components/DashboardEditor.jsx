@@ -193,7 +193,11 @@ function DashboardWidgetChart({ chart }) {
   );
 }
 
-function DashboardWidget({ widget, chart, layout, readOnly, onRemove, onDragStart, onResizeStart, isDragging, isResizing }) {
+function DashboardWidget({ widget, chart, layout, readOnly, onRemove, onDragStart, onResizeStart, isDragging, isResizing, onUpdateWidget }) {
+  const [showMenu, setShowMenu] = useState(false);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [tempTitle, setTempTitle] = useState("");
+
   const style = {
     left: `${layout.left}px`,
     top: `${layout.top}px`,
@@ -214,26 +218,112 @@ function DashboardWidget({ widget, chart, layout, readOnly, onRemove, onDragStar
       >
         <div className="dashboard-widget-title-wrap">
           {!readOnly && <Grip size={14} className="dashboard-widget-drag-handle" />}
-          <h5>{chart?.name || "Missing chart"}</h5>
+          {isEditingTitle ? (
+            <input
+              autoFocus
+              className="dashboard-name-input"
+              style={{
+                padding: "0 4px",
+                fontSize: "12px",
+                height: "auto",
+                minHeight: "20px",
+                margin: 0,
+                width: "100%",
+                border: "1px solid var(--border)",
+                borderRadius: "4px"
+              }}
+              value={tempTitle}
+              onChange={(e) => setTempTitle(e.target.value)}
+              onBlur={() => {
+                setIsEditingTitle(false);
+                onUpdateWidget(widget.id, { title: tempTitle.trim() });
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  setIsEditingTitle(false);
+                  onUpdateWidget(widget.id, { title: tempTitle.trim() });
+                }
+              }}
+              onMouseDown={(e) => e.stopPropagation()}
+            />
+          ) : (
+            <h5>{widget.title || chart?.name || "Missing chart"}</h5>
+          )}
         </div>
         <div className="dashboard-widget-actions">
-          {!readOnly ? (
-            <button
-              type="button"
-              className="dashboard-widget-icon-btn danger"
-              onMouseDown={(event) => event.stopPropagation()}
-              onClick={(event) => {
-                event.stopPropagation();
-                onRemove(widget.id);
-              }}
-              title="Remove chart"
-            >
-              <Trash2 size={13} />
-            </button>
-          ) : (
-            <button type="button" className="dashboard-widget-icon-btn subtle">
-              <MoreVertical size={14} />
-            </button>
+          {!readOnly && (
+            <>
+              <div style={{ position: "relative", display: "inline-block" }}>
+                <button
+                  type="button"
+                  className="dashboard-widget-icon-btn action"
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setShowMenu(!showMenu);
+                  }}
+                  title="Menu"
+                >
+                  <MoreVertical size={13} />
+                </button>
+                {showMenu && (
+                  <div
+                    className="dashboard-widget-menu"
+                    style={{
+                      position: "absolute",
+                      right: 0,
+                      top: "100%",
+                      background: "var(--bg-3, #1e2126)",
+                      border: "1px solid var(--border, #333)",
+                      borderRadius: "4px",
+                      padding: "4px 0",
+                      zIndex: 100,
+                      minWidth: "120px",
+                      boxShadow: "0 4px 6px rgba(0,0,0,0.3)"
+                    }}
+                  >
+                    <button
+                      type="button"
+                      style={{
+                        width: "100%",
+                        padding: "6px 12px",
+                        textAlign: "left",
+                        background: "none",
+                        border: "none",
+                        color: "var(--fg-1, #e0e0e0)",
+                        cursor: "pointer",
+                        fontSize: "12px",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px"
+                      }}
+                      onMouseDown={(event) => event.stopPropagation()}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setShowMenu(false);
+                        setTempTitle(widget.title || chart?.name || "");
+                        setIsEditingTitle(true);
+                      }}
+                    >
+                      <Pencil size={12} />
+                      Rename
+                    </button>
+                  </div>
+                )}
+              </div>
+              <button
+                type="button"
+                className="dashboard-widget-icon-btn danger"
+                onMouseDown={(event) => event.stopPropagation()}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onRemove(widget.id);
+                }}
+                title="Remove chart"
+              >
+                <Trash2 size={13} />
+              </button>
+            </>
           )}
         </div>
       </header>
@@ -452,6 +542,12 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
 
   const removeWidget = useCallback((widgetId) => {
     setWidgets((previous) => previous.filter((widget) => widget.id !== widgetId));
+  }, []);
+
+  const updateWidget = useCallback((widgetId, updates) => {
+    setWidgets((previous) =>
+      previous.map((widget) => (widget.id === widgetId ? { ...widget, ...updates } : widget))
+    );
   }, []);
 
   useEffect(() => {
@@ -708,12 +804,6 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
                 <Plus size={14} />
                 Add chart
               </button>
-              {dashboard?.id && (
-                <button type="button" className="dashboard-danger-btn" onClick={() => onDelete?.(dashboard.id)}>
-                  <Trash2 size={14} />
-                  Delete
-                </button>
-              )}
               <button type="button" className="dashboard-primary-btn" onClick={submitSave} disabled={isSaving}>
                 {isSaving ? <Loader2 size={14} className="spinner" /> : "Save"}
               </button>
@@ -755,6 +845,7 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
                   layout={widget}
                   readOnly={!isEditMode}
                   onRemove={removeWidget}
+                  onUpdateWidget={updateWidget}
                   onDragStart={startDrag}
                   onResizeStart={startResize}
                   isDragging={action?.widgetId === widget.id && action?.type === "drag"}
