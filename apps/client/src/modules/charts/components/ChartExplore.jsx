@@ -55,6 +55,8 @@ export default function ChartExplore({ chartId, onBack }) {
     scatter: { xAxis: null, metrics: [] },
   });
 
+  const initialLoadDone = useRef(false);
+
   const handleSetChartType = useCallback((newType, currentType, currentXAxis, currentMetrics) => {
     // Save current selections before switching
     if (currentType && chartSelections.current[currentType]) {
@@ -106,11 +108,32 @@ export default function ChartExplore({ chartId, onBack }) {
   const [savedChartId, setSavedChartId] = useState(isEditing ? chartId : null);
   const [lastSaved, setLastSaved] = useState(null);
   const [isDirty, setIsDirty] = useState(false);
+  const [isChartOutdated, setIsChartOutdated] = useState(false);
   const [error, setError] = useState(null);
 
-  // Track if initial load from editing
-  const initialLoadDone = useRef(false);
   const [schemaLoaded, setSchemaLoaded] = useState(false);
+
+  // ── Navigation Guard ──
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (isDirty) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isDirty]);
+
+  const handleBack = useCallback(() => {
+    if (isDirty) {
+      if (window.confirm("You have unsaved changes. Are you sure you want to leave?")) {
+        onBack();
+      }
+    } else {
+      onBack();
+    }
+  }, [isDirty, onBack]);
 
   const extractErrorMessage = (err, fallback) => {
     return err?.response?.data?.message || err?.response?.data?.detail || err?.message || fallback;
@@ -145,6 +168,7 @@ export default function ChartExplore({ chartId, onBack }) {
             setShowGrid(chart.style?.showGrid !== false);
             setColorScheme(getSchemeByPalette(chart.style?.colorPalette || []));
             setLastSaved(chart.updatedAt);
+            setSavedChartId(chart.chartId);
 
             // Restore query config
             if (chart.visualization?.xAxis) setXAxis(chart.visualization.xAxis);
@@ -163,6 +187,39 @@ export default function ChartExplore({ chartId, onBack }) {
             if (chart.query?.filters?.length > 0) {
               setFilters(chart.query.filters);
             }
+            // ── Auto-query on first load ──
+            const chartTypeVal = chart.visualization?.type || "bar";
+            const isScatter = chartTypeVal === "scatter";
+            const isLineOrArea = chartTypeVal === "line" || chartTypeVal === "area";
+            const isLineAreaRaw = isLineOrArea && chart.query?.measures?.some((m) => (m.aggregation || "").toUpperCase() === "RAW");
+            const finalXAxis = chart.visualization?.xAxis || "";
+            
+            const queryPayload = {
+              dimensions: isScatter ? [] : (finalXAxis ? [finalXAxis] : []),
+              measures: chart.query?.measures || [],
+              filters: (chart.query?.filters || []).filter((f) => f.field && f.operator),
+              sortBy: chart.query?.sortBy || [],
+              orderBy: chart.query?.orderBy || [],
+              raw: isScatter || isLineAreaRaw,
+              rowLimit: chart.query?.rowLimit || 10000,
+              seriesLimit: chart.query?.seriesLimit || 0,
+              contributionMode: chart.query?.contributionMode || "none",
+            };
+
+            setIsQuerying(true);
+            try {
+              const response = await queryDataset(chart.dataSource.datasetId, queryPayload);
+              setResultData(response.results || []);
+              setRowCount(response.rowCount || 0);
+              setExecutionTimeMs(response.executionTimeMs || 0);
+              setIsDirty(false); 
+              setIsChartOutdated(false);
+            } catch (qErr) {
+              console.error("Initial load query failed", qErr);
+            } finally {
+              setIsQuerying(false);
+            }
+
             initialLoadDone.current = true;
           }
         } catch (err) {
@@ -171,6 +228,19 @@ export default function ChartExplore({ chartId, onBack }) {
       })();
     }
   }, [isEditing, chartId]);
+
+  // ── Fresh Start ──
+  // Ensure that when entering "New" mode, all state is wiped clean
+  useEffect(() => {
+    if (!isEditing && initialLoadDone.current) {
+      setXAxis(null);
+      setMetrics([]);
+      setFilters([]);
+      setResultData([]);
+      setIsDirty(false);
+      initialLoadDone.current = false;
+    }
+  }, [isEditing]);
 
   // ── Fetch schema when dataset changes ──
   useEffect(() => {
@@ -186,44 +256,37 @@ export default function ChartExplore({ chartId, onBack }) {
         setColumns(data.schema || []);
         setSampleData(data.preview || []);
 
-        // Auto-select first dimension and metric for new charts
-        if (!schemaLoaded && (!isEditing || !initialLoadDone.current)) {
-          const schema = data.schema || [];
-          const numericCols = schema.filter((col) => {
-            const t = (col.type || "").toLowerCase();
-            return t.includes("int") || t.includes("float") || t.includes("number") || t.includes("decimal");
-          });
-          const textCols = schema.filter((col) => !numericCols.some((n) => n.name === col.name));
-
-          if (textCols.length > 0 && !xAxis) {
-            setXAxis(textCols[0].name);
-          }
-          if (metrics.length === 0) {
-            setMetrics([{ field: "*", aggregation: "COUNT", label: "COUNT(*)" }]);
-          }
-          setSchemaLoaded(true);
-        }
+        // Auto-selection disabled as requested
+        setSchemaLoaded(true);
       } catch (err) {
         console.error("Failed to fetch schema", err);
       } finally {
         setLoadingSchema(false);
       }
     })();
-  }, [selectedDatasetId, isEditing, schemaLoaded, xAxis, metrics]);
+  }, [selectedDatasetId]);
 
   // ── Mark dirty when config changes ──
   useEffect(() => {
     if (resultData.length > 0) {
       setIsDirty(true);
+      setIsChartOutdated(true);
     }
-  }, [xAxis, xAxisSortBy, metrics, dimensionsList, contributionMode, filters, seriesLimit, sortBy, rowLimit, chartType, showLegend, showGrid, colorScheme]);
+  }, [xAxis, xAxisSortBy, metrics, dimensionsList, contributionMode, filters, seriesLimit, sortBy, rowLimit, chartType]);
+
+  // Visual-only changes (no query update needed)
+  useEffect(() => {
+    if (resultData.length > 0) {
+      setIsDirty(true);
+    }
+  }, [chartName, showLegend, showGrid, colorScheme]);
 
   // ── Execute query ──
   const handleUpdateChart = useCallback(async () => {
     if (!selectedDatasetId) return;
     setIsQuerying(true);
     setError(null);
-    setIsDirty(false);
+    setIsChartOutdated(false);
 
     try {
       const isScatter = chartType === "scatter";
@@ -257,31 +320,7 @@ export default function ChartExplore({ chartId, onBack }) {
     }
   }, [selectedDatasetId, chartType, xAxis, metrics, dimensionsList, filters, sortBy, rowLimit, seriesLimit, contributionMode]);
 
-  useEffect(() => {
-    if (!selectedDatasetId || loadingDatasets || loadingSchema) return;
 
-    const hasRenderableQuery =
-      chartType === "scatter" ? metrics.length >= 2 : metrics.length > 0;
-
-    if (!hasRenderableQuery) return;
-
-    const timer = setTimeout(() => {
-      handleUpdateChart();
-    }, 200);
-
-    return () => clearTimeout(timer);
-  }, [
-    selectedDatasetId,
-    chartType,
-    xAxis,
-    metrics,
-    dimensionsList,
-    filters,
-    contributionMode,
-    loadingDatasets,
-    loadingSchema,
-    handleUpdateChart,
-  ]);
 
   // ── Save chart ──
   const handleSave = useCallback(async () => {
@@ -294,12 +333,15 @@ export default function ChartExplore({ chartId, onBack }) {
       const isXAxisNumeric = NUMERIC_TYPE_REGEX.test(
         String(columns.find((col) => col.name === xAxis)?.type || "").toLowerCase()
       );
+      const payloadXAxis = isScatter ? (metrics[0]?.field || "") : (xAxis || "");
+      const payloadYAxis = isScatter ? (metrics[1]?.field || "") : (metrics[0]?.label || metrics[0]?.field || "");
+
       const payload = {
         ...(savedChartId ? { chartId: savedChartId } : {}),
         name: chartName || "Untitled Chart",
         dataSource: { datasetId: selectedDatasetId, table: "cleaned_records" },
         query: {
-          dimensions: (xAxis
+          dimensions: (!isScatter && xAxis
             ? [{ field: xAxis, type: isXAxisNumeric ? "continuous" : "categorical" }]
             : []),
           measures: metrics.map((m) => ({
@@ -309,13 +351,13 @@ export default function ChartExplore({ chartId, onBack }) {
           })),
           raw: isScatter || isLineAreaRaw,
           filters: filters.filter((f) => f.field && f.operator),
-          groupBy: xAxis ? [xAxis] : [],
+          groupBy: !isScatter && xAxis ? [xAxis] : [],
           orderBy: sortBy,
         },
         visualization: {
           type: chartType,
-          xAxis: xAxis || "",
-          yAxis: metrics[0]?.label || metrics[0]?.field || "",
+          xAxis: payloadXAxis,
+          yAxis: payloadYAxis,
           series: { stack: false, grouped: true },
         },
         style: {
@@ -424,7 +466,7 @@ export default function ChartExplore({ chartId, onBack }) {
         isDirty={isDirty}
         isSaving={isSaving}
         onSave={handleSave}
-        onBack={onBack}
+        onBack={handleBack}
         lastSaved={lastSaved}
       />
 
@@ -495,7 +537,7 @@ export default function ChartExplore({ chartId, onBack }) {
           colorPalette={COLOR_SCHEMES[colorScheme] || COLOR_SCHEMES.vivid}
           rowCount={rowCount}
           executionTimeMs={executionTimeMs}
-          isDirty={isDirty}
+          isDirty={isChartOutdated}
           onUpdateChart={handleUpdateChart}
           sampleData={sampleData}
         />

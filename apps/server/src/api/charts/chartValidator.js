@@ -78,9 +78,14 @@ exports.validateChart = async (frontendConfig) => {
       error: "Bar charts require a categorical dimension on the X axis and a numeric measure on the Y axis."
     },
     line: {
-      x: ["categorical"], // Line charts often use dates/categories
+      x: ["categorical", "numeric"],
       y: ["numeric"],
-      error: "Line charts require a categorical dimension on the X axis and a numeric measure on the Y axis."
+      error: "Line charts require a dimension (categorical or numeric) on the X axis and a numeric measure on the Y axis."
+    },
+    area: {
+      x: ["categorical", "numeric"],
+      y: ["numeric"],
+      error: "Area charts require a dimension (categorical or numeric) on the X axis and a numeric measure on the Y axis."
     },
     scatter: {
       x: ["numeric"],

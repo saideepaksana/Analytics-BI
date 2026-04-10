@@ -109,14 +109,8 @@ export default function SourcePanel({
               Metrics
             </span>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              {pendingMetricAggregation ? (
-                <span className="source-section-count" title="Click a numeric column to apply this aggregation">
-                  Selected: {pendingMetricAggregation}
-                </span>
-              ) : null}
-              <span className="source-section-count">
-                Showing {filteredMetrics.length} of {metrics.length} items
-              </span>
+
+
               <ChevronDown
                 size={14}
                 className={`source-section-chevron ${metricsOpen ? "open" : ""}`}
@@ -131,8 +125,7 @@ export default function SourcePanel({
                   <div
                     key={col.name}
                     className="source-column-item"
-                    onClick={() => onColumnClick(col, "metric")}
-                    title={`Click to add ${col.name} as a metric`}
+                    style={{ opacity: 0.8, cursor: "default" }}
                   >
                     <span className={`source-column-icon ${className}`}>{icon}</span>
                     <span className="source-column-name">{col.name}</span>
@@ -154,14 +147,8 @@ export default function SourcePanel({
               Columns
             </span>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              {pendingMetricAggregation ? (
-                <span className="source-section-count">
-                  Pick a numeric column
-                </span>
-              ) : null}
-              <span className="source-section-count">
-                Showing {filteredColumns.length} of {regularColumns.length} items
-              </span>
+
+
               <ChevronDown
                 size={14}
                 className={`source-section-chevron ${columnsOpen ? "open" : ""}`}
@@ -177,12 +164,7 @@ export default function SourcePanel({
                   <div
                     key={col.name}
                     className="source-column-item"
-                    onClick={() => onColumnClick(col, "column")}
-                    title={
-                      pendingMetricAggregation && isNumeric
-                        ? `Click to add ${pendingMetricAggregation}(${col.name}) metric`
-                        : `Click to add ${col.name} to X-axis`
-                    }
+                    style={{ opacity: 0.8, cursor: "default" }}
                   >
                     <span className={`source-column-icon ${className}`}>{icon}</span>
                     <span className="source-column-name">{col.name}</span>

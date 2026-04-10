@@ -34,6 +34,7 @@ function IngestionWizard({ onCompleted, activeBackgroundTasks = [] }) {
   const [datasetsError, setDatasetsError] = useState("");
   const [availableDatasets, setAvailableDatasets] = useState([]);
   const [relatedDatasets, setRelatedDatasets] = useState([]);
+  const [hasFetchedDatasets, setHasFetchedDatasets] = useState(false);
   const cancelSourceRef = useRef(null);
   const socketRef = useRef(null);
 

@@ -94,7 +94,10 @@ export default function ChartPanel({
           nameTextStyle: { color: "#94a3b8" },
           axisLine: { lineStyle: { color: "#334155" } },
           axisLabel: { color: "#94a3b8" },
-          splitLine: { lineStyle: { color: "rgba(148,163,184,0.08)" } },
+          splitLine: { 
+            show: showGrid,
+            lineStyle: { color: "rgba(148,163,184,0.08)" } 
+          },
         },
         yAxis: {
           type: "value",
@@ -102,11 +105,21 @@ export default function ChartPanel({
           nameTextStyle: { color: "#94a3b8" },
           axisLine: { lineStyle: { color: "#334155" } },
           axisLabel: { color: "#94a3b8" },
-          splitLine: { lineStyle: { color: "rgba(148,163,184,0.08)" } },
+          splitLine: { 
+            show: showGrid,
+            lineStyle: { color: "rgba(148,163,184,0.08)" } 
+          },
+        },
+        legend: {
+          show: showLegend,
+          textStyle: { color: "#94a3b8" },
+          bottom: 0,
+          type: "scroll",
         },
         color: colors,
         series: [
           {
+            name: `${xField} vs ${yField}`,
             type: "scatter",
             data: scatterData,
             symbolSize: 10,
@@ -200,7 +213,7 @@ export default function ChartPanel({
       backgroundColor: "transparent",
       tooltip: { ...darkTooltip, trigger: "axis" },
       legend: {
-        show: showLegend && metrics.length >= 1,
+        show: showLegend,
         textStyle: { color: "#94a3b8" },
         bottom: 0,
         type: "scroll",
@@ -221,11 +234,17 @@ export default function ChartPanel({
         nameTextStyle: hasNumericXAxis ? { color: "#94a3b8" } : undefined,
         axisLine: { lineStyle: { color: "#334155" } },
         axisLabel: { color: "#94a3b8", rotate: xAxisData.length > 12 ? 35 : 0 },
-        splitLine: { show: false },
+        splitLine: { 
+          show: showGrid,
+          lineStyle: { color: "rgba(148,163,184,0.08)" } 
+        },
       },
       yAxis: {
         type: "value",
-        splitLine: { lineStyle: { color: "rgba(148,163,184,0.08)" } },
+        splitLine: { 
+          show: showGrid,
+          lineStyle: { color: "rgba(148,163,184,0.08)" } 
+        },
         axisLabel: { color: "#94a3b8" },
       },
       color: colors,

@@ -5,6 +5,11 @@
   background: var(--bg);
 }
 
+.app-frame.locked {
+  height: 100vh;
+  overflow: hidden;
+}
+
 /* ── Sidebar ── */
 .app-sidebar {
   position: sticky;

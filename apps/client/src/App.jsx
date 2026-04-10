@@ -99,7 +99,7 @@ function App() {
   ];
 
   return (
-    <div className="app-frame" data-theme={theme} style={{ position: "relative" }}>
+    <div className={`app-frame ${chartsExploreMode || dashboardEditorMode ? "locked" : ""}`} data-theme={theme} style={{ position: "relative" }}>
       <button 
         className="theme-toggle" 
         onClick={() => setTheme(theme === "light" ? "dark" : "light")}
@@ -142,7 +142,7 @@ function App() {
         </div>
       </aside>
 
-      <main className={`app-shell ${dashboardEditorMode ? "app-shell-dashboard-editor" : ""}`}>
+      <main className={`app-shell ${dashboardEditorMode ? "app-shell-dashboard-editor" : ""} ${chartsExploreMode ? "app-shell-charts-explore" : ""}`}>
         {activeHeader && !chartsExploreMode && !dashboardEditorMode && (
           <header className="app-header">
             <h1>{activeHeader.title}</h1>

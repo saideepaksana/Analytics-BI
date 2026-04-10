@@ -101,6 +101,7 @@ export default function ChartsPage({ onExploreMode }) {
   if (exploreChartId !== null) {
     return (
       <ChartExplore
+        key={exploreChartId}
         chartId={exploreChartId}
         onBack={handleBackFromExplore}
       />
