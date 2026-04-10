@@ -58,9 +58,12 @@ function ensureTransientError(err) {
 const BACKGROUND_TASK_HANDLERS = {
   // Example handler — remove once you wire in real jobs:
   "test-job": async (job) => {
-    const { message } = job.data;
-    logger.info(`[test-job] ${message}`, "Worker");
-    await new Promise((r) => setTimeout(r, 500));
+    const { message, duration, simulateFailure } = job.data;
+    if (simulateFailure) {
+      throw new Error(`Simulated failure for job ${job.id}`);
+    }
+    logger.info(`[test-job] ${message || `ID: ${job.id}`} (duration: ${duration || 500}ms)`, "Worker");
+    await new Promise((r) => setTimeout(r, duration || 500));
     return { status: "ok", echo: message };
   },
 

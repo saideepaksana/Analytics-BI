@@ -14,6 +14,8 @@ const {
   queryDatasetData,
   validatePayload,
   previewGroupStage,
+  addRelationship,
+  removeRelationship,
 } = require("./datasets.controller");
 
 router.get("/", listDatasets);
@@ -22,6 +24,8 @@ router.get("/:datasetId/schema", getDatasetSchema);
 router.post("/:datasetId/query", queryDatasetData);
 router.post("/:datasetId/query/preview-stage", previewGroupStage);
 router.post("/:datasetId/validate-payload", validatePayload);
+router.post("/:datasetId/relationships", addRelationship);
+router.delete("/:datasetId/relationships", removeRelationship);
 router.patch("/:datasetId/schema/:columnName", updateSchemaColumn);
 router.delete("/:datasetId/quarantine/:rowIndex", deleteQuarantinedRow);
 router.delete("/:datasetId/quarantine", deleteAllQuarantinedRows);

@@ -101,8 +101,9 @@ function IngestionWizard({ onCompleted, activeBackgroundTasks = [] }) {
   useEffect(() => () => cancelSourceRef.current?.cancel?.("Component unmounted"), []);
 
   useEffect(() => {
-    if (currentStep === 3 && availableDatasets.length === 0 && !datasetsLoading) {
+    if (currentStep === 3 && !hasFetchedDatasets && !datasetsLoading) {
       setDatasetsLoading(true);
+      setHasFetchedDatasets(true);
       setDatasetsError("");
       listDatasets()
         .then((data) => {
@@ -115,7 +116,7 @@ function IngestionWizard({ onCompleted, activeBackgroundTasks = [] }) {
         .catch((err) => setDatasetsError(getRequestErrorMessage(err, "Failed to load datasets for linking")))
         .finally(() => setDatasetsLoading(false));
     }
-  }, [currentStep, availableDatasets.length, needsDatasetId, datasetId, datasetsLoading]);
+  }, [currentStep, hasFetchedDatasets, needsDatasetId, datasetId, datasetsLoading]);
 
   useEffect(() => {
     if (!uploadId) {

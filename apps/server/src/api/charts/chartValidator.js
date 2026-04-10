@@ -1,4 +1,5 @@
 const Metadata = require("../../models/Metadata");
+const { isNumeric } = require("../../core/typeConstants");
 
 class ChartValidationError extends Error {
   constructor(message) {
@@ -50,16 +51,16 @@ exports.validateChart = async (frontendConfig) => {
     throw new ChartValidationError(`Dataset "${datasetId}" not found for validation.`);
   }
 
-  const typeClassification = {
-    measure: ["int", "float", "number", "decimal", "double", "numeric", "real", "long"],
-    dimension: ["string", "text", "categorical", "bool", "boolean", "date", "timestamp", "time"],
-  };
-
   const getColType = (fieldName) => {
-    const col = metadata.schema?.find(c => c.name === fieldName);
+    // Case-insensitive lookup
+    const colNameLower = String(fieldName || "").toLowerCase();
+    const col = metadata.schema?.find(c => String(c.name || "").toLowerCase() === colNameLower);
+    
     if (!col) return null;
     const t = (col.type || col.dataType || "string").toLowerCase();
-    if (typeClassification.measure.some(mt => t.includes(mt))) return "numeric";
+    
+    // Use shared logic to determine if it is numeric
+    if (isNumeric(t)) return "numeric";
     return "categorical";
   };
 

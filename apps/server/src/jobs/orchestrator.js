@@ -211,11 +211,37 @@ const resumeQueue = async (queue) => {
   logger.info(`Queue "${queue.name}" RESUMED.`, "Orchestrator");
 };
 
+/**
+ * Restart a failed job by its ID.
+ * Moves the job from 'failed' back to 'wait' status.
+ *
+ * @param {Queue}  queue
+ * @param {string} jobId
+ * @returns {Promise<boolean>}
+ */
+const retryJob = async (queue, jobId) => {
+  const job = await queue.getJob(jobId);
+  if (!job) {
+    logger.error(`Cannot retry job: ID "${jobId}" not found in queue "${queue.name}"`, "Orchestrator");
+    return false;
+  }
+
+  const state = await job.getState();
+  if (state !== "failed") {
+    logger.warn(`Job "${jobId}" is currently in "${state}" state. Retry only works for failed jobs.`, "Orchestrator");
+    return false;
+  }
+
+  await job.retry();
+  logger.info(`Manual retry initiated for job "${jobId}" in queue "${queue.name}"`, "Orchestrator");
+  return true;
+};
+
 // ---------------------------------------------------------------------------
 // Re-export the shared bulkIngestionQueue from queue.js
 // (queue.js owns all Queue instances — orchestrator must not create its own)
 // ---------------------------------------------------------------------------
-const { bulkIngestionQueue } = require("./queue");
+const { bulkIngestionQueue, backgroundTasksQueue } = require("./queue");
 
 module.exports = {
   CONCURRENCY_PROFILES,
@@ -226,5 +252,7 @@ module.exports = {
   getQueueStats,
   pauseQueue,
   resumeQueue,
+  retryJob,
   bulkIngestionQueue,
+  backgroundTasksQueue,
 };

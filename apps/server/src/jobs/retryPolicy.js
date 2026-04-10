@@ -95,6 +95,9 @@ const isPermanentFailure = (error) => {
   // Explicit permanent classification
   if (error?.permanent === true) return true;
 
+  // Explicit status code check (4xx errors are usually non-retryable)
+  if (error?.status && [400, 401, 403, 404, 422].includes(error.status)) return true;
+
   // Known unrecoverable error types
   const permanentMessages = [
     "ValidationError",

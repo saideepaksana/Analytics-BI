@@ -124,18 +124,41 @@ const refreshDatasetRelationships = async (targetDatasetId, explicitlyRelatedDat
   const detectedRelationships = detectRelationships(relationshipInputs);
 
   const docsToUpdate = metadataDocs.map((doc) => {
-    const retainedOldEdges = (doc.relationships || []).filter((edge) => {
+    // 1. Keep relationships to datasets NOT involved in this refresh
+    const unrelatedEdges = (doc.relationships || []).filter((edge) => {
       const otherSide = edge.fromCollection === doc.datasetId ? edge.toCollection : edge.fromCollection;
       return !datasetsToLink.includes(otherSide);
     });
 
-    const newEdgesForDoc = detectedRelationships
+    // 2. Keep MANUALLY created relationships (confidence: 1.0) even if they ARE in the refresh set
+    const manualEdges = (doc.relationships || []).filter((edge) => {
+      const isInRefresh = datasetsToLink.includes(edge.fromCollection === doc.datasetId ? edge.toCollection : edge.fromCollection);
+      return isInRefresh && edge.confidence === 1.0;
+    });
+
+    // 3. Get new inferred edges from the relationship mapper
+    const newInferredEdges = detectedRelationships
       .filter((rel) => rel.fromCollection === doc.datasetId || rel.toCollection === doc.datasetId)
       .map(({ strategy, ...safeRelationship }) => safeRelationship);
 
+    // 4. Merge (Avoid duplicates: manual link takes precedence over inferred link for the same column pair)
+    const combined = [...unrelatedEdges, ...manualEdges];
+    
+    newInferredEdges.forEach(inferred => {
+      const isDuplicate = combined.some(existing => 
+        existing.fromCollection === inferred.fromCollection &&
+        existing.toCollection === inferred.toCollection &&
+        existing.fromColumn === inferred.fromColumn &&
+        existing.toColumn === inferred.toColumn
+      );
+      if (!isDuplicate) {
+        combined.push(inferred);
+      }
+    });
+
     return {
       datasetId: doc.datasetId,
-      relationships: [...retainedOldEdges, ...newEdgesForDoc]
+      relationships: combined
     };
   });
 

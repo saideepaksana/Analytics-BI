@@ -8,6 +8,7 @@ const os = require("os");
 const logger = require("../../core/logger");
 const { validateRow, cleanAndNormalizeRow, semanticValidateRow } = require("../../pipelines/dts/index");
 const schemaValidator = require("../../core/SchemaValidator");
+const { isNumeric } = require("../../core/typeConstants");
 
 const findQuarantineRowByIndexOrNumber = async (datasetId, rawIndex) => {
   const parsed = Number.parseInt(rawIndex, 10);
@@ -105,6 +106,39 @@ exports.getDatasetMetadata = async (req, res) => {
         .lean(),
     ]);
 
+    // Enrich relationships with human-readable dataset names (Zoho-style ER view)
+    const rawRelationships = metadata.relationships || [];
+    let enrichedRelationships = rawRelationships;
+
+    if (rawRelationships.length > 0) {
+      // Collect all unique related datasetIds (excluding the current one, which we already have)
+      const relatedIds = [
+        ...new Set(
+          rawRelationships.flatMap((r) => [r.fromCollection, r.toCollection]).filter(Boolean)
+        ),
+      ];
+
+      // Single batch lookup → { datasetId: fileName }
+      const relatedMeta = await Metadata.find({ datasetId: { $in: relatedIds } })
+        .select("datasetId fileName")
+        .lean();
+
+      const nameMap = {};
+      for (const m of relatedMeta) {
+        nameMap[m.datasetId] = m.fileName || m.datasetId;
+      }
+
+      enrichedRelationships = rawRelationships.map((r) => ({
+        fromCollection: r.fromCollection,
+        fromDatasetName: nameMap[r.fromCollection] || r.fromCollection,
+        fromColumn: r.fromColumn,
+        toCollection: r.toCollection,
+        toDatasetName: nameMap[r.toCollection] || r.toCollection,
+        toColumn: r.toColumn,
+        confidence: r.confidence,
+      }));
+    }
+
     return res.json({
       metadata: {
         datasetId: metadata.datasetId,
@@ -115,7 +149,7 @@ exports.getDatasetMetadata = async (req, res) => {
         createdAt: metadata.createdAt,
       },
       schema: metadata.schema || [],
-      relationships: metadata.relationships || [],
+      relationships: enrichedRelationships,
       quarantinedRows: quarantinedDocs.map((r) => ({
         _id: r._id,
         rowNumber: r.rowNumber,
@@ -140,13 +174,6 @@ exports.getDatasetSchema = async (req, res) => {
     if (!metadata) {
       return res.status(404).json({ message: "Dataset not found" });
     }
-
-    const typeClassification = {
-      measure: ["int", "float", "number", "decimal", "double", "numeric", "real", "long"],
-      dimension: ["string", "text", "categorical", "bool", "boolean", "date", "timestamp", "time"],
-    };
-
-    const isNumeric = (type = "") => typeClassification.measure.some((t) => type.toLowerCase().includes(t));
 
     const columns = (metadata.schema || []).map((col) => {
       const fieldType = col.type || col.dataType || "string";
@@ -781,6 +808,82 @@ exports.validatePayload = async (req, res) => {
     });
   } catch (error) {
     logger.error(`validatePayload error: ${error.message}`, "Datasets");
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+// POST /api/datasets/:datasetId/relationships
+exports.addRelationship = async (req, res) => {
+  try {
+    const { datasetId } = req.params;
+    const { fromColumn, toCollection, toColumn } = req.body;
+
+    if (!fromColumn || !toCollection || !toColumn) {
+      return res.status(400).json({ message: "fromColumn, toCollection, and toColumn are required" });
+    }
+
+    const [sourceMeta, targetMeta] = await Promise.all([
+      Metadata.findOne({ datasetId }).lean(),
+      Metadata.findOne({ datasetId: toCollection }).lean()
+    ]);
+
+    if (!sourceMeta) return res.status(404).json({ message: `Source dataset "${datasetId}" not found` });
+    if (!targetMeta) return res.status(404).json({ message: `Target dataset "${toCollection}" not found` });
+
+    const sourceCol = sourceMeta.schema?.find(c => c.name === fromColumn);
+    const targetCol = targetMeta.schema?.find(c => c.name === toColumn);
+
+    if (!sourceCol) return res.status(400).json({ message: `Column "${fromColumn}" not found in source dataset` });
+    if (!targetCol) return res.status(400).json({ message: `Column "${toColumn}" not found in target dataset` });
+
+    const exists = sourceMeta.relationships?.some(r => 
+      (r.fromCollection === datasetId && r.toCollection === toCollection && r.fromColumn === fromColumn && r.toColumn === toColumn) ||
+      (r.fromCollection === toCollection && r.toCollection === datasetId && r.fromColumn === toColumn && r.toColumn === fromColumn)
+    );
+
+    if (exists) return res.status(409).json({ message: "Relationship already exists" });
+
+    const newRel = {
+      fromCollection: datasetId,
+      fromColumn,
+      toCollection,
+      toColumn,
+      confidence: 1.0 
+    };
+
+    await Promise.all([
+      Metadata.updateOne({ datasetId }, { $push: { relationships: newRel } }),
+      Metadata.updateOne({ datasetId: toCollection }, { $push: { relationships: newRel } })
+    ]);
+
+    return res.json({ message: "Relationship added successfully", relationship: newRel });
+  } catch (error) {
+    logger.error(`addRelationship error: ${error.message}`, "Datasets");
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+// DELETE /api/datasets/:datasetId/relationships
+exports.removeRelationship = async (req, res) => {
+  try {
+    const { datasetId } = req.params;
+    const { fromColumn, toCollection, toColumn } = req.body;
+
+    const filter = {
+      $or: [
+        { fromCollection: datasetId, fromColumn, toCollection, toColumn },
+        { fromCollection: toCollection, fromColumn: toColumn, toCollection: datasetId, toColumn: fromColumn }
+      ]
+    };
+
+    const [sourceUpdate, targetUpdate] = await Promise.all([
+      Metadata.updateOne({ datasetId }, { $pull: { relationships: { fromCollection: datasetId, toCollection, fromColumn, toColumn } } }),
+      Metadata.updateOne({ datasetId: toCollection }, { $pull: { relationships: { fromCollection: datasetId, toCollection, fromColumn, toColumn } } })
+    ]);
+
+    return res.json({ message: "Relationship removed successfully" });
+  } catch (error) {
+    logger.error(`removeRelationship error: ${error.message}`, "Datasets");
     return res.status(500).json({ message: "Internal server error" });
   }
 };

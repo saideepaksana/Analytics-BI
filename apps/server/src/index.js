@@ -141,6 +141,24 @@ app.get("/api/jobs/stats", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// POST /api/jobs/retry/:jobId
+// Retries a failed job by ID (moved from failed -> wait).
+app.post("/api/jobs/retry/:jobId", async (req, res) => {
+  try {
+    const { retryJob, backgroundTasksQueue } = require("./jobs/orchestrator");
+    const { jobId } = req.params;
+    const success = await retryJob(backgroundTasksQueue, jobId);
+    
+    if (success) {
+      res.json({ message: `Job ${jobId} re-enqueued for retry` });
+    } else {
+      res.status(400).json({ error: "Job could not be retried. Ensure it exists and is in 'failed' state." });
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 // ─────────────────────────────────────────────────────────────────────────────
 
 //check server status

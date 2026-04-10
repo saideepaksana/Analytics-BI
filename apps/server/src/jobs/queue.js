@@ -131,10 +131,33 @@ const addBulkIngestionJob = async (jobName, data, opts = {}) => {
   return bulkIngestionQueue.add(jobName, data, opts);
 };
 
+/**
+ * Wait for a job in a specific queue to finish (complete or fail).
+ * Uses the Job instance method for reliable waiting.
+ *
+ * @param {string} queueName
+ * @param {string} jobId
+ * @param {number} [timeout=30000]
+ * @returns {Promise<any>} - Resolves with job return value, rejects on failure
+ */
+const waitUntilFinished = async (queueName, jobId, timeout = 30000) => {
+  const queue = queues[queueName];
+  if (!queue) throw new Error(`Queue "${queueName}" not initialized.`);
+
+  const job = await queue.getJob(jobId);
+  if (!job) throw new Error(`Job "${jobId}" not found in queue "${queueName}".`);
+
+  const events = getQueueEvents(queueName);
+  if (!events) throw new Error(`QueueEvents for "${queueName}" not initialized.`);
+
+  return job.waitUntilFinished(events, timeout);
+};
+
 module.exports = {
   QUEUE_NAMES,
   getQueue,
   getQueueEvents,
+  waitUntilFinished,
   backgroundTasksQueue,
   bulkIngestionQueue,
   addBackgroundTask,
