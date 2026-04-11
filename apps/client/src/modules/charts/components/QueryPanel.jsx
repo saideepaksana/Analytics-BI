@@ -58,6 +58,8 @@ export default function QueryPanel({
   // Distribution chart specific
   binSize = 10,
   onSetBinSize,
+  stacking = false,
+  onSetStacking,
 }) {
   const isScatter = chartType === "scatter";
   const isDistribution = chartType === "boxplot" || chartType === "histogram";
@@ -439,6 +441,20 @@ export default function QueryPanel({
                 })}
               </div>
             </div>
+
+            {(chartType === "bar" || chartType === "line" || chartType === "area") && (
+              <div className="customize-toggle">
+                <div className="customize-toggle-copy">
+                  <label>Stacked Mode</label>
+                  <span>Display multiple metrics in a stacked format.</span>
+                </div>
+                <button
+                  className={`toggle-switch ${stacking ? "on" : ""}`}
+                  onClick={() => onSetStacking?.(!stacking)}
+                  aria-label="Toggle stacked rendering"
+                />
+              </div>
+            )}
           </div>
         )}
       </div>

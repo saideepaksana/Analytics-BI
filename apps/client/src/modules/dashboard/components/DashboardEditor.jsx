@@ -189,6 +189,7 @@ function DashboardWidgetChart({ chart }) {
       dimensions={normalizeDimensions(getDimensionsFromChart(chart))}
       measures={getMeasuresFromChart(chart)}
       style={{ ...chart.style, minHeight: "0px" }}
+      stacking={chart.visualization?.series?.stack || false}
     />
   );
 }

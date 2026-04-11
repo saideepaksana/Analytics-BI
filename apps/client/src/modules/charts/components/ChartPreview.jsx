@@ -1,7 +1,7 @@
 import React, { useMemo } from "react";
 import ReactECharts from "echarts-for-react";
 
-const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style = {}, annotations = [], isPreview = false, binSize = 10 }) => {
+const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style = {}, annotations = [], isPreview = false, binSize = 10, stacking = false }) => {
   const option = useMemo(() => {
     if (!data || data.length === 0) {
       return {
@@ -299,7 +299,8 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
         data: renderedSeriesData,
         areaStyle: type === "area" ? {} : undefined,
         smooth: true,
-        emphasis: { focus: "series" }
+        emphasis: { focus: "series" },
+        stack: stacking ? "total" : undefined,
       };
     });
 
@@ -344,7 +345,7 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
       }));
     }
     return baseOption;
-  }, [type, data, dimensions, measures, style, annotations]);
+  }, [type, data, dimensions, measures, style, annotations, stacking]);
 
   return (
     <div className="chart-preview-wrapper" style={{ height: "100%", width: "100%", minHeight: isPreview ? "0px" : (style?.minHeight !== undefined ? style.minHeight : "400px") }}>

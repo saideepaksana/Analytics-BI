@@ -91,6 +91,7 @@ export default function ChartCard({ chart, onDelete, onEdit, onView }) {
             measures={chart.query?.measures || []}
             style={chart.style}
             binSize={chart.visualization?.binSize}
+            stacking={chart.visualization?.series?.stack || false}
           />
         )}
       </div>

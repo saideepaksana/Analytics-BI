@@ -106,6 +106,7 @@ export default function ChartExplore({ chartId, onBack }) {
   const [showLegend, setShowLegend] = useState(true);
   const [showGrid, setShowGrid] = useState(true);
   const [colorScheme, setColorScheme] = useState("vivid");
+  const [stacking, setStacking] = useState(false);
 
   // ── Results state ──
   const [resultData, setResultData] = useState([]);
@@ -175,6 +176,7 @@ export default function ChartExplore({ chartId, onBack }) {
             setShowLegend(chart.style?.showLegend !== false);
             setShowGrid(chart.style?.showGrid !== false);
             setColorScheme(getSchemeByPalette(chart.style?.colorPalette || []));
+            setStacking(chart.visualization?.series?.stack || false);
             setLastSaved(chart.updatedAt);
             setSavedChartId(chart.chartId);
             if (chart.visualization?.binSize) setBinSize(chart.visualization.binSize);
@@ -289,7 +291,7 @@ export default function ChartExplore({ chartId, onBack }) {
     if (resultData.length > 0) {
       setIsDirty(true);
     }
-  }, [chartName, showLegend, showGrid, colorScheme]);
+  }, [chartName, showLegend, showGrid, colorScheme, stacking]);
 
   // ── Execute query ──
   const handleUpdateChart = useCallback(async () => {
@@ -370,7 +372,7 @@ export default function ChartExplore({ chartId, onBack }) {
           type: chartType,
           xAxis: payloadXAxis,
           yAxis: payloadYAxis,
-          series: { stack: false, grouped: true },
+          series: { stack: stacking, grouped: !stacking },
           binSize: chartType === "histogram" ? binSize : undefined,
         },
         style: {
@@ -391,7 +393,7 @@ export default function ChartExplore({ chartId, onBack }) {
     } finally {
       setIsSaving(false);
     }
-  }, [savedChartId, chartName, selectedDatasetId, chartType, xAxis, metrics, dimensionsList, filters, sortBy, showLegend, showGrid, colorScheme, columns, binSize]);
+  }, [savedChartId, chartName, selectedDatasetId, chartType, xAxis, metrics, dimensionsList, filters, sortBy, showLegend, showGrid, colorScheme, columns, binSize, stacking]);
 
   // ── Handle column click from source panel ──
   const handleColumnClick = useCallback((col, role) => {
@@ -539,6 +541,8 @@ export default function ChartExplore({ chartId, onBack }) {
           }))}
           binSize={binSize}
           onSetBinSize={setBinSize}
+          stacking={stacking}
+          onSetStacking={setStacking}
         />
 
         <ChartPanel
@@ -556,6 +560,7 @@ export default function ChartExplore({ chartId, onBack }) {
           onUpdateChart={handleUpdateChart}
           sampleData={sampleData}
           binSize={binSize}
+          stacking={stacking}
         />
       </div>
     </div>

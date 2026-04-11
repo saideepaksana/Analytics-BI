@@ -22,6 +22,7 @@ export default function ChartPanel({
   onUpdateChart,
   sampleData = [],
   binSize = 10,
+  stacking = false,
 }) {
   const [bottomTab, setBottomTab] = useState("results");
   const echartsRef = useRef(null);
@@ -357,6 +358,7 @@ export default function ChartPanel({
         smooth: chartType === "line" || chartType === "area",
         emphasis: { focus: "series" },
         barMaxWidth: 50,
+        stack: stacking ? "total" : undefined,
       };
     });
 
@@ -401,7 +403,7 @@ export default function ChartPanel({
       color: colors,
       series: seriesData,
     };
-  }, [chartType, data, xAxis, metrics, showLegend, showGrid, colorPalette, binSize]);
+  }, [chartType, data, xAxis, metrics, showLegend, showGrid, colorPalette, binSize, stacking]);
 
   // Get table columns from data
   const tableColumns = data.length > 0 ? Object.keys(data[0]) : [];
