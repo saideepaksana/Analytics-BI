@@ -1216,3 +1216,129 @@ button:disabled {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
 }
+/* ── Model Review (Step 5) ── */
+.model-review-step {
+  animation: fade-in 300ms ease;
+}
+
+.relationship-list {
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  margin-top: 1rem;
+}
+
+.rel-header {
+  display: grid;
+  grid-template-columns: 2fr 1fr 100px;
+  padding: 10px 16px;
+  background: var(--surface-raised);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--border);
+}
+
+.rel-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 100px;
+  padding: 14px 16px;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  transition: background 200ms ease;
+}
+
+.rel-row:last-child {
+  border-bottom: none;
+}
+
+.rel-row:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.rel-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'JetBrains Mono', 'Roboto Mono', monospace;
+  font-size: 13px;
+}
+
+.rel-col {
+  color: var(--brand);
+  background: var(--brand-glow);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.rel-arrow {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.rel-dest {
+  color: var(--accent);
+  background: var(--accent-glow);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.badge-inferred {
+  background: var(--surface-raised);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+
+.badge-manual {
+  background: rgba(34, 197, 94, 0.1);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.2);
+}
+
+.rel-actions .icon-btn.delete {
+  background: transparent;
+  color: var(--danger);
+  border: none;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.rel-actions .icon-btn.delete:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.empty-state-mini {
+  padding: 2rem;
+  text-align: center;
+  color: var(--muted);
+  font-style: italic;
+  font-size: 14px;
+}
+
+.loading-state .spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--border);
+  border-top-color: var(--brand);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

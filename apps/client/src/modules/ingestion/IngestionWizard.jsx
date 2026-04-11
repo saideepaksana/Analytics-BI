@@ -6,7 +6,7 @@ import DatasetPickerModal from "./components/DatasetPickerModal";
 import { SOCKET_URL } from "../../core/config/env";
 import { getRequestErrorMessage } from "../../core/http/apiClient";
 import { formatDateTime } from "../../core/utils/formatters";
-import { listDatasets } from "../../services/datasets.service";
+import { listDatasets, addRelationship, removeRelationship, getDatasetMetadata } from "../../services/datasets.service";
 import { uploadDatasetFile } from "../../services/upload.service";
 import { createUploadId, MAX_FILE_SIZE_BYTES, MODE_OPTIONS, prettyMode } from "./constants";
 
@@ -35,6 +35,12 @@ function IngestionWizard({ onCompleted, activeBackgroundTasks = [] }) {
   const [availableDatasets, setAvailableDatasets] = useState([]);
   const [relatedDatasets, setRelatedDatasets] = useState([]);
   const [hasFetchedDatasets, setHasFetchedDatasets] = useState(false);
+  const [modelMetadata, setModelMetadata] = useState(null);
+  const [isReviewLoading, setIsReviewLoading] = useState(false);
+  const [reviewError, setReviewError] = useState(null);
+  const [isAddingLink, setIsAddingLink] = useState(false);
+  const [newLink, setNewLink] = useState({ toCollection: "", toColumn: "", fromColumn: "" });
+  const [targetSchema, setTargetSchema] = useState([]);
   const cancelSourceRef = useRef(null);
   const socketRef = useRef(null);
 
@@ -100,6 +106,41 @@ function IngestionWizard({ onCompleted, activeBackgroundTasks = [] }) {
   }, [file]);
 
   useEffect(() => () => cancelSourceRef.current?.cancel?.("Component unmounted"), []);
+
+  const startModelReview = async (id) => {
+    setCurrentStep(5);
+    setIsReviewLoading(true);
+    setReviewError(null);
+    
+    const poll = async () => {
+      try {
+        const meta = await getDatasetMetadata(id);
+        if (meta.inferenceStatus === "complete") {
+          setModelMetadata(meta);
+          setIsReviewLoading(false);
+          return true;
+        } else if (meta.inferenceStatus === "failed") {
+          setModelMetadata(meta);
+          setIsReviewLoading(false);
+          setReviewError(meta.inferenceError || "System inference failed. You can still add links manually.");
+          return true;
+        }
+        return false;
+      } catch (err) {
+        setReviewError("Failed to fetch model metadata.");
+        setIsReviewLoading(false);
+        return true;
+      }
+    };
+
+    const success = await poll();
+    if (!success) {
+      const interval = setInterval(async () => {
+        const done = await poll();
+        if (done) clearInterval(interval);
+      }, 2000);
+    }
+  };
 
   useEffect(() => {
     if (currentStep === 3 && !hasFetchedDatasets && !datasetsLoading) {
@@ -481,23 +522,194 @@ function IngestionWizard({ onCompleted, activeBackgroundTasks = [] }) {
             <button 
                 type="button" 
                 className="primary-btn" 
-                onClick={handleUpload} 
+                onClick={() => {
+                   if (stage === "done") {
+                       startModelReview(datasetId);
+                   } else {
+                       handleUpload();
+                   }
+                }} 
                 disabled={!canSubmit || (loading && stage === "uploading")}
             >
-              {loading && stage === "uploading" ? "Uploading..." : (stage === "done" ? "Finish" : "Upload")}
+              {loading && stage === "uploading" ? "Uploading..." : (stage === "done" ? "Review Relationships" : "Upload")}
             </button>
             {(stage === "processing" || stage === "parsing" || stage === "schema" || stage === "done") && !loading ? (
                 <button 
                     type="button" 
                     className="primary-btn" 
-                    style={{ backgroundColor: 'var(--success)' }}
-                    onClick={() => onCompleted?.({ datasetId, status: 'processing' })}
+                    style={{ backgroundColor: "var(--success)" }}
+                    onClick={() => {
+                       if (stage === "done") {
+                           startModelReview(datasetId);
+                       } else {
+                           onCompleted?.({ datasetId, status: "processing" });
+                       }
+                    }}
                 >
-                    Return to Review
+                    {stage === "done" ? "Go to Review" : "Return to Review"}
                 </button>
             ) : null}
           </div>
         </>
+      ) : null}
+
+      {currentStep === 5 ? (
+        <div className="model-review-step">
+          <div className="wizard-head">
+            <h3>Review Model: {modelMetadata?.fileName || datasetId}</h3>
+            <p className="muted">
+                The matching algorithm has automatically inferred relationships. 
+                Verify them below or add your own manual links.
+            </p>
+          </div>
+
+          {isReviewLoading ? (
+            <div className="loading-state" style={{ padding: "2rem", textAlign: "center" }}>
+                <div className="spinner" style={{ margin: "0 auto 1rem" }} />
+                <p>Analyzing dataset structure and inferring relationships...</p>
+            </div>
+          ) : (
+            <>
+              {reviewError && !modelMetadata?.relationships?.length ? (
+                <div className="error-card" style={{ marginBottom: "1rem" }}>
+                    <p><strong>Notice:</strong> {reviewError}</p>
+                </div>
+              ) : null}
+
+              <div className="relationship-list">
+                <div className="rel-header">
+                  <span>Relationship</span>
+                  <span>Source</span>
+                  <span>Action</span>
+                </div>
+                {!modelMetadata?.relationships?.length ? (
+                    <div className="empty-state-mini">No relationships defined for this dataset.</div>
+                ) : (
+                    modelMetadata.relationships.map((rel, idx) => (
+                        <div key={idx} className="rel-row">
+                            <div className="rel-info">
+                                <span className="rel-col">{rel.fromColumn}</span>
+                                <span className="rel-arrow">→</span>
+                                <span className="rel-dest">{rel.toCollection}.{rel.toColumn}</span>
+                            </div>
+                            <div className="rel-meta">
+                                <span className={`badge badge-${rel.source || "inferred"}`}>
+                                    {rel.source || "inferred"}
+                                </span>
+                            </div>
+                            <div className="rel-actions">
+                                <button 
+                                    className="icon-btn delete" 
+                                    title="Remove Relationship"
+                                    onClick={async () => {
+                                        try {
+                                            await removeRelationship(datasetId, rel);
+                                            const updated = await getDatasetMetadata(datasetId);
+                                            setModelMetadata(updated);
+                                        } catch (e) {
+                                            alert("Failed to remove relationship");
+                                        }
+                                    }}
+                                >
+                                    Remove
+                                </button>
+                            </div>
+                        </div>
+                    ))
+                )}
+              </div>
+
+              {!isAddingLink ? (
+                <button 
+                    type="button" 
+                    className="ghost-btn" 
+                    style={{ marginTop: "1rem", width: "100%" }}
+                    onClick={() => setIsAddingLink(true)}
+                >
+                    + Add Manual Relationship
+                </button>
+              ) : (
+                <div className="add-rel-form card" style={{ marginTop: "1rem", padding: "1rem", backgroundColor: "var(--surface)" }}>
+                    <h4>New Manual Link</h4>
+                    <div className="form-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginTop: "0.5rem" }}>
+                        <div className="form-row">
+                            <label>Source Column</label>
+                            <select 
+                                value={newLink.fromColumn} 
+                                onChange={e => setNewLink({...newLink, fromColumn: e.target.value})}
+                            >
+                                <option value="">Select Column</option>
+                                {modelMetadata?.schema?.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+                            </select>
+                        </div>
+                        <div className="form-row">
+                            <label>Target Dataset</label>
+                            <select 
+                                value={newLink.toCollection} 
+                                onChange={async (e) => {
+                                    const targetId = e.target.value;
+                                    setNewLink({...newLink, toCollection: targetId, toColumn: ""});
+                                    if (targetId) {
+                                        const targetMeta = await getDatasetMetadata(targetId);
+                                        setTargetSchema(targetMeta.schema || []);
+                                    }
+                                }}
+                            >
+                                <option value="">Select Dataset</option>
+                                {availableDatasets.filter(d => d.datasetId !== datasetId).map(d => (
+                                    <option key={d.datasetId} value={d.datasetId}>{d.fileName || d.datasetId}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="form-row">
+                            <label>Target Column</label>
+                            <select 
+                                value={newLink.toColumn} 
+                                onChange={e => setNewLink({...newLink, toColumn: e.target.value})}
+                                disabled={!newLink.toCollection}
+                            >
+                                <option value="">Select Column</option>
+                                {targetSchema.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+                            </select>
+                        </div>
+                    </div>
+                    <div className="form-actions" style={{ marginTop: "1rem", display: "flex", gap: "0.5rem" }}>
+                        <button 
+                            className="primary-btn" 
+                            disabled={!newLink.fromColumn || !newLink.toCollection || !newLink.toColumn}
+                            onClick={async () => {
+                                try {
+                                    await addRelationship(datasetId, newLink);
+                                    const updated = await getDatasetMetadata(datasetId);
+                                    setModelMetadata(updated);
+                                    setIsAddingLink(false);
+                                    setNewLink({ toCollection: "", toColumn: "", fromColumn: "" });
+                                } catch (e) {
+                                    alert(e.response?.data?.message || "Failed to add relationship");
+                                }
+                            }}
+                        >
+                            Save Link
+                        </button>
+                        <button className="ghost-btn" onClick={() => setIsAddingLink(false)}>Cancel</button>
+                    </div>
+                </div>
+              )}
+            </>
+          )}
+
+          <div className="wizard-actions" style={{ marginTop: "2rem" }}>
+             <button 
+                type="button" 
+                className="primary-btn" 
+                style={{ width: "100%", backgroundColor: "var(--success)" }}
+                onClick={() => onCompleted?.({ datasetId, status: "complete" })}
+                disabled={isReviewLoading}
+             >
+               Finalize & Go to Dashboard
+             </button>
+          </div>
+        </div>
       ) : null}
 
       {appendMismatchDetails ? (

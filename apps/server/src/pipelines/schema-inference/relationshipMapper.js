@@ -245,7 +245,7 @@ function scoreDirection(fromCol, fromMeta, toCol, toMeta) {
  *   Each item: { collectionName, totalRows, columns: [{name, dataType, sampleValues, uniqueCount}] }
  *
  * @returns {Array<Object>} relationships sorted by confidence descending:
- *   { fromCollection, fromColumn, toCollection, toColumn, confidence, strategy }
+ *   { fromCollection, fromColumn, toCollection, toColumn, confidence, strategy, source }
  */
 function detectRelationships(allMetadata) {
     if (!Array.isArray(allMetadata) || allMetadata.length < 2) return [];
@@ -293,6 +293,7 @@ function detectRelationships(allMetadata) {
                             toColumn: colB.name,
                             confidence: ab.score,
                             strategy: ab.strategy,
+                            source: "inferred",
                         };
                     } else if (ba.score > 0) {
                         best = {
@@ -302,6 +303,7 @@ function detectRelationships(allMetadata) {
                             toColumn: colA.name,
                             confidence: ba.score,
                             strategy: ba.strategy,
+                            source: "inferred",
                         };
                     }
 

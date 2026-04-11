@@ -812,6 +812,17 @@ exports.validatePayload = async (req, res) => {
   }
 };
 
+function typesCompatible(typeA, typeB) {
+  const a = String(typeA || "").toLowerCase();
+  const b = String(typeB || "").toLowerCase();
+  if (!a || !b || a === b) return true;
+  const numeric = new Set(["number", "int", "integer", "float", "double", "decimal"]);
+  const textual = new Set(["string", "text", "varchar", "char"]);
+  if (numeric.has(a) && textual.has(b)) return true;
+  if (textual.has(a) && numeric.has(b)) return true;
+  return false;
+}
+
 // POST /api/datasets/:datasetId/relationships
 exports.addRelationship = async (req, res) => {
   try {
@@ -830,25 +841,36 @@ exports.addRelationship = async (req, res) => {
     if (!sourceMeta) return res.status(404).json({ message: `Source dataset "${datasetId}" not found` });
     if (!targetMeta) return res.status(404).json({ message: `Target dataset "${toCollection}" not found` });
 
-    const sourceCol = sourceMeta.schema?.find(c => c.name === fromColumn);
-    const targetCol = targetMeta.schema?.find(c => c.name === toColumn);
+    // 1. Type Compatibility Validation
+    const sourceSchema = sourceMeta.schema || sourceMeta.columns || [];
+    const targetSchema = targetMeta.schema || targetMeta.columns || [];
+    const sourceCol = sourceSchema.find(c => c.name === fromColumn);
+    const targetCol = targetSchema.find(c => c.name === toColumn);
 
     if (!sourceCol) return res.status(400).json({ message: `Column "${fromColumn}" not found in source dataset` });
     if (!targetCol) return res.status(400).json({ message: `Column "${toColumn}" not found in target dataset` });
 
+    if (!typesCompatible(sourceCol.dataType || sourceCol.type, targetCol.dataType || targetCol.type)) {
+      return res.status(400).json({ 
+        message: `Incompatible types: Cannot link "${sourceCol.dataType || sourceCol.type}" to "${targetCol.dataType || targetCol.type}"` 
+      });
+    }
+
+    // 2. Uniqueness/Idempotency Check
     const exists = sourceMeta.relationships?.some(r => 
       (r.fromCollection === datasetId && r.toCollection === toCollection && r.fromColumn === fromColumn && r.toColumn === toColumn) ||
       (r.fromCollection === toCollection && r.toCollection === datasetId && r.fromColumn === toColumn && r.toColumn === fromColumn)
     );
 
-    if (exists) return res.status(409).json({ message: "Relationship already exists" });
+    if (exists) return res.status(409).json({ message: "Relationship already exists between these columns" });
 
     const newRel = {
       fromCollection: datasetId,
       fromColumn,
       toCollection,
       toColumn,
-      confidence: 1.0 
+      confidence: 1.0,
+      source: "manual"
     };
 
     await Promise.all([
@@ -869,16 +891,17 @@ exports.removeRelationship = async (req, res) => {
     const { datasetId } = req.params;
     const { fromColumn, toCollection, toColumn } = req.body;
 
-    const filter = {
+    // Symmetrical pull: Remove any edge that matches this pair in either orientation
+    const pullQuery = {
       $or: [
         { fromCollection: datasetId, fromColumn, toCollection, toColumn },
         { fromCollection: toCollection, fromColumn: toColumn, toCollection: datasetId, toColumn: fromColumn }
       ]
     };
 
-    const [sourceUpdate, targetUpdate] = await Promise.all([
-      Metadata.updateOne({ datasetId }, { $pull: { relationships: { fromCollection: datasetId, toCollection, fromColumn, toColumn } } }),
-      Metadata.updateOne({ datasetId: toCollection }, { $pull: { relationships: { fromCollection: datasetId, toCollection, fromColumn, toColumn } } })
+    await Promise.all([
+      Metadata.updateOne({ datasetId }, { $pull: { relationships: pullQuery } }),
+      Metadata.updateOne({ datasetId: toCollection }, { $pull: { relationships: pullQuery } })
     ]);
 
     return res.json({ message: "Relationship removed successfully" });

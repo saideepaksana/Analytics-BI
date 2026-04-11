@@ -36,7 +36,12 @@ const RelationshipSchema = new mongoose.Schema(
         fromColumn: { type: String, required: true },
         toCollection: { type: String, required: true },
         toColumn: { type: String, required: true },
-        confidence: { type: Number, min: 0, max: 1 }, // 0.0 - 1.0 // Confidence score of the inferred relationship (for filtering/validation).
+        confidence: { type: Number, min: 0, max: 1, default: 0.5 }, // 0.0 - 1.0 // Confidence score of the inferred relationship
+        source: {
+            type: String,
+            enum: ["inferred", "manual"],
+            default: "inferred"
+        }
     },
     { _id: false }
 );

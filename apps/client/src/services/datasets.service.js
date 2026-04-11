@@ -50,3 +50,15 @@ export const restoreAllValidQuarantineRows = async (datasetId) => {
   const response = await apiClient.post(`/datasets/${datasetId}/quarantine/restore-all`);
   return response.data;
 };
+
+export const addRelationship = async (datasetId, payload) => {
+  const response = await apiClient.post(`/datasets/${datasetId}/relationships`, payload);
+  return response.data;
+};
+
+export const removeRelationship = async (datasetId, payload) => {
+  const response = await apiClient.delete(`/datasets/${datasetId}/relationships`, {
+    data: payload
+  });
+  return response.data;
+};

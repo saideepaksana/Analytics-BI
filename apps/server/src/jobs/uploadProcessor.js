@@ -130,10 +130,12 @@ const refreshDatasetRelationships = async (targetDatasetId, explicitlyRelatedDat
       return !datasetsToLink.includes(otherSide);
     });
 
-    // 2. Keep MANUALLY created relationships (confidence: 1.0) even if they ARE in the refresh set
+    // 2. Keep MANUALLY created relationships (source: 'manual' or confidence: 1.0)
+    // even if they ARE in the refresh set.
     const manualEdges = (doc.relationships || []).filter((edge) => {
-      const isInRefresh = datasetsToLink.includes(edge.fromCollection === doc.datasetId ? edge.toCollection : edge.fromCollection);
-      return isInRefresh && edge.confidence === 1.0;
+      const isManual = edge.source === "manual" || edge.confidence === 1.0;
+      const otherSide = edge.fromCollection === doc.datasetId ? edge.toCollection : edge.fromCollection;
+      return datasetsToLink.includes(otherSide) && isManual;
     });
 
     // 3. Get new inferred edges from the relationship mapper
@@ -141,15 +143,15 @@ const refreshDatasetRelationships = async (targetDatasetId, explicitlyRelatedDat
       .filter((rel) => rel.fromCollection === doc.datasetId || rel.toCollection === doc.datasetId)
       .map(({ strategy, ...safeRelationship }) => safeRelationship);
 
-    // 4. Merge (Avoid duplicates: manual link takes precedence over inferred link for the same column pair)
+    // 4. Merge
+    // Start with existing unrelated + manual links
     const combined = [...unrelatedEdges, ...manualEdges];
     
+    // Add inferred links only if they don't conflict with existing (manual or unrelated) ones
     newInferredEdges.forEach(inferred => {
       const isDuplicate = combined.some(existing => 
-        existing.fromCollection === inferred.fromCollection &&
-        existing.toCollection === inferred.toCollection &&
-        existing.fromColumn === inferred.fromColumn &&
-        existing.toColumn === inferred.toColumn
+        (existing.fromCollection === inferred.fromCollection && existing.toCollection === inferred.toCollection && existing.fromColumn === inferred.fromColumn && existing.toColumn === inferred.toColumn) ||
+        (existing.fromCollection === inferred.toCollection && existing.toCollection === inferred.fromCollection && existing.fromColumn === inferred.toColumn && existing.toColumn === inferred.fromColumn)
       );
       if (!isDuplicate) {
         combined.push(inferred);
