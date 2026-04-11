@@ -246,9 +246,9 @@ export default function ChartPanel({
           nameTextStyle: { color: "#94a3b8" },
           axisLine: { lineStyle: { color: "#334155" } },
           axisLabel: { color: "#94a3b8" },
-          splitLine: { 
+          splitLine: {
             show: showGrid,
-            lineStyle: { color: "rgba(148,163,184,0.08)" } 
+            lineStyle: { color: "rgba(148,163,184,0.08)" }
           },
         },
         yAxis: {
@@ -257,9 +257,9 @@ export default function ChartPanel({
           nameTextStyle: { color: "#94a3b8" },
           axisLine: { lineStyle: { color: "#334155" } },
           axisLabel: { color: "#94a3b8" },
-          splitLine: { 
+          splitLine: {
             show: showGrid,
-            lineStyle: { color: "rgba(148,163,184,0.08)" } 
+            lineStyle: { color: "rgba(148,163,184,0.08)" }
           },
         },
         legend: {
@@ -358,7 +358,7 @@ export default function ChartPanel({
         smooth: chartType === "line" || chartType === "area",
         emphasis: { focus: "series" },
         barMaxWidth: 50,
-        stack: stacking ? "total" : undefined,
+        stack: (stacking && chartType === "bar") ? "total" : undefined,
       };
     });
 
@@ -387,16 +387,16 @@ export default function ChartPanel({
         nameTextStyle: hasNumericXAxis ? { color: "#94a3b8" } : undefined,
         axisLine: { lineStyle: { color: "#334155" } },
         axisLabel: { color: "#94a3b8", rotate: xAxisData.length > 12 ? 35 : 0 },
-        splitLine: { 
+        splitLine: {
           show: showGrid,
-          lineStyle: { color: "rgba(148,163,184,0.08)" } 
+          lineStyle: { color: "rgba(148,163,184,0.08)" }
         },
       },
       yAxis: {
         type: "value",
-        splitLine: { 
+        splitLine: {
           show: showGrid,
-          lineStyle: { color: "rgba(148,163,184,0.08)" } 
+          lineStyle: { color: "rgba(148,163,184,0.08)" }
         },
         axisLabel: { color: "#94a3b8" },
       },

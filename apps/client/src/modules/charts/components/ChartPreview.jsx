@@ -119,7 +119,7 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
       const end = Math.ceil(globalMax / actualBinSize) * actualBinSize;
       const binCount = Math.max(1, Math.ceil((end - start) / actualBinSize));
 
-      const binLabels = new Array(binCount).fill(0).map((_, i) => 
+      const binLabels = new Array(binCount).fill(0).map((_, i) =>
         isPreview ? "" : `${start + i * actualBinSize} - ${start + (i + 1) * actualBinSize}`
       );
 
@@ -300,7 +300,7 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
         areaStyle: type === "area" ? {} : undefined,
         smooth: true,
         emphasis: { focus: "series" },
-        stack: stacking ? "total" : undefined,
+        stack: (stacking && type === "bar") ? "total" : undefined,
       };
     });
 

@@ -442,7 +442,7 @@ export default function QueryPanel({
               </div>
             </div>
 
-            {(chartType === "bar" || chartType === "line" || chartType === "area") && (
+            {(chartType === "bar") && (
               <div className="customize-toggle">
                 <div className="customize-toggle-copy">
                   <label>Stacked Mode</label>
