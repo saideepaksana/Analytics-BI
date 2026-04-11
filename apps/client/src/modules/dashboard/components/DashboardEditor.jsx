@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Grip, Loader2, MoveDiagonal2, Pencil, Plus, PlusCircle, Save, Trash2, X, MoreVertical, Star, User, Clock } from "lucide-react";
+import { ArrowLeft, Grip, Loader2, MoveDiagonal2, Pencil, Plus, PlusCircle, Save, Trash2, X, MoreVertical, Star, User, Clock, MessageSquare } from "lucide-react";
 import html2canvas from "html2canvas";
 import ChartPreview from "../../charts/components/ChartPreview";
 import { queryDataset } from "../../../services/charts.service";
+import * as annotationsService from "../../../services/annotations.service";
 
 const ROW_HEIGHT = 42;
 const MIN_WIDGET_W = 4;
@@ -194,10 +195,28 @@ function DashboardWidgetChart({ chart }) {
   );
 }
 
-function DashboardWidget({ widget, chart, layout, readOnly, onRemove, onDragStart, onResizeStart, isDragging, isResizing, onUpdateWidget }) {
+function DashboardWidget({
+  widget,
+  chart,
+  layout,
+  readOnly,
+  annotations = [],
+  onRemove,
+  onDragStart,
+  onResizeStart,
+  isDragging,
+  isResizing,
+  onUpdateWidget,
+  onAddAnnotation,
+  onUpdateAnnotation,
+  onDeleteAnnotation,
+}) {
   const [showMenu, setShowMenu] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [tempTitle, setTempTitle] = useState("");
+  const [isEditingAnnotation, setIsEditingAnnotation] = useState(false);
+  const [annotationToEdit, setAnnotationToEdit] = useState(null);
+  const [tempAnnotation, setTempAnnotation] = useState("");
 
   const style = {
     left: `${layout.left}px`,
@@ -207,6 +226,20 @@ function DashboardWidget({ widget, chart, layout, readOnly, onRemove, onDragStar
   };
 
   const activeClass = isDragging ? "is-dragging" : isResizing ? "is-resizing" : "";
+
+  const handleSaveAnnotation = async () => {
+    if (!tempAnnotation.trim()) return;
+
+    if (annotationToEdit) {
+      await onUpdateAnnotation(annotationToEdit._id, tempAnnotation.trim());
+    } else {
+      await onAddAnnotation(widget.chartId, tempAnnotation.trim());
+    }
+
+    setIsEditingAnnotation(false);
+    setAnnotationToEdit(null);
+    setTempAnnotation("");
+  };
 
   return (
     <article className={`dashboard-widget ${activeClass}`} style={style}>
@@ -231,7 +264,7 @@ function DashboardWidget({ widget, chart, layout, readOnly, onRemove, onDragStar
                 margin: 0,
                 width: "100%",
                 border: "1px solid var(--border)",
-                borderRadius: "4px"
+                borderRadius: "4px",
               }}
               value={tempTitle}
               onChange={(e) => setTempTitle(e.target.value)}
@@ -280,7 +313,7 @@ function DashboardWidget({ widget, chart, layout, readOnly, onRemove, onDragStar
                       padding: "4px 0",
                       zIndex: 100,
                       minWidth: "120px",
-                      boxShadow: "0 4px 6px rgba(0,0,0,0.3)"
+                      boxShadow: "0 4px 6px rgba(0,0,0,0.3)",
                     }}
                   >
                     <button
@@ -296,7 +329,7 @@ function DashboardWidget({ widget, chart, layout, readOnly, onRemove, onDragStar
                         fontSize: "12px",
                         display: "flex",
                         alignItems: "center",
-                        gap: "6px"
+                        gap: "6px",
                       }}
                       onMouseDown={(event) => event.stopPropagation()}
                       onClick={(event) => {
@@ -308,6 +341,33 @@ function DashboardWidget({ widget, chart, layout, readOnly, onRemove, onDragStar
                     >
                       <Pencil size={12} />
                       Rename
+                    </button>
+                    <button
+                      type="button"
+                      style={{
+                        width: "100%",
+                        padding: "6px 12px",
+                        textAlign: "left",
+                        background: "none",
+                        border: "none",
+                        color: "var(--fg-1, #e0e0e0)",
+                        cursor: "pointer",
+                        fontSize: "12px",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                      }}
+                      onMouseDown={(event) => event.stopPropagation()}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setShowMenu(false);
+                        setTempAnnotation("");
+                        setAnnotationToEdit(null);
+                        setIsEditingAnnotation(true);
+                      }}
+                    >
+                      <MessageSquare size={12} />
+                      Add Annotation
                     </button>
                   </div>
                 )}
@@ -330,7 +390,76 @@ function DashboardWidget({ widget, chart, layout, readOnly, onRemove, onDragStar
       </header>
 
       <div className="dashboard-widget-body">
-        {chart ? <DashboardWidgetChart chart={chart} /> : <div className="dashboard-widget-error">Chart not found</div>}
+        {chart ? (
+          <DashboardWidgetChart chart={chart} />
+        ) : (
+          <div className="dashboard-widget-error">Chart not found</div>
+        )}
+      </div>
+
+      <div className="dashboard-widget-annotations-area">
+        {annotations.length > 0 && (
+          <div
+            style={{
+              fontSize: "10px",
+              fontWeight: "700",
+              color: "rgba(255,255,255,0.3)",
+              letterSpacing: "0.1em",
+              marginBottom: "4px",
+              textTransform: "uppercase",
+            }}
+          >
+            Notes
+          </div>
+        )}
+        {annotations.map((ann) => (
+          <div key={ann._id} className="dashboard-widget-annotation">
+            <p>{ann.text}</p>
+            {!readOnly && (
+              <div className="annotation-actions">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAnnotationToEdit(ann);
+                    setTempAnnotation(ann.text);
+                    setIsEditingAnnotation(true);
+                  }}
+                >
+                  Edit
+                </button>
+                <button type="button" onClick={() => onDeleteAnnotation(ann._id)}>
+                  Delete
+                </button>
+              </div>
+            )}
+          </div>
+        ))}
+
+        {isEditingAnnotation && (
+          <div className="dashboard-widget-annotation-editor">
+            <textarea
+              autoFocus
+              value={tempAnnotation}
+              onChange={(e) => setTempAnnotation(e.target.value)}
+              placeholder="Enter annotation..."
+            />
+            <div className="editor-buttons">
+              <button type="button" className="save-btn" onClick={handleSaveAnnotation}>
+                Save
+              </button>
+              <button
+                type="button"
+                className="cancel-btn"
+                onClick={() => {
+                  setIsEditingAnnotation(false);
+                  setAnnotationToEdit(null);
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {!readOnly ? (
@@ -369,6 +498,47 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
 
     return [];
   });
+  const [annotations, setAnnotations] = useState([]);
+
+  useEffect(() => {
+    if (dashboard?.id) {
+      annotationsService.getAnnotationsByDashboard(dashboard.id).then(setAnnotations);
+    }
+  }, [dashboard?.id]);
+
+  const handleAddAnnotation = async (chartId, text) => {
+    try {
+      const newAnn = await annotationsService.createAnnotation({
+        chartId,
+        dashboardId: dashboard.id,
+        text,
+        position: { x: 0, y: 0 }, // Default position as it's rendered below
+      });
+      setAnnotations((prev) => [newAnn, ...prev]);
+    } catch (err) {
+      console.error("Failed to add annotation", err);
+    }
+  };
+
+  const handleUpdateAnnotation = async (annId, text) => {
+    try {
+      const updatedAnn = await annotationsService.updateAnnotation(annId, { text });
+      setAnnotations((prev) =>
+        prev.map((ann) => (ann._id === annId ? updatedAnn : ann))
+      );
+    } catch (err) {
+      console.error("Failed to update annotation", err);
+    }
+  };
+
+  const handleDeleteAnnotation = async (annId) => {
+    try {
+      await annotationsService.deleteAnnotation(annId);
+      setAnnotations((prev) => prev.filter((ann) => ann._id !== annId));
+    } catch (err) {
+      console.error("Failed to delete annotation", err);
+    }
+  };
   const [action, setAction] = useState(null);
   const [showChartLibrary, setShowChartLibrary] = useState(false);
   const canvasRef = useRef(null);
@@ -838,19 +1008,23 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
                   }}
                 />
               ) : null}
-              {cellWidth > 0 && widgetLayout.map((widget) => (
+              {cellWidth > 0 && widgetLayout.map((widget, index) => (
                 <DashboardWidget
                   key={widget.id}
                   widget={widget}
                   chart={chartMap.get(widget.chartId)}
-                  layout={widget}
+                  layout={widgetLayout[index]}
                   readOnly={!isEditMode}
+                  annotations={annotations.filter((ann) => ann.chartId === widget.chartId)}
                   onRemove={removeWidget}
                   onUpdateWidget={updateWidget}
                   onDragStart={startDrag}
                   onResizeStart={startResize}
                   isDragging={action?.widgetId === widget.id && action?.type === "drag"}
                   isResizing={action?.widgetId === widget.id && action?.type === "resize"}
+                  onAddAnnotation={handleAddAnnotation}
+                  onUpdateAnnotation={handleUpdateAnnotation}
+                  onDeleteAnnotation={handleDeleteAnnotation}
                 />
               ))}
               {widgetLayout.length === 0 ? (

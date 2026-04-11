@@ -838,3 +838,132 @@
   border-color: #7dd3fc;
   color: #0284c7;
 }
+/* Annotations Area & Individual Items */
+.dashboard-widget-annotations-area {
+  padding: 12px 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dashboard-widget-annotation {
+  position: relative;
+  padding: 4px 0;
+  font-size: 0.82rem;
+  color: #94a3b8;
+  transition: all 0.2s ease;
+}
+
+.dashboard-widget-annotation:hover {
+  border-left-color: rgba(34, 211, 238, 0.8);
+  color: #e2e8f0;
+}
+
+.dashboard-widget-annotation p {
+  margin: 0;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  font-style: italic;
+}
+
+.dashboard-widget-annotation .annotation-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 4px;
+  opacity: 0;
+  transform: translateY(2px);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.dashboard-widget-annotation:hover .annotation-actions {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.dashboard-widget-annotation .annotation-actions button {
+  background: transparent;
+  border: none;
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  padding: 0;
+}
+
+.dashboard-widget-annotation .annotation-actions button:hover {
+  color: #22d3ee;
+}
+
+.dashboard-widget-annotation .annotation-actions button.delete:hover {
+  color: #f43f5e;
+}
+
+/* Annotation Editor Refinement */
+.dashboard-widget-annotation-editor {
+  background: rgba(30, 41, 59, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 12px;
+  margin-top: 4px;
+  backdrop-filter: blur(8px);
+}
+
+.dashboard-widget-annotation-editor textarea {
+  width: 100%;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #f8fafc;
+  border-radius: 6px;
+  padding: 10px;
+  font-size: 13px;
+  min-height: 80px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.dashboard-widget-annotation-editor textarea:focus {
+  border-color: #22d3ee;
+}
+
+.dashboard-widget-annotation-editor textarea:focus {
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 1px #38bdf8;
+}
+
+.dashboard-widget-annotation-editor .editor-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.dashboard-widget-annotation-editor .editor-buttons button {
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.dashboard-widget-annotation-editor .editor-buttons .save-btn {
+  background: #20a7c9;
+  color: #fff;
+  border: none;
+}
+
+.dashboard-widget-annotation-editor .editor-buttons .save-btn:hover {
+  background: #1c92b0;
+}
+
+.dashboard-widget-annotation-editor .editor-buttons .cancel-btn {
+  background: transparent;
+  color: #94a3b8;
+  border: 1px solid #334155;
+}
+
+.dashboard-widget-annotation-editor .editor-buttons .cancel-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+}

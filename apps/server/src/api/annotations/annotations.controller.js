@@ -10,7 +10,7 @@ const logger = require('../../core/logger');
  */
 async function validateReference({ chartId, dashboardId }) {
   if (chartId) {
-    const exists = await Chart.exists({ _id: chartId });
+    const exists = await Chart.exists({ chartId: chartId });
     if (!exists) throw Object.assign(new Error('Referenced chart does not exist'), { status: 404 });
   }
   if (dashboardId) {
@@ -76,8 +76,8 @@ function assertCanMutate({ actorId, annotation }) {
 exports.getAnnotationsByChart = async (req, res) => {
   try {
     const { chartId } = req.params;
-    if (!mongoose.isValidObjectId(chartId))
-      return res.status(400).json({ message: 'Invalid chartId' });
+    if (!chartId)
+      return res.status(400).json({ message: 'chartId is required' });
 
     const annotations = await Annotation.find({ chartId }).sort({ createdAt: -1 }).lean();
     return res.json({ annotations });

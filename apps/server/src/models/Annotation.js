@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
 const AnnotationSchema = new Schema({
-  chartId: { type: Schema.Types.ObjectId, ref: 'Chart', required: false },
+  chartId: { type: String, required: false }, // Store UUID used in frontend
   dashboardId: { type: Schema.Types.ObjectId, ref: 'Dashboard', required: false },
   text: { type: String, required: true, trim: true },
   position: {
