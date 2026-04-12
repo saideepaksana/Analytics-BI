@@ -7,6 +7,8 @@ const {
   saveDashboardLayout,
   patchDashboardMetadata,
   patchDashboardState,
+  getDashboardFull,
+  refreshDashboard,
 } = require('./dashboard.controller');
 
 const router = express.Router();
@@ -14,6 +16,8 @@ const router = express.Router();
 router.get('/', listDashboards);
 router.post('/', createDashboard);
 router.get('/:dashboardId', getDashboard);
+router.get('/:dashboardId/full', getDashboardFull);
+router.post('/:dashboardId/refresh', refreshDashboard);
 router.delete('/:dashboardId', deleteDashboard);
 router.patch('/:dashboardId/layout', saveDashboardLayout);
 router.patch('/:dashboardId/metadata', patchDashboardMetadata);

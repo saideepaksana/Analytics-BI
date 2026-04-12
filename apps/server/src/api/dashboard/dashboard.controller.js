@@ -2,6 +2,7 @@ const Dashboard = require('../../models/Dashboard');
 const dashboardMapper = require('./dashboardMapper');
 const SchemaValidator = require('../../core/SchemaValidator');
 const dashboardStateSchema = require('./dashboardState.schema');
+const { loadDashboard, refreshDashboardCache } = require('./dashboardService');
 
 /** GET /api/dashboards */
 exports.listDashboards = async (req, res) => {
@@ -194,3 +195,28 @@ function validateLayout(layout) {
   }
   return null;
 }
+
+/** GET /api/dashboards/:dashboardId/full */
+exports.getDashboardFull = async (req, res) => {
+  try {
+    const { dashboardId } = req.params;
+    const fullDashboard = await loadDashboard(dashboardId);
+    return res.json({ dashboard: dashboardMapper.fromDB(fullDashboard) });
+  } catch (error) {
+    if (error.message === 'Dashboard not found') {
+      return res.status(404).json({ message: 'Dashboard not found' });
+    }
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+/** POST /api/dashboards/:dashboardId/refresh */
+exports.refreshDashboard = async (req, res) => {
+  try {
+    const { dashboardId } = req.params;
+    await refreshDashboardCache(dashboardId);
+    return res.json({ message: 'Dashboard cache refreshed' });
+  } catch (error) {
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+};
