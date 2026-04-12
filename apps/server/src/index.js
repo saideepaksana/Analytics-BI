@@ -8,14 +8,17 @@ const Redis = require("ioredis");
 const connectDB = require("./core/db");
 const { redisConfig } = require("./core/redis");
 const { initStorage } = require("./core/storage");
+const { initIndexes } = require("./core/dbIndexes");
 const uploadRoutes = require("./api/upload/upload.routes");
 const datasetsRoutes = require("./api/query/datasets.routes");
 const exportRoutes = require("./export/exportRoutes");
 const chartsRoutes = require("./api/charts/charts.routes");
 const dashboardRoutes = require("./api/dashboard/dashboard.routes");
 const annotationsRoutes = require("./api/annotations/annotations.routes");
+const aiRoutes = require("./api/ai/ai.routes");
 const { setIO } = require("./core/socket");
 const logger = require("./core/logger");
+const { idempotencyMiddleware } = require("./core/middleware/idempotencyMiddleware");
 
 const app = express();
 const server = http.createServer(app);
@@ -53,8 +56,9 @@ const startWorkersIfAvailable = async () => {
 startWorkersIfAvailable();
 
 //start GridFS AFTER DB connects
-mongoose.connection.once("open", () => {
-  initStorage();
+mongoose.connection.once("open", async () => {
+  await initStorage();
+  await initIndexes();
 });
 
 //middleware
@@ -65,6 +69,7 @@ app.use(
   })
 );
 app.use(express.json());
+app.use(idempotencyMiddleware);
 
 const io = new Server(server, {
   cors: {
@@ -99,6 +104,7 @@ app.use("/api/dashboard", dashboardRoutes);
 // Alias for consistency with newer clients/specs
 app.use("/api/dashboards", dashboardRoutes);
 app.use("/api/annotations", annotationsRoutes);
+app.use("/api/ai", aiRoutes);
 app.use("/api/export", exportRoutes);
 
 // ── Job testing routes (remove these in production) ──────────────────────────
