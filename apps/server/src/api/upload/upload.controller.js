@@ -7,6 +7,7 @@ const { parse } = require("fast-csv");
 const Metadata = require("../../models/Metadata");
 const { getIO } = require("../../core/socket");
 const logger = require("../../core/logger");
+const { cacheIdempotentResponse } = require("../../core/middleware/idempotencyMiddleware");
 
 const MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024 * 1024; // 2GB
 const allowedExtensions = new Set([".csv", ".xls", ".xlsx"]);
@@ -351,7 +352,7 @@ exports.uploadFile = async (req, res) => {
       { upsert: true }
     );
 
-    return res.status(202).json({
+    const responseBody = {
       message: "File uploaded and queued for processing.",
       datasetId,
       fileId: sourceFileId,
@@ -360,7 +361,14 @@ exports.uploadFile = async (req, res) => {
       uploadId: uploadId || undefined,
       jobId: job.id,
       processing: true,
-    });
+    };
+
+    // Cache for idempotency
+    if (req.idempotencyKey) {
+      cacheIdempotentResponse(req.idempotencyKey, 202, responseBody, req);
+    }
+
+    return res.status(202).json(responseBody);
   } catch (error) {
     logger.error(`Upload Controller Error: ${error.message}`, "Upload");
     const cleanupSourceFileId = sourceFileId || error?.sourceFileId;
