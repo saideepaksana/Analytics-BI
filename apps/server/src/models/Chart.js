@@ -72,5 +72,8 @@ const ChartSchema = new Schema(
 
 ChartSchema.index({ "dataSource.datasetId": 1, updatedAt: -1 });
 ChartSchema.index({ name: "text" });
+ChartSchema.index({ createdBy: 1, updatedAt: -1 });
+ChartSchema.index({ "query.dimensions.field": 1 });
+ChartSchema.index({ "query.measures.field": 1 });
 
 module.exports = mongoose.model("Chart", ChartSchema);

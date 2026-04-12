@@ -26,5 +26,8 @@ const DashboardSchema = new Schema(
 
 DashboardSchema.index({ updatedAt: -1 });
 DashboardSchema.index({ title: "text", description: "text" });
+DashboardSchema.index({ status: 1, updatedAt: -1 });
+DashboardSchema.index({ createdBy: 1, updatedAt: -1 });
+DashboardSchema.index({ isFavorite: 1, updatedAt: -1 });
 
 module.exports = mongoose.model("Dashboard", DashboardSchema);

@@ -97,6 +97,9 @@ const MetadataSchema = new mongoose.Schema(
 MetadataSchema.index({ createdAt: -1 });
 MetadataSchema.index({ updatedAt: -1 });
 MetadataSchema.index({ fileName: "text" });
+MetadataSchema.index({ mode: 1, updatedAt: -1 });
+MetadataSchema.index({ rowCount: -1 });
+MetadataSchema.index({ inferenceStatus: 1 });
 
 MetadataSchema.methods.toJSONSchema = function () {
     const requiredFields = [];
