@@ -8,7 +8,9 @@ const os = require("os");
 const logger = require("../../core/logger");
 const { validateRow, cleanAndNormalizeRow, semanticValidateRow } = require("../../pipelines/dts/index");
 const schemaValidator = require("../../core/SchemaValidator");
+const { generateJsonSchema, validateCrossColumnConstraints } = require("../../core/schemaValidation");
 const { isNumeric } = require("../../core/typeConstants");
+const { serializeSchema, generateSchemaFingerprint } = require("../../core/schemaFormatter");
 
 const findQuarantineRowByIndexOrNumber = async (datasetId, rawIndex) => {
   const parsed = Number.parseInt(rawIndex, 10);
@@ -194,6 +196,29 @@ exports.getDatasetSchema = async (req, res) => {
     });
   } catch (error) {
     logger.error(`getDatasetSchema error: ${error.message}`, "Datasets");
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+exports.getDatasetSchemaCompact = async (req, res) => {
+  try {
+    const { datasetId } = req.params;
+    const metadata = await Metadata.findOne({ datasetId }).lean();
+    if (!metadata) {
+      return res.status(404).json({ message: "Dataset not found" });
+    }
+
+    const compactSchema = serializeSchema(metadata.schema || []);
+    const fingerprint = generateSchemaFingerprint(metadata.schema || []);
+
+    return res.json({
+      datasetId: metadata.datasetId,
+      compactSchema,
+      fingerprint,
+      columnCount: (metadata.schema || []).length
+    });
+  } catch (error) {
+    logger.error(`getDatasetSchemaCompact error: ${error.message}`, "Datasets");
     return res.status(500).json({ message: "Internal server error" });
   }
 };
@@ -780,23 +805,32 @@ exports.validatePayload = async (req, res) => {
       return res.status(404).json({ message: "Dataset not found" });
     }
 
-    const jsonSchema = metadataDoc.toJSONSchema();
+    const jsonSchema = generateJsonSchema(metadataDoc);
     const validatorFunc = schemaValidator.compile(jsonSchema);
-    
+
     const validationReport = [];
     let validCount = 0;
-    
-    records.forEach((record, index) => {
-      const result = validatorFunc(record);
-      if (result.valid) {
+
+    for (let index = 0; index < records.length; index++) {
+      const record = records[index];
+      const schemaResult = validatorFunc(record);
+
+      let crossColumnErrors = [];
+      if (schemaResult.valid) {
+        // Only check cross-column if schema is valid
+        crossColumnErrors = await validateCrossColumnConstraints(record, metadataDoc, req.app.get('mongoose'));
+      }
+
+      if (schemaResult.valid && crossColumnErrors.length === 0) {
         validCount++;
       } else {
         validationReport.push({
           row: index,
-          errors: result.errors
+          schemaErrors: schemaResult.errors,
+          crossColumnErrors
         });
       }
-    });
+    }
 
     return res.json({
       message: "Validation complete",
