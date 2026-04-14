@@ -69,11 +69,9 @@ const resolveCleanerForColumn = (schemaColumn) => {
     }
     
     return TYPE_CLEANER_MAP[type] || null;
-};
-
-// ── Semantic Validation Layer ───────────────
+};// ── Semantic Validation Layer ───────────────
 const semanticValidateRow = (row, schemaMap) => {
-    const errors = [];
+    const errorDetails = [];
 
     for (const [key, value] of Object.entries(row)) {
         const lowerKey = key.toLowerCase();
@@ -85,7 +83,7 @@ const semanticValidateRow = (row, schemaMap) => {
 
         // ── 1. Null/Empty Check for Required Fields ──
         if (!nullable && (value === null || value === undefined || value === '')) {
-            errors.push(`${key}: Required field cannot be empty`);
+            errorDetails.push({ field: key, errorType: 'missing_required_value', message: `${key}: Required field cannot be empty`, value });
             continue; // Skip further validation if required field is empty
         }
 
@@ -94,26 +92,26 @@ const semanticValidateRow = (row, schemaMap) => {
 
         // Additionally reject empty strings for nullable fields (they should be null instead)
         if (value === '' && nullable) {
-            errors.push(`${key}: Empty string should be null for nullable fields`);
+            errorDetails.push({ field: key, errorType: 'invalid_format', message: `${key}: Empty string should be null for nullable fields`, value });
             continue;
         }
 
         // ── 2. String validation ──
         if (type === 'string' || type === 'varchar' || type === 'text' || type === 'char') {
             if (typeof value !== 'string') {
-                errors.push(`${key}: Expected text, got ${typeof value}`);
+                errorDetails.push({ field: key, errorType: 'type_mismatch', message: `${key}: Expected text, got ${typeof value}`, value });
             } else if (value === '' && !nullable) {
                 // Strictly reject empty strings for required fields
-                errors.push(`${key}: Cannot be empty string`);
+                errorDetails.push({ field: key, errorType: 'missing_required_value', message: `${key}: Cannot be empty string`, value });
             }
         }
 
         // ── 3. Number/Decimal validation (prices, amounts) ──
         if (type === 'decimal' || type === 'number' || hasNameToken(lowerKey, ['price', 'amount'])) {
             if (typeof value !== 'number') {
-                errors.push(`${key}: Expected number, got ${typeof value}`);
+                errorDetails.push({ field: key, errorType: 'type_mismatch', message: `${key}: Expected number, got ${typeof value}`, value });
             } else if (!Number.isFinite(value)) {
-                errors.push(`${key}: Invalid number value`);
+                errorDetails.push({ field: key, errorType: 'invalid_format', message: `${key}: Invalid number value`, value });
             } else {
                 // Apply constraints
                 const enforceDefaultNonNegative =
@@ -125,10 +123,10 @@ const semanticValidateRow = (row, schemaMap) => {
                     : (enforceDefaultNonNegative ? 0 : undefined);
                 const max = constraints.max;
                 if (min !== undefined && value < min) {
-                    errors.push(`${key}: Cannot be negative or less than ${min}`);
+                    errorDetails.push({ field: key, errorType: 'constraint_violation', message: `${key}: Cannot be negative or less than ${min}`, value });
                 }
                 if (max !== undefined && value > max) {
-                    errors.push(`${key}: Exceeds maximum ${max}`);
+                    errorDetails.push({ field: key, errorType: 'constraint_violation', message: `${key}: Exceeds maximum ${max}`, value });
                 }
             }
         }
@@ -136,7 +134,7 @@ const semanticValidateRow = (row, schemaMap) => {
         // ── 4. Integer validation (quantity, count, ids) ──
         if (type === 'integer' || hasNameToken(lowerKey, ['quantity', 'count'])) {
             if (!Number.isInteger(value)) {
-                errors.push(`${key}: Must be whole number, got ${value}`);
+                errorDetails.push({ field: key, errorType: 'invalid_format', message: `${key}: Must be whole number, got ${value}`, value });
             } else {
                 const enforceDefaultNonNegative =
                     constraints.min === undefined &&
@@ -147,10 +145,10 @@ const semanticValidateRow = (row, schemaMap) => {
                     : (enforceDefaultNonNegative ? 0 : undefined);
 
                 if (min !== undefined && value < min) {
-                    errors.push(`${key}: Cannot be negative or less than ${min}`);
+                    errorDetails.push({ field: key, errorType: 'constraint_violation', message: `${key}: Cannot be negative or less than ${min}`, value });
                 }
                 if (constraints.max !== undefined && value > constraints.max) {
-                    errors.push(`${key}: Exceeds maximum ${constraints.max}`);
+                    errorDetails.push({ field: key, errorType: 'constraint_violation', message: `${key}: Exceeds maximum ${constraints.max}`, value });
                 }
             }
         }
@@ -166,10 +164,10 @@ const semanticValidateRow = (row, schemaMap) => {
                 const validTrue = ['true', '1', 'yes', 'y'];
                 const validFalse = ['false', '0', 'no', 'n'];
                 if (!validTrue.includes(s) && !validFalse.includes(s)) {
-                    errors.push(`${key}: Must be true/false. Allowed values: true, false, yes, no, 1, 0, y, n. Got "${value}"`);
+                    errorDetails.push({ field: key, errorType: 'invalid_format', message: `${key}: Must be true/false. Allowed values: true, false, yes, no, 1, 0, y, n. Got "${value}"`, value });
                 }
             } else {
-                errors.push(`${key}: Boolean field must be true/false or string, got ${typeof value}`);
+                errorDetails.push({ field: key, errorType: 'type_mismatch', message: `${key}: Boolean field must be true/false or string, got ${typeof value}`, value });
             }
         }
 
@@ -178,16 +176,16 @@ const semanticValidateRow = (row, schemaMap) => {
             if (typeof value === 'string') {
                 const parsed = new Date(value);
                 if (isNaN(parsed.getTime())) {
-                    errors.push(`${key}: Invalid date format "${value}"`);
+                    errorDetails.push({ field: key, errorType: 'invalid_format', message: `${key}: Invalid date format "${value}"`, value });
                 }
             } else if (!(value instanceof Date) && typeof value !== 'string') {
-                errors.push(`${key}: Expected date format, got ${typeof value}`);
+                errorDetails.push({ field: key, errorType: 'type_mismatch', message: `${key}: Expected date format, got ${typeof value}`, value });
             }
         }
 
         // ── 7. Enum validation (category, status) ──
         if (constraints.enum && !constraints.enum.includes(value)) {
-            errors.push(`${key}: "${value}" is not valid. Allowed: ${constraints.enum.join(', ')}`);
+            errorDetails.push({ field: key, errorType: 'constraint_violation', message: `${key}: "${value}" is not valid. Allowed: ${constraints.enum.join(', ')}`, value });
         }
 
         // ── 8. Heuristic Boolean Validation (even if column inferred as string) ──
@@ -197,7 +195,7 @@ const semanticValidateRow = (row, schemaMap) => {
             if (pattern.startsWith('_') || pattern.endsWith('_')) {
                 return lowerKey.includes(pattern);
             }
-            const nameRegex = new RegExp(`(^|_)${pattern}(_|$)`);
+            const nameRegex = new RegExp(`(^_|_)${pattern}(_|$)`);
             return nameRegex.test(lowerKey);
         });
 
@@ -208,15 +206,22 @@ const semanticValidateRow = (row, schemaMap) => {
                 const validTrue = ['true', '1', 'yes', 'y'];
                 const validFalse = ['false', '0', 'no', 'n'];
                 if (!validTrue.includes(s) && !validFalse.includes(s)) {
-                    errors.push(`${key}: Looks like a boolean field. Must be true/false. Allowed: true, false, yes, no, 1, 0, y, n. Got "${value}"`);
+                    errorDetails.push({ field: key, errorType: 'invalid_format', message: `${key}: Looks like a boolean field. Must be true/false. Allowed: true, false, yes, no, 1, 0, y, n. Got "${value}"`, value });
                 }
             } else if (typeof value !== 'boolean' && typeof value !== 'number') {
-                errors.push(`${key}: Looks like a boolean field. Expected boolean/string, got ${typeof value}`);
+                errorDetails.push({ field: key, errorType: 'type_mismatch', message: `${key}: Looks like a boolean field. Expected boolean/string, got ${typeof value}`, value });
             }
         }
     }
 
-    return [...new Set(errors)];
+    // Deduplicate by message
+    const map = new Map();
+    for (const ed of errorDetails) {
+        if (!map.has(ed.message)) {
+            map.set(ed.message, ed);
+        }
+    }
+    return Array.from(map.values());
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -295,6 +300,7 @@ class DTSEngineStream extends Transform {
                 rawData: chunk,
                 cleanedData: cleanedRow,
                 errorMessages: ['Row contains no usable values'],
+                errorDetails: [{ field: null, errorType: 'unusable_row', message: 'Row contains no usable values', value: null }],
                 status: 'UNFIXABLE'
             });
             logger.warn(`Row rejected: no usable values`, "DTS");
@@ -306,15 +312,23 @@ class DTSEngineStream extends Transform {
 
         // ── 3. DLQ Decision ───────────────────────────────────
         if (structuralErrors.length > 0 || semanticErrors.length > 0) {
+            const mappedStructuralErrors = structuralErrors.map(e => ({
+                field: e.column,
+                errorType: e.type,
+                message: e.message,
+                value: e.raw
+            }));
+            
             this.dlqBuffer.push({
                 datasetId: this.datasetId,
                 rowNumber: this.dlqBuffer.length + 1, // Add row number
                 rawData: chunk,
                 cleanedData: cleanedRow,
                 errorMessages: [  // Array of error messages
-                    ...structuralErrors.map(e => e.message),
-                    ...semanticErrors
+                    ...mappedStructuralErrors.map(e => e.message),
+                    ...semanticErrors.map(e => e.message)
                 ],
+                errorDetails: [...mappedStructuralErrors, ...semanticErrors],
                 status: 'UNFIXABLE'
             });
 
@@ -387,7 +401,8 @@ const transformRows = (rows, datasetId, inferredSchema = []) => {
             invalidRows.push({
                 rawData: row,
                 cleanedData: cleanedRow,
-                errors: ['Row contains no usable values']
+                errors: ['Row contains no usable values'],
+                errorDetails: [{ field: null, errorType: 'unusable_row', message: 'Row contains no usable values', value: null }]
             });
             continue;
         }
@@ -397,13 +412,21 @@ const transformRows = (rows, datasetId, inferredSchema = []) => {
 
         // 4. DLQ Decision
         if (structuralErrors.length > 0 || semanticErrors.length > 0) {
+            const mappedStructuralErrors = structuralErrors.map(e => ({
+                field: e.column,
+                errorType: e.type,
+                message: e.message,
+                value: e.raw
+            }));
+            
             invalidRows.push({
                 rawData: row,
                 cleanedData: cleanedRow,
                 errors: [
-                    ...structuralErrors.map(e => e.message),
-                    ...semanticErrors
-                ]
+                    ...mappedStructuralErrors.map(e => e.message),
+                    ...semanticErrors.map(e => e.message)
+                ],
+                errorDetails: [...mappedStructuralErrors, ...semanticErrors]
             });
         } else {
             validRows.push(cleanedRow);

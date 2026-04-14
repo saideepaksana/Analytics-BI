@@ -18,12 +18,12 @@ const findQuarantineRowByIndexOrNumber = async (datasetId, rawIndex) => {
     return null;
   }
 
-  const direct = await DLQRecord.findOne({ datasetId, rowNumber: parsed }).lean();
+  const direct = await DLQRecord.findOne({ datasetId, rowNumber: parsed, status: "QUARANTINED" }).lean();
   if (direct) {
     return direct;
   }
 
-  return DLQRecord.findOne({ datasetId })
+  return DLQRecord.findOne({ datasetId, status: "QUARANTINED" })
     .sort({ rowNumber: 1 })
     .skip(parsed)
     .lean();
@@ -101,7 +101,7 @@ exports.getDatasetMetadata = async (req, res) => {
         .limit(previewLimit)
         .select("data rowNumber")
         .lean(),
-      DLQRecord.find({ datasetId })
+      DLQRecord.find({ datasetId, status: "QUARANTINED" })
         .sort({ rowNumber: 1 })
         .limit(previewLimit)
         .select("rowNumber rawData errorMessages status")
@@ -268,7 +268,15 @@ exports.deleteQuarantinedRow = async (req, res) => {
       return res.status(404).json({ message: "Row not found" });
     }
 
-    await DLQRecord.deleteOne({ _id: row._id });
+    await DLQRecord.updateOne(
+      { _id: row._id },
+      {
+        $set: { status: "DELETED" },
+        $push: {
+          resolutionHistory: { action: "DELETED_MANUALLY", timestamp: new Date(), user: req.user?.id || "system" }
+        }
+      }
+    );
     const meta = await Metadata.findOneAndUpdate(
       { datasetId },
       { $inc: { quarantinedCount: -1 } },
@@ -291,7 +299,13 @@ exports.deleteAllQuarantinedRows = async (req, res) => {
   try {
     const { datasetId } = req.params;
 
-    await DLQRecord.deleteMany({ datasetId });
+    await DLQRecord.updateMany(
+      { datasetId, status: "QUARANTINED" },
+      {
+         $set: { status: "DELETED" },
+         $push: { resolutionHistory: { action: "DELETED_ALL", timestamp: new Date(), user: req.user?.id || "system" } }
+      }
+    );
     const meta = await Metadata.findOneAndUpdate(
       { datasetId },
       { $set: { quarantinedCount: 0 } },
@@ -393,7 +407,15 @@ exports.restoreQuarantinedRow = async (req, res) => {
       status: "VALID",
     });
 
-    await DLQRecord.deleteOne({ _id: row._id });
+    await DLQRecord.updateOne(
+      { _id: row._id },
+      {
+        $set: { status: "RESTORED" },
+        $push: {
+          resolutionHistory: { action: "RESTORED", timestamp: new Date(), user: req.user?.id || "system" }
+        }
+      }
+    );
 
     const meta = await Metadata.findOneAndUpdate(
       { datasetId },
@@ -524,7 +546,13 @@ exports.restoreAllValidQuarantinedRows = async (req, res) => {
         await upsertCleanRecords(cleanDocs);
 
         const validIds = validRows.map((r) => r._id);
-        await DLQRecord.deleteMany({ _id: { $in: validIds } });
+        await DLQRecord.updateMany(
+          { _id: { $in: validIds } },
+          {
+            $set: { status: "RESTORED" },
+            $push: { resolutionHistory: { action: "BATCH_RESTORED", timestamp: new Date(), user: "system" } }
+          }
+        );
         restoredCount += validRows.length;
       }
 
@@ -533,7 +561,7 @@ exports.restoreAllValidQuarantinedRows = async (req, res) => {
       }
     };
 
-    const cursor = DLQRecord.find({ datasetId }).sort({ rowNumber: 1 }).lean().cursor();
+    const cursor = DLQRecord.find({ datasetId, status: "QUARANTINED" }).sort({ rowNumber: 1 }).lean().cursor();
 
     let currentBatch = [];
     let batchSeq = 0;
