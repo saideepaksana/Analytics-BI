@@ -90,6 +90,11 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
           name: "BoxPlot",
           type: "boxplot",
           data: boxDataList,
+          label: {
+            show: style.showLabels === true,
+            position: "top",
+            color: "#94a3b8",
+          },
         }]
       };
     }
@@ -135,6 +140,11 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
           data: bins,
           itemStyle: { borderRadius: [4, 4, 0, 0] },
           barMaxWidth: 100,
+          label: {
+            show: style.showLabels === true,
+            position: "top",
+            color: "#94a3b8",
+          },
         };
       });
 
@@ -206,7 +216,13 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
           data: scatterData,
           symbolSize: 10,
           itemStyle: { borderColor: "rgba(255,255,255,0.2)", borderWidth: 1 },
-          emphasis: { itemStyle: { shadowBlur: 10, shadowColor: "rgba(99, 102, 241, 0.5)" } }
+          emphasis: { itemStyle: { shadowBlur: 10, shadowColor: "rgba(99, 102, 241, 0.5)" } },
+          label: {
+            show: style.showLabels === true,
+            position: "top",
+            color: "#94a3b8",
+            formatter: (p) => p.value[1],
+          },
         }]
       };
 
@@ -238,7 +254,12 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
           radius: ["40%", "70%"],
           avoidLabelOverlap: false,
           itemStyle: { borderRadius: 10, borderColor: "#0f172a", borderWidth: 2 },
-          label: { show: false, position: "center" },
+          label: { 
+            show: style.showLabels === true,
+            position: "outside",
+            color: "#94a3b8",
+            formatter: "{b}: {c}",
+          },
           emphasis: { label: { show: true, fontSize: 20, fontWeight: "bold", color: "#fff" } },
           data: data.map(item => ({ value: item[yAxisField], name: item[xAxisField] }))
         }]
@@ -301,6 +322,11 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
         smooth: true,
         emphasis: { focus: "series" },
         stack: (stacking && type === "bar") ? "total" : undefined,
+        label: {
+          show: style.showLabels === true,
+          position: type === "bar" && stacking ? "inside" : "top",
+          color: type === "bar" && stacking ? "#fff" : "#94a3b8",
+        },
       };
     });
 

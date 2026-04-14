@@ -23,6 +23,7 @@ export default function ChartPanel({
   sampleData = [],
   binSize = 10,
   stacking = false,
+  showLabels = false,
 }) {
   const [bottomTab, setBottomTab] = useState("results");
   const echartsRef = useRef(null);
@@ -145,6 +146,11 @@ export default function ChartPanel({
             name: "BoxPlot",
             type: "boxplot",
             data: boxDataList,
+            label: {
+              show: showLabels,
+              position: "top",
+              color: "#94a3b8",
+            },
           },
         ],
       };
@@ -192,6 +198,11 @@ export default function ChartPanel({
           data: bins,
           itemStyle: { borderRadius: [4, 4, 0, 0] },
           barMaxWidth: 100,
+          label: {
+            show: showLabels,
+            position: "top",
+            color: "#94a3b8",
+          },
         };
       });
 
@@ -277,6 +288,12 @@ export default function ChartPanel({
             symbolSize: 10,
             itemStyle: { borderColor: "rgba(255,255,255,0.2)", borderWidth: 1 },
             emphasis: { itemStyle: { shadowBlur: 10, shadowColor: "rgba(99,102,241,0.5)" } },
+            label: {
+              show: showLabels,
+              position: "top",
+              color: "#94a3b8",
+              formatter: (p) => p.value[1],
+            },
           },
         ],
       };
@@ -303,7 +320,12 @@ export default function ChartPanel({
             radius: ["38%", "68%"],
             avoidLabelOverlap: false,
             itemStyle: { borderRadius: 8, borderColor: "#0f172a", borderWidth: 2 },
-            label: { show: false },
+            label: { 
+              show: showLabels,
+              position: "outside",
+              color: "#94a3b8",
+              formatter: "{b}: {c}",
+            },
             emphasis: { label: { show: true, fontSize: 16, fontWeight: "bold", color: "#fff" } },
             data: data.map((item) => ({ value: item[valField], name: item[catField] })),
           },
@@ -359,6 +381,11 @@ export default function ChartPanel({
         emphasis: { focus: "series" },
         barMaxWidth: 50,
         stack: (stacking && chartType === "bar") ? "total" : undefined,
+        label: {
+          show: showLabels,
+          position: chartType === "bar" && stacking ? "inside" : "top",
+          color: chartType === "bar" && stacking ? "#fff" : "#94a3b8",
+        },
       };
     });
 
@@ -403,7 +430,7 @@ export default function ChartPanel({
       color: colors,
       series: seriesData,
     };
-  }, [chartType, data, xAxis, metrics, showLegend, showGrid, colorPalette, binSize, stacking]);
+  }, [chartType, data, xAxis, metrics, showLegend, showGrid, showLabels, colorPalette, binSize, stacking]);
 
   // Get table columns from data
   const tableColumns = data.length > 0 ? Object.keys(data[0]) : [];

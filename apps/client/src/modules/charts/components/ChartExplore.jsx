@@ -105,6 +105,7 @@ export default function ChartExplore({ chartId, onBack }) {
   // ── Customize ──
   const [showLegend, setShowLegend] = useState(true);
   const [showGrid, setShowGrid] = useState(true);
+  const [showLabels, setShowLabels] = useState(false);
   const [colorScheme, setColorScheme] = useState("vivid");
   const [stacking, setStacking] = useState(false);
 
@@ -175,6 +176,7 @@ export default function ChartExplore({ chartId, onBack }) {
             setSelectedDatasetId(chart.dataSource?.datasetId || "");
             setShowLegend(chart.style?.showLegend !== false);
             setShowGrid(chart.style?.showGrid !== false);
+            setShowLabels(chart.style?.showLabels === true);
             setColorScheme(getSchemeByPalette(chart.style?.colorPalette || []));
             setStacking(chart.visualization?.series?.stack || false);
             setLastSaved(chart.updatedAt);
@@ -291,7 +293,7 @@ export default function ChartExplore({ chartId, onBack }) {
     if (resultData.length > 0) {
       setIsDirty(true);
     }
-  }, [chartName, showLegend, showGrid, colorScheme, stacking]);
+  }, [chartName, showLegend, showGrid, showLabels, colorScheme, stacking]);
 
   // ── Execute query ──
   const handleUpdateChart = useCallback(async () => {
@@ -380,6 +382,7 @@ export default function ChartExplore({ chartId, onBack }) {
           colorScheme,
           showLegend,
           showGrid,
+          showLabels,
         },
       };
 
@@ -393,7 +396,7 @@ export default function ChartExplore({ chartId, onBack }) {
     } finally {
       setIsSaving(false);
     }
-  }, [savedChartId, chartName, selectedDatasetId, chartType, xAxis, metrics, dimensionsList, filters, sortBy, showLegend, showGrid, colorScheme, columns, binSize, stacking]);
+  }, [savedChartId, chartName, selectedDatasetId, chartType, xAxis, metrics, dimensionsList, filters, sortBy, showLegend, showGrid, showLabels, colorScheme, columns, binSize, stacking]);
 
   // ── Handle column click from source panel ──
   const handleColumnClick = useCallback((col, role) => {
@@ -532,6 +535,8 @@ export default function ChartExplore({ chartId, onBack }) {
           onToggleLegend={() => setShowLegend((v) => !v)}
           showGrid={showGrid}
           onToggleGrid={() => setShowGrid((v) => !v)}
+          showLabels={showLabels}
+          onToggleLabels={() => setShowLabels((v) => !v)}
           colorScheme={colorScheme}
           onColorSchemeChange={setColorScheme}
           colorSchemeOptions={Object.entries(COLOR_SCHEMES).map(([id, colors]) => ({
@@ -553,6 +558,7 @@ export default function ChartExplore({ chartId, onBack }) {
           dimensionsList={dimensionsList}
           showLegend={showLegend}
           showGrid={showGrid}
+          showLabels={showLabels}
           colorPalette={COLOR_SCHEMES[colorScheme] || COLOR_SCHEMES.vivid}
           rowCount={rowCount}
           executionTimeMs={executionTimeMs}

@@ -58,6 +58,7 @@ const ChartSchema = new Schema(
       colorPalette: { type: [String], default: [] },
       showLegend: { type: Boolean, default: true },
       showGrid: { type: Boolean, default: true },
+      showLabels: { type: Boolean, default: false },
     },
 
     state: {

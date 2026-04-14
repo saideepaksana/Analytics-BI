@@ -55,6 +55,8 @@ export default function QueryPanel({
   colorScheme = "vivid",
   colorSchemeOptions = [],
   onColorSchemeChange,
+  showLabels = false,
+  onToggleLabels,
   // Distribution chart specific
   binSize = 10,
   onSetBinSize,
@@ -420,6 +422,18 @@ export default function QueryPanel({
                 className={`toggle-switch ${showGrid ? "on" : ""}`}
                 onClick={onToggleGrid}
                 aria-label="Toggle chart grid lines"
+              />
+            </div>
+            
+            <div className="customize-toggle">
+              <div className="customize-toggle-copy">
+                <label>Show Data Labels</label>
+                <span>Always display point values on the chart.</span>
+              </div>
+              <button
+                className={`toggle-switch ${showLabels ? "on" : ""}`}
+                onClick={onToggleLabels}
+                aria-label="Toggle data labels"
               />
             </div>
 
