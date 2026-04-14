@@ -564,11 +564,11 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
   // Validate layout for collisions and dimension constraints
   const validateLayout = useCallback(() => {
     if (!name || !name.trim()) return "Please provide a dashboard name";
-    
+
     for (let i = 0; i < (widgets || []).length; i++) {
       const a = widgets[i];
       if (a.w < 1 || a.h < 1) return `Widget ${a.id || i} has invalid size`;
-      
+
       for (let j = i + 1; j < widgets.length; j++) {
         const b = widgets[j];
         const overlap = a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
@@ -925,12 +925,12 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
       widgets,
       thumbnail
     });
-    
+
     lastStateRef.current = {
       name: name.trim(),
       widgets: JSON.stringify(widgets),
     };
-    
+
     setSavingLocal(false);
   };
 

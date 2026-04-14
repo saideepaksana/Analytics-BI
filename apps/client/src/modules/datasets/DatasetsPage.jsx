@@ -3,6 +3,8 @@ import { formatDateTime } from "../../core/utils/formatters";
 import { deleteDataset, listDatasets } from "../../services/datasets.service";
 import { downloadDatasetExport } from "../../services/export.service";
 import { Download, FileText, FileSpreadsheet, FileJson, ChevronDown, Search, SortAsc, SortDesc, Filter } from "lucide-react";
+import "./styles/datasets.css";
+
 
 function DatasetsPage({ activeDatasetId, onOpenDataset }) {
   const [datasets, setDatasets] = useState([]);
@@ -10,14 +12,14 @@ function DatasetsPage({ activeDatasetId, onOpenDataset }) {
   const [error, setError] = useState("");
   const [deleting, setDeleting] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
-  
+
   // New state for enhanced features
   const [searchTerm, setSearchTerm] = useState("");
   const [sortBy, setSortBy] = useState("createdAt");
   const [sortOrder, setSortOrder] = useState("desc");
   const [selectedDatasets, setSelectedDatasets] = useState([]);
-  const [expandedRows, setExpandedRows] = useState(new Set());
-  
+
+
   // Track which dataset's export dropdown is open:
   const [openExportDropdown, setOpenExportDropdown] = useState(null);
   const dropdownRef = useRef(null);
@@ -113,9 +115,9 @@ function DatasetsPage({ activeDatasetId, onOpenDataset }) {
 
   // New handlers
   const handleSelectDataset = useCallback((datasetId, checked) => {
-    setSelectedDatasets(prev => 
-      checked 
-        ? [...prev, datasetId] 
+    setSelectedDatasets(prev =>
+      checked
+        ? [...prev, datasetId]
         : prev.filter(id => id !== datasetId)
     );
   }, []);
@@ -124,21 +126,11 @@ function DatasetsPage({ activeDatasetId, onOpenDataset }) {
     setSelectedDatasets(checked ? filteredDatasets.map(d => d.datasetId) : []);
   }, [filteredDatasets]);
 
-  const handleToggleRow = useCallback((datasetId) => {
-    setExpandedRows(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(datasetId)) {
-        newSet.delete(datasetId);
-      } else {
-        newSet.add(datasetId);
-      }
-      return newSet;
-    });
-  }, []);
+
 
   const handleBulkDelete = useCallback(async () => {
     if (selectedDatasets.length === 0) return;
-    
+
     // Implement bulk delete logic
     setError("Bulk delete not implemented yet");
   }, [selectedDatasets]);
@@ -167,15 +159,15 @@ function DatasetsPage({ activeDatasetId, onOpenDataset }) {
             className="search-input"
           />
         </div>
-        
+
         <div className="sort-container">
           <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
             <option value="createdAt">Date Created</option>
             <option value="fileName">File Name</option>
             <option value="rowCount">Row Count</option>
           </select>
-          <button 
-            type="button" 
+          <button
+            type="button"
             onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
             className="sort-btn"
           >
@@ -225,7 +217,7 @@ function DatasetsPage({ activeDatasetId, onOpenDataset }) {
               {filteredDatasets.map((dataset) => {
                 const isActive = dataset.datasetId === activeDatasetId;
                 const isSelected = selectedDatasets.includes(dataset.datasetId);
-                const isExpanded = expandedRows.has(dataset.datasetId);
+
                 return (
                   <>
                     <tr key={dataset.datasetId} className={isActive ? "dataset-row-active" : ""}>
@@ -238,13 +230,10 @@ function DatasetsPage({ activeDatasetId, onOpenDataset }) {
                       </td>
                       <td className="mono">{dataset.datasetId}</td>
                       <td>
-                        <button 
-                          type="button" 
-                          className="expand-btn"
-                          onClick={() => handleToggleRow(dataset.datasetId)}
-                        >
-                          {dataset.fileName || "-"} {isExpanded ? '▼' : '▶'}
-                        </button>
+                        <span className="file-name-pill">
+                          {dataset.fileName || "-"}
+                        </span>
+
                       </td>
                       <td>{dataset.mode || "-"}</td>
                       <td>{dataset.rowCount ?? 0}</td>
@@ -259,16 +248,16 @@ function DatasetsPage({ activeDatasetId, onOpenDataset }) {
                           >
                             Open in Review
                           </button>
-                          
+
                           <div className="export-dropdown-wrapper" ref={openExportDropdown === dataset.datasetId ? dropdownRef : null}>
-                            <button 
-                              type="button" 
+                            <button
+                              type="button"
                               className="action-btn secondary-btn"
                               onClick={() => setOpenExportDropdown(openExportDropdown === dataset.datasetId ? null : dataset.datasetId)}
                             >
                               <Download size={14} className="icon-left" /> Export <ChevronDown size={14} className="icon-right" />
                             </button>
-                            
+
                             {openExportDropdown === dataset.datasetId && (
                               <div className="export-dropdown-menu">
                                 <button type="button" onClick={() => handleExport(dataset.datasetId, "csv")}>
@@ -295,16 +284,6 @@ function DatasetsPage({ activeDatasetId, onOpenDataset }) {
                         </div>
                       </td>
                     </tr>
-                    {isExpanded && (
-                      <tr className="expanded-row">
-                        <td colSpan="8">
-                          <div className="schema-preview">
-                            <h4>Schema Preview</h4>
-                            <p>Schema preview not implemented yet. Will show column types and sample data.</p>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
                   </>
                 );
               })}

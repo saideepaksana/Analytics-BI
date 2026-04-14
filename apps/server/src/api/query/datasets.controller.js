@@ -302,8 +302,8 @@ exports.deleteAllQuarantinedRows = async (req, res) => {
     await DLQRecord.updateMany(
       { datasetId, status: "QUARANTINED" },
       {
-         $set: { status: "DELETED" },
-         $push: { resolutionHistory: { action: "DELETED_ALL", timestamp: new Date(), user: req.user?.id || "system" } }
+        $set: { status: "DELETED" },
+        $push: { resolutionHistory: { action: "DELETED_ALL", timestamp: new Date(), user: req.user?.id || "system" } }
       }
     );
     const meta = await Metadata.findOneAndUpdate(
@@ -705,9 +705,9 @@ exports.queryDatasetData = async (req, res) => {
           const values = Array.isArray(f.value)
             ? f.value
             : String(f.value || "")
-                .split(",")
-                .map((v) => v.trim())
-                .filter(Boolean);
+              .split(",")
+              .map((v) => v.trim())
+              .filter(Boolean);
           const typedValues = values.map((v) => coerceValue(v, columnType, "IN"));
           const merged = [...new Set([...values, ...typedValues])];
           if (merged.length > 0) matchStage[key] = { $in: merged };
@@ -715,9 +715,9 @@ exports.queryDatasetData = async (req, res) => {
           const values = Array.isArray(f.value)
             ? f.value
             : String(f.value || "")
-                .split(",")
-                .map((v) => v.trim())
-                .filter(Boolean);
+              .split(",")
+              .map((v) => v.trim())
+              .filter(Boolean);
           const typedValues = values.map((v) => coerceValue(v, columnType, "NOT IN"));
           const merged = [...new Set([...values, ...typedValues])];
           if (merged.length > 0) matchStage[key] = { $nin: merged };
@@ -741,7 +741,7 @@ exports.queryDatasetData = async (req, res) => {
       // Aggregated mode: group and aggregate
       const { buildGroupAndProjectStages } = require("./groupStageBuilder");
       const stages = buildGroupAndProjectStages(normalizedDimensions, normalizedMeasures);
-      
+
       metricKeys.push(...stages.metricKeys);
 
       pipeline.push({ $group: stages.groupStage });
@@ -800,18 +800,18 @@ exports.previewGroupStage = async (req, res) => {
   try {
     const { dimensions = [], measures = [] } = req.body;
     const { buildGroupAndProjectStages } = require("./groupStageBuilder");
-    
+
     // Normalize body structure if needed (similar to full query)
     const normalizedDimensions = Array.isArray(dimensions) ? dimensions : [];
     const normalizedMeasures = Array.isArray(measures) ? measures : [];
 
     const stages = buildGroupAndProjectStages(normalizedDimensions, normalizedMeasures);
     return res.json({
-        message: "Aggregation preview generated successfully.",
-        pipeline: [
-            { $group: stages.groupStage },
-            { $project: stages.projectStage }
-        ]
+      message: "Aggregation preview generated successfully.",
+      pipeline: [
+        { $group: stages.groupStage },
+        { $project: stages.projectStage }
+      ]
     });
   } catch (err) {
     return res.status(400).json({ message: "Could not build pipeline preview", error: err.message });
@@ -913,13 +913,13 @@ exports.addRelationship = async (req, res) => {
     if (!targetCol) return res.status(400).json({ message: `Column "${toColumn}" not found in target dataset` });
 
     if (!typesCompatible(sourceCol.dataType || sourceCol.type, targetCol.dataType || targetCol.type)) {
-      return res.status(400).json({ 
-        message: `Incompatible types: Cannot link "${sourceCol.dataType || sourceCol.type}" to "${targetCol.dataType || targetCol.type}"` 
+      return res.status(400).json({
+        message: `Incompatible types: Cannot link "${sourceCol.dataType || sourceCol.type}" to "${targetCol.dataType || targetCol.type}"`
       });
     }
 
     // 2. Uniqueness/Idempotency Check
-    const exists = sourceMeta.relationships?.some(r => 
+    const exists = sourceMeta.relationships?.some(r =>
       (r.fromCollection === datasetId && r.toCollection === toCollection && r.fromColumn === fromColumn && r.toColumn === toColumn) ||
       (r.fromCollection === toCollection && r.toCollection === datasetId && r.fromColumn === toColumn && r.toColumn === fromColumn)
     );

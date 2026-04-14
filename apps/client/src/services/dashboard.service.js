@@ -23,7 +23,7 @@ const normalizeDashboard = (dashboard) => {
   if (dashboard.title && !dashboard.name) {
     dashboard.name = dashboard.title;
   }
-  
+
   const sections = normalizeSections(dashboard);
   const activeSectionId =
     sections.some((section) => section.id === dashboard.activeSectionId)
@@ -55,11 +55,11 @@ export const createDashboard = async (payload = {}) => {
   const sections = Array.isArray(payload.sections) && payload.sections.length > 0
     ? payload.sections
     : [defaultSection(payload.widgets || [])];
-    
+
   const activeSectionId = sections.some((section) => section.id === payload.activeSectionId)
     ? payload.activeSectionId
     : sections[0]?.id;
-    
+
   const name = payload.name?.trim() || "Untitled Dashboard";
 
   // We wrap the full UI state into _rawFrontendState so the backend persists everything.
@@ -67,6 +67,7 @@ export const createDashboard = async (payload = {}) => {
     name,
     sections,
     activeSectionId,
+    thumbnail: payload.thumbnail || null,
     widgets: sections.flatMap((section) => section.widgets || []),
   };
 
@@ -75,7 +76,7 @@ export const createDashboard = async (payload = {}) => {
     description: payload.description?.trim() || "",
     _rawFrontendState: rawFrontendState
   });
-  
+
   return normalizeDashboard(response.data.dashboard);
 };
 
@@ -83,7 +84,7 @@ export const updateDashboard = async (dashboardId, payload = {}) => {
   // First, fetch existing to replicate the merge logic that was previously sync
   const getRes = await apiClient.get(`/dashboards/${dashboardId}`);
   if (!getRes.data || !getRes.data.dashboard) {
-     throw new Error("Dashboard not found");
+    throw new Error("Dashboard not found");
   }
   const existingNormalized = normalizeDashboard(getRes.data.dashboard);
 
