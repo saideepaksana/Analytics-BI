@@ -21,9 +21,9 @@ const logger = require("../core/logger");
 // Queue name registry — single source of truth
 // ---------------------------------------------------------------------------
 const QUEUE_NAMES = {
-  BACKGROUND_TASKS: "background-tasks",
-  BULK_INGESTION: "bulk-ingestion",
-  // Extend here as new queues are introduced
+    BACKGROUND_TASKS: "background-tasks",
+    BULK_INGESTION: "bulk-ingestion",
+    // Extend here as new queues are introduced
 };
 
 // Singleton store
@@ -43,34 +43,34 @@ const queueEventListeners = {};
  * @returns {Queue}
  */
 const getQueue = (queueName, defaultJobOptions = RETRY_POLICIES.STANDARD) => {
-  if (!queues[queueName]) {
-    queues[queueName] = new Queue(queueName, {
-      connection: redisConnection,
-      defaultJobOptions,
-    });
+    if (!queues[queueName]) {
+        queues[queueName] = new Queue(queueName, {
+            connection: redisConnection,
+            defaultJobOptions,
+        });
 
-    // QueueEvents — global monitoring for this queue
-    const events = new QueueEvents(queueName, { connection: redisConnection });
+        // QueueEvents — global monitoring for this queue
+        const events = new QueueEvents(queueName, { connection: redisConnection });
 
-    events.on("completed", ({ jobId }) => {
-      logger.success(`Job ${jobId} completed.`, `Queue:${queueName}`);
-    });
+        events.on("completed", ({ jobId }) => {
+            logger.success(`Job ${jobId} completed.`, `Queue:${queueName}`);
+        });
 
-    events.on("failed", ({ jobId, failedReason }) => {
-      logger.error(`Job ${jobId} failed — ${failedReason}`, `Queue:${queueName}`);
-    });
+        events.on("failed", ({ jobId, failedReason }) => {
+            logger.error(`Job ${jobId} failed — ${failedReason}`, `Queue:${queueName}`);
+        });
 
-    events.on("stalled", ({ jobId }) => {
-      logger.warn(
-        `Job ${jobId} stalled (worker likely crashed mid-job).`,
-        `Queue:${queueName}`
-      );
-    });
+        events.on("stalled", ({ jobId }) => {
+            logger.warn(
+                `Job ${jobId} stalled (worker likely crashed mid-job).`,
+                `Queue:${queueName}`
+            );
+        });
 
-    queueEventListeners[queueName] = events;
-  }
+        queueEventListeners[queueName] = events;
+    }
 
-  return queues[queueName];
+    return queues[queueName];
 };
 
 // ---------------------------------------------------------------------------
@@ -89,8 +89,8 @@ const getQueueEvents = (queueName) => queueEventListeners[queueName];
 
 /** General background task queue (standard retry policy) */
 const backgroundTasksQueue = getQueue(
-  QUEUE_NAMES.BACKGROUND_TASKS,
-  RETRY_POLICIES.STANDARD
+    QUEUE_NAMES.BACKGROUND_TASKS,
+    RETRY_POLICIES.STANDARD
 );
 
 /**
@@ -98,8 +98,8 @@ const backgroundTasksQueue = getQueue(
  * Worker concurrency for this queue is lower (see orchestrator.js).
  */
 const bulkIngestionQueue = getQueue(
-  QUEUE_NAMES.BULK_INGESTION,
-  RETRY_POLICIES.CONSERVATIVE
+    QUEUE_NAMES.BULK_INGESTION,
+    RETRY_POLICIES.CONSERVATIVE
 );
 
 // ---------------------------------------------------------------------------
@@ -116,7 +116,7 @@ const bulkIngestionQueue = getQueue(
  * @returns {Promise<import('bullmq').Job>}
  */
 const addBackgroundTask = async (jobName, data, opts = {}) => {
-  return backgroundTasksQueue.add(jobName, data, opts);
+    return backgroundTasksQueue.add(jobName, data, opts);
 };
 
 /**
@@ -128,7 +128,7 @@ const addBackgroundTask = async (jobName, data, opts = {}) => {
  * @returns {Promise<import('bullmq').Job>}
  */
 const addBulkIngestionJob = async (jobName, data, opts = {}) => {
-  return bulkIngestionQueue.add(jobName, data, opts);
+    return bulkIngestionQueue.add(jobName, data, opts);
 };
 
 /**
@@ -141,25 +141,25 @@ const addBulkIngestionJob = async (jobName, data, opts = {}) => {
  * @returns {Promise<any>} - Resolves with job return value, rejects on failure
  */
 const waitUntilFinished = async (queueName, jobId, timeout = 30000) => {
-  const queue = queues[queueName];
-  if (!queue) throw new Error(`Queue "${queueName}" not initialized.`);
+    const queue = queues[queueName];
+    if (!queue) throw new Error(`Queue "${queueName}" not initialized.`);
 
-  const job = await queue.getJob(jobId);
-  if (!job) throw new Error(`Job "${jobId}" not found in queue "${queueName}".`);
+    const job = await queue.getJob(jobId);
+    if (!job) throw new Error(`Job "${jobId}" not found in queue "${queueName}".`);
 
-  const events = getQueueEvents(queueName);
-  if (!events) throw new Error(`QueueEvents for "${queueName}" not initialized.`);
+    const events = getQueueEvents(queueName);
+    if (!events) throw new Error(`QueueEvents for "${queueName}" not initialized.`);
 
-  return job.waitUntilFinished(events, timeout);
+    return job.waitUntilFinished(events, timeout);
 };
 
 module.exports = {
-  QUEUE_NAMES,
-  getQueue,
-  getQueueEvents,
-  waitUntilFinished,
-  backgroundTasksQueue,
-  bulkIngestionQueue,
-  addBackgroundTask,
-  addBulkIngestionJob,
+    QUEUE_NAMES,
+    getQueue,
+    getQueueEvents,
+    waitUntilFinished,
+    backgroundTasksQueue,
+    bulkIngestionQueue,
+    addBackgroundTask,
+    addBulkIngestionJob,
 };

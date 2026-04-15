@@ -26,12 +26,12 @@ const DLQ_NAME = "dead-letter-queue";
 
 // Singleton DLQ queue instance
 const dlqQueue = new Queue(DLQ_NAME, {
-  connection: redisConnection,
-  defaultJobOptions: {
-    ...RETRY_POLICIES.NONE,         // No retries — this is the end of the line
-    removeOnComplete: { count: 500 }, // Keep last 500 dead-job records for audit
-    removeOnFail: false,
-  },
+    connection: redisConnection,
+    defaultJobOptions: {
+        ...RETRY_POLICIES.NONE,         // No retries — this is the end of the line
+        removeOnComplete: { count: 500 }, // Keep last 500 dead-job records for audit
+        removeOnFail: false,
+    },
 });
 
 /**
@@ -42,29 +42,29 @@ const dlqQueue = new Queue(DLQ_NAME, {
  * @param {Error}                err  - The error that caused the failure
  */
 const sendToDLQ = async (job, err) => {
-  try {
-    await dlqQueue.add(
-      job.name,
-      {
-        originalQueue: job.queueName,
-        originalJobId: job.id,
-        originalData: job.data,
-        failedReason: err?.message || "Unknown error",
-        failedAt: new Date().toISOString(),
-        attemptsMade: job.attemptsMade,
-        stackTrace: err?.stack || null,
-      },
-      { jobId: `dlq-${job.id}-${Date.now()}` }
-    );
+    try {
+        await dlqQueue.add(
+            job.name,
+            {
+                originalQueue: job.queueName,
+                originalJobId: job.id,
+                originalData: job.data,
+                failedReason: err?.message || "Unknown error",
+                failedAt: new Date().toISOString(),
+                attemptsMade: job.attemptsMade,
+                stackTrace: err?.stack || null,
+            },
+            { jobId: `dlq-${job.id}-${Date.now()}` }
+        );
 
-    logger.error(
-      `Job "${job.name}" (ID: ${job.id}) from queue "${job.queueName}" ` +
-        `quarantined after ${job.attemptsMade} attempt(s). Reason: ${err?.message}`,
-      "DLQ"
-    );
-  } catch (dlqErr) {
-    logger.error(`Could not write to dead-letter-queue: ${dlqErr.message}`, "DLQ");
-  }
+        logger.error(
+            `Job "${job.name}" (ID: ${job.id}) from queue "${job.queueName}" ` +
+            `quarantined after ${job.attemptsMade} attempt(s). Reason: ${err?.message}`,
+            "DLQ"
+        );
+    } catch (dlqErr) {
+        logger.error(`Could not write to dead-letter-queue: ${dlqErr.message}`, "DLQ");
+    }
 };
 
 /**
@@ -76,41 +76,41 @@ const sendToDLQ = async (job, err) => {
  * @param {string} sourceQueueName - The name of the queue to watch
  */
 const attachDLQListener = (sourceQueueName) => {
-  const events = new QueueEvents(sourceQueueName, { connection: redisConnection });
+    const events = new QueueEvents(sourceQueueName, { connection: redisConnection });
 
-  events.on("failed", async ({ jobId, failedReason, prev }) => {
-    // "prev" holds the previous state; only act on final failure
-    // (BullMQ sets prev = 'active' when all retries are exhausted)
-    if (prev !== "active") return;
+    events.on("failed", async ({ jobId, failedReason, prev }) => {
+        // "prev" holds the previous state; only act on final failure
+        // (BullMQ sets prev = 'active' when all retries are exhausted)
+        if (prev !== "active") return;
 
-    try {
-      await dlqQueue.add(
-        `auto-captured:${sourceQueueName}`,
-        {
-          originalQueue: sourceQueueName,
-          originalJobId: jobId,
-          failedReason,
-          capturedAt: new Date().toISOString(),
-        },
-        { jobId: `dlq-auto-${jobId}-${Date.now()}` }
-      );
+        try {
+            await dlqQueue.add(
+                `auto-captured:${sourceQueueName}`,
+                {
+                    originalQueue: sourceQueueName,
+                    originalJobId: jobId,
+                    failedReason,
+                    capturedAt: new Date().toISOString(),
+                },
+                { jobId: `dlq-auto-${jobId}-${Date.now()}` }
+            );
 
-      logger.error(
-        `Auto-captured exhausted job ${jobId} from queue "${sourceQueueName}". ` +
-          `Reason: ${failedReason}`,
-        "DLQ"
-      );
-    } catch (err) {
-      logger.error(`Auto-capture failed: ${err.message}`, "DLQ");
-    }
-  });
+            logger.error(
+                `Auto-captured exhausted job ${jobId} from queue "${sourceQueueName}". ` +
+                `Reason: ${failedReason}`,
+                "DLQ"
+            );
+        } catch (err) {
+            logger.error(`Auto-capture failed: ${err.message}`, "DLQ");
+        }
+    });
 
-  logger.info(`Watching queue "${sourceQueueName}" for exhausted failures.`, "DLQ");
+    logger.info(`Watching queue "${sourceQueueName}" for exhausted failures.`, "DLQ");
 };
 
 module.exports = {
-  DLQ_NAME,
-  dlqQueue,
-  sendToDLQ,
-  attachDLQListener,
+    DLQ_NAME,
+    dlqQueue,
+    sendToDLQ,
+    attachDLQListener,
 };

@@ -17,18 +17,18 @@
  * Throw a PermanentError to skip retries entirely and fail immediately.
  */
 class PermanentError extends Error {
-  constructor(message, options = {}) {
-    super(message, options);
-    this.name = "PermanentError";
-    this.permanent = true;
-  }
+    constructor(message, options = {}) {
+        super(message, options);
+        this.name = "PermanentError";
+        this.permanent = true;
+    }
 }
 
 class TransientError extends Error {
-  constructor(message, options = {}) {
-    super(message, options);
-    this.name = "TransientError";
-  }
+    constructor(message, options = {}) {
+        super(message, options);
+        this.name = "TransientError";
+    }
 }
 
 /**
@@ -47,41 +47,41 @@ class TransientError extends Error {
  *        1 attempt only, fails immediately on error.
  */
 const RETRY_POLICIES = {
-  STANDARD: {
-    attempts: 3,
-    backoff: {
-      type: "exponential",
-      delay: 2000, // 2s → 4s → 8s
+    STANDARD: {
+        attempts: 3,
+        backoff: {
+            type: "exponential",
+            delay: 2000, // 2s → 4s → 8s
+        },
+        removeOnComplete: { count: 100 }, // Keep last 100 successful jobs for auditing
+        removeOnFail: false,             // Keep ALL failed jobs for DLQ inspection
     },
-    removeOnComplete: { count: 100 }, // Keep last 100 successful jobs for auditing
-    removeOnFail: false,             // Keep ALL failed jobs for DLQ inspection
-  },
 
-  AGGRESSIVE: {
-    attempts: 5,
-    backoff: {
-      type: "exponential",
-      delay: 1000, // 1s → 2s → 4s → 8s → 16s
+    AGGRESSIVE: {
+        attempts: 5,
+        backoff: {
+            type: "exponential",
+            delay: 1000, // 1s → 2s → 4s → 8s → 16s
+        },
+        removeOnComplete: { count: 50 },
+        removeOnFail: false,
     },
-    removeOnComplete: { count: 50 },
-    removeOnFail: false,
-  },
 
-  CONSERVATIVE: {
-    attempts: 2,
-    backoff: {
-      type: "exponential",
-      delay: 5000, // 5s → 10s
+    CONSERVATIVE: {
+        attempts: 2,
+        backoff: {
+            type: "exponential",
+            delay: 5000, // 5s → 10s
+        },
+        removeOnComplete: { count: 50 },
+        removeOnFail: false,
     },
-    removeOnComplete: { count: 50 },
-    removeOnFail: false,
-  },
 
-  NONE: {
-    attempts: 1,
-    removeOnComplete: { count: 50 },
-    removeOnFail: false,
-  },
+    NONE: {
+        attempts: 1,
+        removeOnComplete: { count: 50 },
+        removeOnFail: false,
+    },
 };
 
 /**
@@ -92,34 +92,34 @@ const RETRY_POLICIES = {
  * @returns {boolean} - true = permanent failure, false = transient (retryable)
  */
 const isPermanentFailure = (error) => {
-  // Explicit permanent classification
-  if (error?.permanent === true) return true;
+    // Explicit permanent classification
+    if (error?.permanent === true) return true;
 
-  // Explicit status code check (4xx errors are usually non-retryable)
-  if (error?.status && [400, 401, 403, 404, 422].includes(error.status)) return true;
+    // Explicit status code check (4xx errors are usually non-retryable)
+    if (error?.status && [400, 401, 403, 404, 422].includes(error.status)) return true;
 
-  // Known unrecoverable error types
-  const permanentMessages = [
-    "ValidationError",
-    "CastError",
-    "Bad Request",
-    "Unauthorized",
-    "Forbidden",
-    "not found",
-    "invalid format",
-    "schema mismatch",
-  ];
+    // Known unrecoverable error types
+    const permanentMessages = [
+        "ValidationError",
+        "CastError",
+        "Bad Request",
+        "Unauthorized",
+        "Forbidden",
+        "not found",
+        "invalid format",
+        "schema mismatch",
+    ];
 
-  if (error?.name === "PermanentError") return true;
+    if (error?.name === "PermanentError") return true;
 
-  return permanentMessages.some((msg) =>
-    error?.message?.toLowerCase().includes(msg.toLowerCase())
-  );
+    return permanentMessages.some((msg) =>
+        error?.message?.toLowerCase().includes(msg.toLowerCase())
+    );
 };
 
 module.exports = {
-  RETRY_POLICIES,
-  PermanentError,
-  TransientError,
-  isPermanentFailure,
+    RETRY_POLICIES,
+    PermanentError,
+    TransientError,
+    isPermanentFailure,
 };

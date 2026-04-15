@@ -40,15 +40,15 @@ const workers = {};
 const { runUploadProcessor } = require("./uploadProcessor");
 
 function ensurePermanentError(err) {
-  if (!err) return new PermanentError("Unknown permanent error");
-  if (err instanceof PermanentError || err?.name === "PermanentError" || err?.permanent === true) return err;
-  return new PermanentError(err.message || "Permanent error", { cause: err });
+    if (!err) return new PermanentError("Unknown permanent error");
+    if (err instanceof PermanentError || err?.name === "PermanentError" || err?.permanent === true) return err;
+    return new PermanentError(err.message || "Permanent error", { cause: err });
 }
 
 function ensureTransientError(err) {
-  if (!err) return new TransientError("Unknown transient error");
-  if (err instanceof TransientError || err?.name === "TransientError") return err;
-  return new TransientError(err.message || "Transient error", { cause: err });
+    if (!err) return new TransientError("Unknown transient error");
+    if (err instanceof TransientError || err?.name === "TransientError") return err;
+    return new TransientError(err.message || "Transient error", { cause: err });
 }
 
 /**
@@ -56,32 +56,32 @@ function ensureTransientError(err) {
  * Each key is a job.name string; each value is an async function (job) => result.
  */
 const BACKGROUND_TASK_HANDLERS = {
-  // Example handler — remove once you wire in real jobs:
-  "test-job": async (job) => {
-    const { message, duration, simulateFailure } = job.data;
-    if (simulateFailure) {
-      throw new Error(`Simulated failure for job ${job.id}`);
-    }
-    logger.info(`[test-job] ${message || `ID: ${job.id}`} (duration: ${duration || 500}ms)`, "Worker");
-    await new Promise((r) => setTimeout(r, duration || 500));
-    return { status: "ok", echo: message };
-  },
+    // Example handler — remove once you wire in real jobs:
+    "test-job": async (job) => {
+        const { message, duration, simulateFailure } = job.data;
+        if (simulateFailure) {
+            throw new Error(`Simulated failure for job ${job.id}`);
+        }
+        logger.info(`[test-job] ${message || `ID: ${job.id}`} (duration: ${duration || 500}ms)`, "Worker");
+        await new Promise((r) => setTimeout(r, duration || 500));
+        return { status: "ok", echo: message };
+    },
 
-  // Process file upload from GridFS
-  "process-upload": async (job) => {
-    return await runUploadProcessor(job.data);
-  },
+    // Process file upload from GridFS
+    "process-upload": async (job) => {
+        return await runUploadProcessor(job.data);
+    },
 };
 
 /**
  * Dispatch table for bulk-ingestion queue.
  */
 const BULK_INGESTION_HANDLERS = {
-  // Placeholder: uncomment and implement when wiring bulk CSV/Excel ingest
-  // "ingest-csv": async (job) => {
-  //   const { fileId, datasetId } = job.data;
-  //   return await ingestCsvWorker.run(fileId, datasetId);
-  // },
+    // Placeholder: uncomment and implement when wiring bulk CSV/Excel ingest
+    // "ingest-csv": async (job) => {
+    //   const { fileId, datasetId } = job.data;
+    //   return await ingestCsvWorker.run(fileId, datasetId);
+    // },
 };
 
 // ---------------------------------------------------------------------------
@@ -105,62 +105,62 @@ const BULK_INGESTION_HANDLERS = {
  * @returns {Function}        - async (job) => result
  */
 const makeProcessor = (handlerMap) => async (job) => {
-  // 1. Global concurrency guard
-  if (!globalSemaphore.acquire()) {
-    const waitMs = 3000 + Math.random() * 2000; // jitter: 3–5 s
-    logger.warn(
-      `Global limit reached (${globalSemaphore.count}/${globalSemaphore.limit}). ` +
-        `Re-queuing job ${job.id} ("${job.name}") after ${Math.round(waitMs)}ms.`,
-      "Worker"
-    );
-    await job.moveToDelayed(Date.now() + waitMs, job.token);
-    throw new DelayedError();
-  }
-
-  try {
-    logger.info(
-      `Starting job "${job.name}" (ID: ${job.id}) — ` +
-        `attempt ${job.attemptsMade + 1} of ${job.opts.attempts ?? "?"}`,
-      "Worker"
-    );
-
-    // 2. Route to the correct handler
-    const handler = handlerMap[job.name];
-    if (!handler) {
-      // Unknown job name: permanent failure — no point retrying
-      throw new PermanentError(`No handler registered for job name: "${job.name}"`);
+    // 1. Global concurrency guard
+    if (!globalSemaphore.acquire()) {
+        const waitMs = 3000 + Math.random() * 2000; // jitter: 3–5 s
+        logger.warn(
+            `Global limit reached (${globalSemaphore.count}/${globalSemaphore.limit}). ` +
+            `Re-queuing job ${job.id} ("${job.name}") after ${Math.round(waitMs)}ms.`,
+            "Worker"
+        );
+        await job.moveToDelayed(Date.now() + waitMs, job.token);
+        throw new DelayedError();
     }
 
-    const result = await handler(job);
+    try {
+        logger.info(
+            `Starting job "${job.name}" (ID: ${job.id}) — ` +
+            `attempt ${job.attemptsMade + 1} of ${job.opts.attempts ?? "?"}`,
+            "Worker"
+        );
 
-    logger.success(`Job "${job.name}" (ID: ${job.id}) completed successfully.`, "Worker");
-    return result;
-  } catch (err) {
-    // 3. Classify failure
-    if (isPermanentFailure(err)) {
-      logger.error(
-        `Permanent failure on job "${job.name}" (ID: ${job.id}). ` +
-          `Routing to DLQ. Error: ${err.message}`,
-        "Worker"
-      );
-      await sendToDLQ(job, err);
+        // 2. Route to the correct handler
+        const handler = handlerMap[job.name];
+        if (!handler) {
+            // Unknown job name: permanent failure — no point retrying
+            throw new PermanentError(`No handler registered for job name: "${job.name}"`);
+        }
 
-      // Return without re-throwing so BullMQ marks it failed-without-retry
-      // (BullMQ will still move it to the failed set; DLQ has the full record).
-      throw ensurePermanentError(err);
+        const result = await handler(job);
+
+        logger.success(`Job "${job.name}" (ID: ${job.id}) completed successfully.`, "Worker");
+        return result;
+    } catch (err) {
+        // 3. Classify failure
+        if (isPermanentFailure(err)) {
+            logger.error(
+                `Permanent failure on job "${job.name}" (ID: ${job.id}). ` +
+                `Routing to DLQ. Error: ${err.message}`,
+                "Worker"
+            );
+            await sendToDLQ(job, err);
+
+            // Return without re-throwing so BullMQ marks it failed-without-retry
+            // (BullMQ will still move it to the failed set; DLQ has the full record).
+            throw ensurePermanentError(err);
+        }
+
+        // Transient error — log and re-throw so BullMQ applies exponential backoff
+        logger.error(
+            `Transient failure on job "${job.name}" (ID: ${job.id}), ` +
+            `attempt ${job.attemptsMade + 1}. BullMQ will retry. Error: ${err.message}`,
+            "Worker"
+        );
+        throw ensureTransientError(err);
+    } finally {
+        // 4. Always release the global semaphore slot
+        globalSemaphore.release();
     }
-
-    // Transient error — log and re-throw so BullMQ applies exponential backoff
-    logger.error(
-      `Transient failure on job "${job.name}" (ID: ${job.id}), ` +
-        `attempt ${job.attemptsMade + 1}. BullMQ will retry. Error: ${err.message}`,
-      "Worker"
-    );
-    throw ensureTransientError(err);
-  } finally {
-    // 4. Always release the global semaphore slot
-    globalSemaphore.release();
-  }
 };
 
 // ---------------------------------------------------------------------------
@@ -176,34 +176,34 @@ const makeProcessor = (handlerMap) => async (job) => {
  * @returns {Worker}
  */
 const startWorker = (queueName, processor, opts = {}) => {
-  if (workers[queueName]) {
-    logger.warn(`Already running for queue "${queueName}".`, "Worker");
-    return workers[queueName];
-  }
+    if (workers[queueName]) {
+        logger.warn(`Already running for queue "${queueName}".`, "Worker");
+        return workers[queueName];
+    }
 
-  const concurrency = getConcurrency(queueName);
+    const concurrency = getConcurrency(queueName);
 
-  const worker = new Worker(queueName, processor, {
-    connection: redisConfig,
-    concurrency,
-    ...opts,
-  });
+    const worker = new Worker(queueName, processor, {
+        connection: redisConfig,
+        concurrency,
+        ...opts,
+    });
 
-  worker.once("ready", () => {
-    logger.success(
-      `Ready — queue: "${queueName}" | concurrency: ${concurrency} | ` +
-        `global limit: ${globalSemaphore.limit}`,
-      "Worker"
-    );
-  });
+    worker.once("ready", () => {
+        logger.success(
+            `Ready — queue: "${queueName}" | concurrency: ${concurrency} | ` +
+            `global limit: ${globalSemaphore.limit}`,
+            "Worker"
+        );
+    });
 
-  worker.on("error", (err) => {
-    // Connection-level errors (not job errors) — log only, don't exit.
-    logger.error(`Connection error for "${queueName}": ${err.message}`, "Worker");
-  });
+    worker.on("error", (err) => {
+        // Connection-level errors (not job errors) — log only, don't exit.
+        logger.error(`Connection error for "${queueName}": ${err.message}`, "Worker");
+    });
 
-  workers[queueName] = worker;
-  return worker;
+    workers[queueName] = worker;
+    return worker;
 };
 
 // ---------------------------------------------------------------------------
@@ -215,33 +215,33 @@ const startWorker = (queueName, processor, opts = {}) => {
  * Called once from src/index.js on server boot.
  */
 const initWorkers = () => {
-  // Guard: ensure workers are only ever initialized ONCE per process lifetime.
-  // Prevents duplicate workers if initWorkers() is accidentally called multiple
-  // times (e.g., from test setup, hot-reload quirks, or a mis-placed import).
-  if (global.__workers_initialized__) {
-    logger.warn("initWorkers() called again — skipping (already initialized).", "Worker");
-    return;
-  }
-  global.__workers_initialized__ = true;
+    // Guard: ensure workers are only ever initialized ONCE per process lifetime.
+    // Prevents duplicate workers if initWorkers() is accidentally called multiple
+    // times (e.g., from test setup, hot-reload quirks, or a mis-placed import).
+    if (global.__workers_initialized__) {
+        logger.warn("initWorkers() called again — skipping (already initialized).", "Worker");
+        return;
+    }
+    global.__workers_initialized__ = true;
 
-  logger.info(
-    `Initializing workers (profile: ${process.env.WORKER_CONCURRENCY_PROFILE || "MEDIUM"})...`,
-    "Worker"
-  );
+    logger.info(
+        `Initializing workers (profile: ${process.env.WORKER_CONCURRENCY_PROFILE || "MEDIUM"})...`,
+        "Worker"
+    );
 
-  // --- background-tasks worker ---
-  startWorker(
-    QUEUE_NAMES.BACKGROUND_TASKS,
-    makeProcessor(BACKGROUND_TASK_HANDLERS)
-  );
-  attachDLQListener(QUEUE_NAMES.BACKGROUND_TASKS);
+    // --- background-tasks worker ---
+    startWorker(
+        QUEUE_NAMES.BACKGROUND_TASKS,
+        makeProcessor(BACKGROUND_TASK_HANDLERS)
+    );
+    attachDLQListener(QUEUE_NAMES.BACKGROUND_TASKS);
 
-  // --- bulk-ingestion worker ---
-  startWorker(
-    QUEUE_NAMES.BULK_INGESTION,
-    makeProcessor(BULK_INGESTION_HANDLERS)
-  );
-  attachDLQListener(QUEUE_NAMES.BULK_INGESTION);
+    // --- bulk-ingestion worker ---
+    startWorker(
+        QUEUE_NAMES.BULK_INGESTION,
+        makeProcessor(BULK_INGESTION_HANDLERS)
+    );
+    attachDLQListener(QUEUE_NAMES.BULK_INGESTION);
 };
 
 // ---------------------------------------------------------------------------
@@ -253,19 +253,19 @@ const initWorkers = () => {
  * Called from SIGINT / SIGTERM in src/index.js.
  */
 const shutdownWorkers = async () => {
-  logger.warn("Initiating graceful shutdown...", "Worker");
-  for (const [queueName, worker] of Object.entries(workers)) {
-    logger.info(`Closing worker for "${queueName}"...`, "Worker");
-    await worker.close(); // Waits for in-flight jobs to finish
-  }
-  logger.success("All workers shut down cleanly.", "Worker");
+    logger.warn("Initiating graceful shutdown...", "Worker");
+    for (const [queueName, worker] of Object.entries(workers)) {
+        logger.info(`Closing worker for "${queueName}"...`, "Worker");
+        await worker.close(); // Waits for in-flight jobs to finish
+    }
+    logger.success("All workers shut down cleanly.", "Worker");
 };
 
 module.exports = {
-  startWorker,
-  initWorkers,
-  shutdownWorkers,
-  makeProcessor, // exported so feature-specific workers can reuse the wrapper
-  BACKGROUND_TASK_HANDLERS,
-  BULK_INGESTION_HANDLERS,
+    startWorker,
+    initWorkers,
+    shutdownWorkers,
+    makeProcessor, // exported so feature-specific workers can reuse the wrapper
+    BACKGROUND_TASK_HANDLERS,
+    BULK_INGESTION_HANDLERS,
 };

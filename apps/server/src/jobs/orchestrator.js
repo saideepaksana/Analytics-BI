@@ -34,30 +34,30 @@ const logger = require("../core/logger");
  * Select via WORKER_CONCURRENCY_PROFILE env var (default: MEDIUM).
  */
 const CONCURRENCY_PROFILES = {
-  LOW: {
-    "background-tasks": 2,
-    "bulk-ingestion": 1,
-    DEFAULT: 2,
-    GLOBAL_MAX: 5,
-  },
-  MEDIUM: {
-    "background-tasks": 5,
-    "bulk-ingestion": 3,
-    DEFAULT: 3,
-    GLOBAL_MAX: 15,
-  },
-  HIGH: {
-    "background-tasks": 10,
-    "bulk-ingestion": 5,
-    DEFAULT: 5,
-    GLOBAL_MAX: 30,
-  },
+    LOW: {
+        "background-tasks": 2,
+        "bulk-ingestion": 1,
+        DEFAULT: 2,
+        GLOBAL_MAX: 5,
+    },
+    MEDIUM: {
+        "background-tasks": 5,
+        "bulk-ingestion": 3,
+        DEFAULT: 3,
+        GLOBAL_MAX: 15,
+    },
+    HIGH: {
+        "background-tasks": 10,
+        "bulk-ingestion": 5,
+        DEFAULT: 5,
+        GLOBAL_MAX: 30,
+    },
 };
 
 const activeProfile =
-  CONCURRENCY_PROFILES[
+    CONCURRENCY_PROFILES[
     (process.env.WORKER_CONCURRENCY_PROFILE || "MEDIUM").toUpperCase()
-  ] || CONCURRENCY_PROFILES.MEDIUM;
+    ] || CONCURRENCY_PROFILES.MEDIUM;
 
 /**
  * Get the concurrency limit for a specific queue.
@@ -67,7 +67,7 @@ const activeProfile =
  * @returns {number}
  */
 const getConcurrency = (queueName) =>
-  activeProfile[queueName] ?? activeProfile.DEFAULT;
+    activeProfile[queueName] ?? activeProfile.DEFAULT;
 
 // ---------------------------------------------------------------------------
 // Global in-flight semaphore
@@ -77,31 +77,31 @@ const getConcurrency = (queueName) =>
 let _activeJobCount = 0;
 
 const globalSemaphore = {
-  get count() {
-    return _activeJobCount;
-  },
-  get limit() {
-    return activeProfile.GLOBAL_MAX;
-  },
+    get count() {
+        return _activeJobCount;
+    },
+    get limit() {
+        return activeProfile.GLOBAL_MAX;
+    },
 
-  /**
-   * Attempt to acquire a slot. Returns false if at capacity.
-   * Call this at the START of each job processor.
-   */
-  acquire() {
-    if (_activeJobCount >= activeProfile.GLOBAL_MAX) {
-      return false;
-    }
-    _activeJobCount++;
-    return true;
-  },
+    /**
+     * Attempt to acquire a slot. Returns false if at capacity.
+     * Call this at the START of each job processor.
+     */
+    acquire() {
+        if (_activeJobCount >= activeProfile.GLOBAL_MAX) {
+            return false;
+        }
+        _activeJobCount++;
+        return true;
+    },
 
-  /**
-   * Release a slot. Call this in finally{} at the END of each job processor.
-   */
-  release() {
-    if (_activeJobCount > 0) _activeJobCount--;
-  },
+    /**
+     * Release a slot. Call this in finally{} at the END of each job processor.
+     */
+    release() {
+        if (_activeJobCount > 0) _activeJobCount--;
+    },
 };
 
 // ---------------------------------------------------------------------------
@@ -122,41 +122,41 @@ const DEFAULT_BATCH_SIZE = 50;
  * @returns {Promise<{enqueued: number, batches: number}>}
  */
 const bulkDispatch = async (
-  queue,
-  jobName,
-  dataItems,
-  options = {},
-  batchSize = DEFAULT_BATCH_SIZE
+    queue,
+    jobName,
+    dataItems,
+    options = {},
+    batchSize = DEFAULT_BATCH_SIZE
 ) => {
-  if (!Array.isArray(dataItems) || dataItems.length === 0) {
-    return { enqueued: 0, batches: 0 };
-  }
+    if (!Array.isArray(dataItems) || dataItems.length === 0) {
+        return { enqueued: 0, batches: 0 };
+    }
 
-  const mergedOptions = { ...RETRY_POLICIES.STANDARD, ...options };
-  let enqueued = 0;
-  let batches = 0;
+    const mergedOptions = { ...RETRY_POLICIES.STANDARD, ...options };
+    let enqueued = 0;
+    let batches = 0;
 
-  for (let i = 0; i < dataItems.length; i += batchSize) {
-    const chunk = dataItems.slice(i, i + batchSize);
+    for (let i = 0; i < dataItems.length; i += batchSize) {
+        const chunk = dataItems.slice(i, i + batchSize);
 
-    const jobs = chunk.map((data) => ({
-      name: jobName,
-      data,
-      opts: mergedOptions,
-    }));
+        const jobs = chunk.map((data) => ({
+            name: jobName,
+            data,
+            opts: mergedOptions,
+        }));
 
-    await queue.addBulk(jobs);
-    enqueued += chunk.length;
-    batches++;
+        await queue.addBulk(jobs);
+        enqueued += chunk.length;
+        batches++;
 
-    logger.info(
-      `Dispatched batch ${batches} → ${chunk.length} jobs ` +
-        `(${enqueued}/${dataItems.length} total) to queue "${queue.name}"`,
-      "Orchestrator"
-    );
-  }
+        logger.info(
+            `Dispatched batch ${batches} → ${chunk.length} jobs ` +
+            `(${enqueued}/${dataItems.length} total) to queue "${queue.name}"`,
+            "Orchestrator"
+        );
+    }
 
-  return { enqueued, batches };
+    return { enqueued, batches };
 };
 
 // ---------------------------------------------------------------------------
@@ -170,24 +170,24 @@ const bulkDispatch = async (
  * @returns {Promise<Object>}
  */
 const getQueueStats = async (queue) => {
-  const [active, waiting, failed, delayed, completed] = await Promise.all([
-    queue.getActiveCount(),
-    queue.getWaitingCount(),
-    queue.getFailedCount(),
-    queue.getDelayedCount(),
-    queue.getCompletedCount(),
-  ]);
+    const [active, waiting, failed, delayed, completed] = await Promise.all([
+        queue.getActiveCount(),
+        queue.getWaitingCount(),
+        queue.getFailedCount(),
+        queue.getDelayedCount(),
+        queue.getCompletedCount(),
+    ]);
 
-  return {
-    queue: queue.name,
-    active,
-    waiting,
-    failed,
-    delayed,
-    completed,
-    globalActiveJobs: _activeJobCount,
-    globalLimit: activeProfile.GLOBAL_MAX,
-  };
+    return {
+        queue: queue.name,
+        active,
+        waiting,
+        failed,
+        delayed,
+        completed,
+        globalActiveJobs: _activeJobCount,
+        globalLimit: activeProfile.GLOBAL_MAX,
+    };
 };
 
 /**
@@ -197,8 +197,8 @@ const getQueueStats = async (queue) => {
  * @param {Queue} queue
  */
 const pauseQueue = async (queue) => {
-  await queue.pause();
-  logger.warn(`Queue "${queue.name}" PAUSED.`, "Orchestrator");
+    await queue.pause();
+    logger.warn(`Queue "${queue.name}" PAUSED.`, "Orchestrator");
 };
 
 /**
@@ -207,8 +207,8 @@ const pauseQueue = async (queue) => {
  * @param {Queue} queue
  */
 const resumeQueue = async (queue) => {
-  await queue.resume();
-  logger.info(`Queue "${queue.name}" RESUMED.`, "Orchestrator");
+    await queue.resume();
+    logger.info(`Queue "${queue.name}" RESUMED.`, "Orchestrator");
 };
 
 /**
@@ -220,21 +220,21 @@ const resumeQueue = async (queue) => {
  * @returns {Promise<boolean>}
  */
 const retryJob = async (queue, jobId) => {
-  const job = await queue.getJob(jobId);
-  if (!job) {
-    logger.error(`Cannot retry job: ID "${jobId}" not found in queue "${queue.name}"`, "Orchestrator");
-    return false;
-  }
+    const job = await queue.getJob(jobId);
+    if (!job) {
+        logger.error(`Cannot retry job: ID "${jobId}" not found in queue "${queue.name}"`, "Orchestrator");
+        return false;
+    }
 
-  const state = await job.getState();
-  if (state !== "failed") {
-    logger.warn(`Job "${jobId}" is currently in "${state}" state. Retry only works for failed jobs.`, "Orchestrator");
-    return false;
-  }
+    const state = await job.getState();
+    if (state !== "failed") {
+        logger.warn(`Job "${jobId}" is currently in "${state}" state. Retry only works for failed jobs.`, "Orchestrator");
+        return false;
+    }
 
-  await job.retry();
-  logger.info(`Manual retry initiated for job "${jobId}" in queue "${queue.name}"`, "Orchestrator");
-  return true;
+    await job.retry();
+    logger.info(`Manual retry initiated for job "${jobId}" in queue "${queue.name}"`, "Orchestrator");
+    return true;
 };
 
 // ---------------------------------------------------------------------------
@@ -244,15 +244,15 @@ const retryJob = async (queue, jobId) => {
 const { bulkIngestionQueue, backgroundTasksQueue } = require("./queue");
 
 module.exports = {
-  CONCURRENCY_PROFILES,
-  activeProfile,
-  getConcurrency,
-  globalSemaphore,
-  bulkDispatch,
-  getQueueStats,
-  pauseQueue,
-  resumeQueue,
-  retryJob,
-  bulkIngestionQueue,
-  backgroundTasksQueue,
+    CONCURRENCY_PROFILES,
+    activeProfile,
+    getConcurrency,
+    globalSemaphore,
+    bulkDispatch,
+    getQueueStats,
+    pauseQueue,
+    resumeQueue,
+    retryJob,
+    bulkIngestionQueue,
+    backgroundTasksQueue,
 };
