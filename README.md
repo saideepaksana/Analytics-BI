@@ -44,7 +44,7 @@ The platform handles the full data lifecycle:
 
 ### Charts & Visualization
 - **Query builder** — Select dimensions, measures, aggregations, filters, sort order, and group-by fields
-- **Multiple chart types** — Bar, Line, Area, Pie, Donut, Scatter, Box Plot, and more via ECharts
+- **Multiple chart types** — Bar, Line, Area, Pie, Scatter, Box Plot, and more via ECharts
 - **Chart customization** — Color palettes, legend toggle, grid toggle, data labels, and style options
 - **Chart annotations** — Add text annotations to charts for team collaboration
 - **Save & manage** — Full CRUD for named, reusable chart definitions
