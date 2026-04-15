@@ -1,201 +1,466 @@
+<div align="center">
+
 # Analytics BI
 
-An Analytics/BI web application with:
+**A full-stack data intelligence platform for ingesting, exploring, visualizing, and dashboarding your data.**
 
-- **Client:** React + Vite
-- **Server:** Node.js + Express
-- **Database:** MongoDB (GridFS for uploaded file storage)
-- **Real-time:** Socket.IO (client + server dependency present)
+[![Node.js](https://img.shields.io/badge/Node.js-18+-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)](https://react.dev/)
+[![MongoDB](https://img.shields.io/badge/MongoDB-6+-47A248?logo=mongodb&logoColor=white)](https://www.mongodb.com/)
+[![Redis](https://img.shields.io/badge/Redis-7+-DC382D?logo=redis&logoColor=white)](https://redis.io/)
+[![Vite](https://img.shields.io/badge/Vite-7-646CFF?logo=vite&logoColor=white)](https://vitejs.dev/)
 
-> Current implemented backend focus: **File ingestion / upload handler** that streams CSV/Excel files into MongoDB GridFS.
 
----
+[Features](#-features) · [Quick Start](#-quick-start) · [Architecture](#-architecture) · [API Reference](#-api-reference) 
 
-## Repository layout
-
-- `apps/client` — React + Vite frontend
-- `apps/server` — Express backend (upload + ingestion)
-- `packages/*` — shared packages (workspace-ready; may be WIP)
-- `logs/` — logs (if used locally)
-- `SRS.pdf` — software requirements/spec
-- `Sprint 1 Presentation.pdf` — sprint documentation
-- `Structure.md`, `tree.md`, `sprint1.md` — project notes/docs
+</div>
 
 ---
 
-## Version control 
+## Overview
 
-- GitHub repository with `main` as protected branch
-- Feature branches for functional work: `feature/*`, `fix/*`, `chore/*`
-- Pull Request workflow (review + approvals before merge)
-- PR checks: lint, test, build
-- Semantic version tags (e.g. `v0.1.0`)
-- `CHANGELOG.md` or release notes for published versions
+Analytics BI is an end-to-end analytics and business intelligence web application. Upload CSV or Excel files, let the platform automatically infer schemas and clean your data, then build interactive charts and assemble them into dashboards — all from a single, unified interface.
 
-## Tools
+The platform handles the full data lifecycle:
 
-### Current stack in repo
-- Node.js + Express (backend)
-- React + Vite (frontend)
-- MongoDB (local), Mongoose ODM
-- GridFS for file ingestion storage
-- Socket.IO for real-time updates
-- Multer for upload multipart handling
-- `fast-csv`, `exceljs` parser support
-- npm workspaces structure with root scripts
+1. **Ingest** — Upload files with streaming parsing, structural validation, and schema inference
+2. **Clean** — Quarantine invalid records with a Dead Letter Queue, review and restore them
+3. **Explore** — Build queries with dimensions, measures, filters, and aggregations
+4. **Visualize** — Create charts (bar, line, pie, scatter, box plot, and more) powered by ECharts
+5. **Dashboard** — Arrange multiple charts into drag-and-drop dashboard layouts
+6. **Export** — Download data and charts in CSV, Excel, or PDF formats
 
 ---
 
-## Tech stack
+## Features
 
-### Frontend (`apps/client`)
-- React (Vite)
-- Axios
-- Socket.IO client
+### Data Ingestion & Management
+- **Multi-format upload** — CSV, XLS, and XLSX with streaming parser
+- **Ingestion modes** — `new`, `append`, or `replace` existing datasets
+- **Background processing** — Large files are processed via BullMQ workers with real-time Socket.IO progress
+- **Automatic schema inference** — Column types, roles (dimension/measure), cardinality, and nullability detection
+- **Data quarantine (DLQ)** — Structurally or semantically invalid rows are quarantined for manual review, restoration, or deletion
+- **Relationship detection** — Automatic FK-like relationship inference across datasets
 
-### Backend (`apps/server`)
-- Express
-- Multer (multipart uploads)
-- MongoDB + Mongoose
-- **GridFS** for large file storage
-- CSV/Excel parsing libraries: `fast-csv`, `exceljs`
-- Socket.IO
+### Charts & Visualization
+- **Query builder** — Select dimensions, measures, aggregations, filters, sort order, and group-by fields
+- **Multiple chart types** — Bar, Line, Area, Pie, Donut, Scatter, Box Plot, and more via ECharts
+- **Chart customization** — Color palettes, legend toggle, grid toggle, data labels, and style options
+- **Chart annotations** — Add text annotations to charts for team collaboration
+- **Save & manage** — Full CRUD for named, reusable chart definitions
+
+### Dashboards
+- **Dashboard builder** — Drag-and-drop layout editor for arranging charts
+- **Dashboard gallery** — Browse, favorite, tag, and manage dashboards
+- **Draft/Published workflow** — Dashboards support draft and published states
+- **Optimistic Concurrency Control** — Version-based conflict resolution for concurrent edits
+
+### Data Export
+- **Multiple formats** — Export datasets and charts as CSV, XLSX, or PDF
+- **PDFKit integration** — Server-side PDF generation with styled formatting
+
+### AI Assistant
+- **LLM-powered insights** — AI endpoint for natural-language data analysis and query suggestions
+
+### Developer Experience
+- **Monorepo** — npm workspaces with shared packages
+- **Docker-ready** — Full `docker-compose.yml` for one-command deployment
+- **Graceful shutdown** — SIGINT/SIGTERM/SIGUSR2 handlers with clean worker teardown
+- **Structured logging** — Color-coded, tagged logger with severity levels
+- **Idempotency middleware** — Prevents duplicate request processing
+- **Auto-port fallback** — Server finds an available port if the default is busy
 
 ---
 
-## Prerequisites
+## Architecture
 
-- **Node.js** (recommended: 18+)
-- **MongoDB** running locally or a connection string to a MongoDB instance
-- **Redis** running locally (required for background tasks and BullMQ)
-- `mongosh` for inspecting the DB
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     BROWSER (Port 5173)                         │
+│                                                                 │
+│   React 19 + Vite 7                                             │
+│   ┌──────────┬──────────┬────────┬──────────┬──────────────┐   │
+│   │   Home   │ Ingest   │Datasets│  Charts  │  Dashboards  │   │
+│   └──────────┴──────────┴────────┴──────────┴──────────────┘   │
+│       Axios (REST)  ←──────────────→  Socket.IO (real-time)     │
+└────────────────────────────────┬────────────────────────────────┘
+                                 │
+                                 ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                  EXPRESS SERVER (Port 5000)                      │
+│                                                                 │
+│   REST API:  /api/upload · /api/datasets · /api/charts          │
+│              /api/dashboards · /api/annotations · /api/export   │
+│              /api/ai                                            │
+│                                                                 │
+│   Middleware: CORS · JSON · Idempotency · Schema Validation     │
+│                                                                 │
+│   Workers (BullMQ):                                             │
+│   ├── background-tasks (concurrency: 5)                         │
+│   └── bulk-ingestion   (concurrency: 3)                         │
+│                                                                 │
+│   Pipelines: Parser → Schema Inference → DTS → Query Engine    │
+└──────────┬───────────────────────────────────┬──────────────────┘
+           │                                   │
+           ▼                                   ▼
+┌──────────────────────┐          ┌────────────────────────┐
+│       MongoDB 6+     │          │       Redis 7+         │
+│                      │          │                        │
+│  GridFS (file store) │          │  BullMQ job queues     │
+│  Metadata            │          │  DLQ watcher           │
+│  CleanRecords        │          └────────────────────────┘
+│  DLQRecords          │
+│  Charts              │
+│  Dashboards          │
+│  Annotations         │
+└──────────────────────┘
+```
 
 ---
 
-## Getting started
+## Project Structure
 
-### 1) Install dependencies
-From the repo root:
+```
+analytics-bi/
+├── apps/
+│   ├── client/                    # React + Vite frontend
+│   │   └── src/
+│   │       ├── components/        # Shared UI components
+│   │       ├── core/              # Config & environment
+│   │       ├── modules/
+│   │       │   ├── home/          # Landing page
+│   │       │   ├── ingestion/     # Upload wizard with progress tracking
+│   │       │   ├── datasets/      # Dataset browser & management
+│   │       │   ├── data-review/   # Row preview, schema editor, quarantine manager
+│   │       │   ├── charts/        # Chart builder, explorer & panel
+│   │       │   ├── dashboard/     # Dashboard gallery & editor
+│   │       │   ├── export/        # Export functionality
+│   │       │   ├── sql-editor/    # SQL query interface
+│   │       │   ├── chatbot/       # AI assistant module
+│   │       │   └── builder/       # Visual builder utilities
+│   │       └── services/          # API service layer (Axios)
+│   │
+│   └── server/                    # Node.js + Express backend
+│       └── src/
+│           ├── api/
+│           │   ├── upload/        # File upload controller & routes
+│           │   ├── query/         # Dataset query & metadata routes
+│           │   ├── charts/        # Chart CRUD routes
+│           │   ├── dashboard/     # Dashboard CRUD routes
+│           │   ├── annotations/   # Chart annotation routes
+│           │   ├── dlq/           # Dead Letter Queue management
+│           │   └── ai/            # AI/LLM endpoint
+│           ├── core/              # DB, Redis, Socket.IO, logging, validation
+│           ├── export/            # PDF/CSV/XLSX export engine
+│           ├── jobs/              # BullMQ workers, queues, retry policies, DLQ
+│           ├── models/            # Mongoose schemas (Chart, Dashboard, Metadata, etc.)
+│           ├── pipelines/         # Data processing: parser, schema inference, DTS, query
+│           └── services/          # Business logic services
+│
+├── packages/
+│   ├── shared-types/              # Shared TypeScript types (workspace package)
+│   └── ui-components/             # Shared UI component library (workspace package)
+│
+├── docs/
+│   ├── architecture.md            # Detailed architecture & data flow diagrams
+│   ├── Structure.md               # Project structure notes
+│   ├── SRS.pdf                    # Software Requirements Specification
+│   └── Sprint 1 Presentation.pdf  # Sprint 1 presentation deck
+│
+├── docker-compose.yml             # Docker orchestration (MongoDB, Redis, Server, Client)
+├── package.json                   # Root workspace configuration
+└── .gitignore
+```
+
+---
+
+## Quick Start
+
+### Prerequisites
+
+| Dependency | Version | Purpose |
+|---|---|---|
+| **Node.js** | 18+ | Runtime |
+| **MongoDB** | 6+ | Primary database |
+| **Redis** | 7+ | BullMQ job queues |
+| **npm** | 9+ | Package manager |
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/saideepaksana/Analytics-BI.git
+cd Analytics-BI
+```
+
+### 2. Install dependencies
 
 ```bash
 npm install
 ```
 
-### 2) Configure environment variables (server)
-Create a file at:
+This installs all workspace dependencies (`apps/client`, `apps/server`, and `packages/*`).
 
-`apps/server/.env`
+### 3. Configure environment
 
-Example:
+Create `apps/server/.env`:
 
 ```env
+# Database
 MONGO_URI=mongodb://localhost:27017/analytics-bi
+
+# Server
 PORT=5000
+
+# Redis (defaults to localhost:6379 if omitted)
+REDIS_HOST=127.0.0.1
+REDIS_PORT=6379
+
+# CORS (defaults to * if omitted)
+CORS_ORIGIN=http://localhost:5173
 ```
 
-### 3) Start MongoDB
-If using local MongoDB (Linux example):
+### 4. Start infrastructure services
 
 ```bash
-sudo systemctl start mongodb
-```
+# MongoDB
+sudo systemctl start mongod
 
-### 4) Start Redis
-If using local Redis:
-
-```bash
+# Redis
 sudo systemctl start redis
 ```
 
-### 5) Run the app (client + server)
-From the repo root:
+### 5. Run the application
 
 ```bash
+# Start both client and server concurrently
 npm run dev
 ```
 
-Or run separately:
+| Service | URL |
+|---|---|
+| Frontend | http://localhost:5173 |
+| Backend API | http://localhost:5000 |
+
+#### Run services individually
 
 ```bash
-npm run dev:client
-npm run dev:server
+npm run dev:client   # Vite dev server only
+npm run dev:server   # Express + workers only
 ```
 
 ---
 
-## Backend: File Upload / Ingestion (current progress)
+## Docker Deployment
 
-### Location
-Backend ingestion layer lives under:
+Spin up the entire stack with a single command:
 
-`apps/server/`
+```bash
+docker-compose up -d
+```
 
-### Key components (server)
-- Express server bootstrap — `apps/server/src/index.js`
-- MongoDB connection — `apps/server/src/core/db.js`
-- GridFS storage — `apps/server/src/core/storage.js`
-- File upload controller — `apps/server/src/api/upload/upload.controller.js`
-- Upload route + Multer middleware — `apps/server/src/api/upload/upload.routes.js`
-
----
-
-## API
-
-### Upload a file
-**POST** `/api/upload`  
-**Content-Type:** `multipart/form-data`
-
-**Form fields**
-- `file` — CSV or Excel file
-- `mode` — `new | append | replace`
-
-**Behavior**
-- Uploaded files are streamed directly into MongoDB using **GridFS** for scalable storage.
+| Container | Port | Description |
+|---|---|---|
+| `analytics-client` | `3000` | Nginx-served React build |
+| `analytics-server` | `5000` | Express API + workers |
+| `analytics-mongo` | — | MongoDB 6 (internal network) |
+| `analytics-redis` | — | Redis 7 (internal network) |
 
 ---
 
-## Database storage
+## API Reference
 
-Uploaded files are stored in MongoDB collections (GridFS):
+### Upload & Ingestion
 
-- `analytics-bi.uploads.files`
-- `analytics-bi.uploads.chunks`
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/api/upload` | Upload a CSV/Excel file (multipart/form-data) |
+| `GET` | `/api/upload/active-jobs` | List active background ingestion jobs |
+
+**Upload form fields:**
+- `file` — The CSV, XLS, or XLSX file
+- `mode` — `new` \| `append` \| `replace`
+- `datasetId` — Required for `append` / `replace` modes
+- `uploadId` — Client-generated ID for Socket.IO progress tracking
+- `quarantine` — `true` \| `false` to enable/disable quarantine
+
+### Datasets & Data Review
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/datasets` | List all datasets |
+| `GET` | `/api/datasets/:datasetId/metadata` | Get dataset metadata, schema, and preview rows |
+| `PATCH` | `/api/datasets/:datasetId/schema/:columnName` | Update column type or role |
+| `DELETE` | `/api/datasets/:datasetId` | Delete dataset and associated records |
+| `POST` | `/api/datasets/:datasetId/quarantine/:rowIndex/validate` | Validate a quarantined row |
+| `POST` | `/api/datasets/:datasetId/quarantine/:rowIndex/restore` | Restore a quarantined row |
+| `POST` | `/api/datasets/:datasetId/quarantine/restore-all` | Restore all quarantined rows |
+| `DELETE` | `/api/datasets/:datasetId/quarantine/:rowIndex` | Delete a quarantined row |
+| `DELETE` | `/api/datasets/:datasetId/quarantine` | Delete all quarantined rows |
+
+### Charts
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/charts` | List saved charts |
+| `POST` | `/api/charts` | Create a new chart |
+| `GET` | `/api/charts/:chartId` | Get chart by ID |
+| `PUT` | `/api/charts/:chartId` | Update a chart |
+| `DELETE` | `/api/charts/:chartId` | Delete a chart |
+
+### Dashboards
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/dashboards` | List all dashboards |
+| `POST` | `/api/dashboards` | Create a new dashboard |
+| `GET` | `/api/dashboards/:id` | Get dashboard by ID |
+| `PUT` | `/api/dashboards/:id` | Update dashboard |
+| `DELETE` | `/api/dashboards/:id` | Delete a dashboard |
+
+### Annotations
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/annotations?chartId=` | List annotations for a chart |
+| `POST` | `/api/annotations` | Create an annotation |
+| `PUT` | `/api/annotations/:id` | Update an annotation |
+| `DELETE` | `/api/annotations/:id` | Delete an annotation |
+
+<!-- ### Export
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/export/:datasetId` | Export dataset (query params: `format=csv\|xlsx\|pdf`) | -->
+
 
 ---
 
-## Scripts
+## Data Flow
+
+```
+User selects file + mode
+        │
+        ▼
+POST /api/upload (multipart)
+        │
+        ├─ Validate request (file, mode, extension, size ≤ 15MB)
+        ├─ Store file in GridFS
+        ├─ Emit Socket.IO progress: received → stored
+        │
+        ▼
+Streaming Parse + Structural Validation
+        │
+        ├─ CSV/Excel row iterator
+        ├─ Worker thread batches (500 rows/batch)
+        ├─ Bad rows → DLQ set
+        ├─ Valid rows → parsedRows
+        │
+        ▼
+Schema Inference + DTS Transform
+        │
+        ├─ Infer column types, roles, cardinality
+        ├─ Clean/normalize values
+        ├─ Semantic validation
+        ├─ Valid rows   → CleanRecord collection
+        ├─ Invalid rows → DLQRecord collection
+        │
+        ▼
+Metadata Upsert + Relationship Refresh
+        │
+        ▼
+HTTP 200 + Socket.IO stage: done (100%)
+```
+
+---
+
+## Database Collections
+
+| Collection | Purpose |
+|---|---|
+| `uploads.files` | GridFS file metadata |
+| `uploads.chunks` | GridFS binary data chunks |
+| `metadatas` | Dataset-level schema, counts, relationships |
+| `cleanrecords` | Valid, normalized data rows |
+| `dlqrecords` | Quarantined rows with error details |
+| `rawrecords` | Raw ingested rows (model exists) |
+| `charts` | Saved chart definitions |
+| `dashboards` | Dashboard layouts and chart references |
+| `annotations` | Chart text annotations |
+| `idempotencies` | Request deduplication records |
+| `exportlogs` | Export operation audit trail |
+
+---
+
+## Tech Stack
+
+### Frontend
+| Technology | Purpose |
+|---|---|
+| React 19 | UI framework |
+| Vite 7 | Build tool & dev server |
+| ECharts 6 | Charting & visualization |
+| Axios | HTTP client |
+| Socket.IO Client | Real-time progress updates |
+| Lucide React | Icon library |
+| html2canvas | Client-side screenshot capture |
+
+### Backend
+| Technology | Purpose |
+|---|---|
+| Express 5 | HTTP server & routing |
+| Mongoose 9 | MongoDB ODM |
+| BullMQ 5 | Background job processing |
+| IORedis 5 | Redis client |
+| Socket.IO 4 | WebSocket server |
+| Busboy | Streaming multipart parsing |
+| fast-csv | CSV parsing |
+| ExcelJS | XLSX reading & writing |
+| PDFKit | PDF generation |
+| AJV | JSON Schema validation |
+| Lodash | Utilities |
+| date-fns | Date utilities |
+
+### Infrastructure
+| Technology | Purpose |
+|---|---|
+| MongoDB 6 | Primary database + GridFS file storage |
+| Redis 7 | Job queues & worker coordination |
+| Docker Compose | Container orchestration |
+| Nodemon | Development auto-reload |
+
+---
+
+## Available Scripts
 
 ### Root
-- `npm run dev` — start client + server
-- `npm run dev:client` — start frontend only
-- `npm run dev:server` — start backend only
 
-### Server (`apps/server`)
-- `npm run dev` — start with nodemon
-- `npm start` — start with node
+| Script | Command | Description |
+|---|---|---|
+| `dev` | `npm run dev` | Start client + server concurrently |
+| `dev:client` | `npm run dev:client` | Start Vite dev server only |
+| `dev:server` | `npm run dev:server` | Start Express server with nodemon |
+| `install:all` | `npm run install:all` | Install all workspace dependencies |
 
 ### Client (`apps/client`)
-- `npm run dev` — start Vite dev server
-- `npm run build` — production build
-- `npm run preview` — preview build
 
----
+| Script | Command | Description |
+|---|---|---|
+| `dev` | `npm run dev` | Start Vite dev server |
+| `build` | `npm run build` | Production build |
+| `preview` | `npm run preview` | Preview production build |
+| `lint` | `npm run lint` | Run ESLint |
 
-## Project status
+### Server (`apps/server`)
 
-This repository contains sprint documents and an initial implementation of the backend ingestion/upload flow. Additional BI/analytics features (dashboards, transformations, datasets, etc.) may be under active development.
+| Script | Command | Description |
+|---|---|---|
+| `dev` | `npm run dev` | Start with nodemon |
+| `start` | `npm start` | Start with node |
 
----
 
-## Contributing
-
-1. Fork the repo
-2. Create a feature branch
-3. Commit your changes
-4. Open a pull request
-
----
 
 ## License
 
-Currently: None
+None
+
+---
