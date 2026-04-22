@@ -65,6 +65,24 @@ function App() {
     return () => socket.disconnect();
   }, []);
 
+  // Export Mode & URL Routing
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const viewParam = params.get("view");
+    const idParam = params.get("id");
+    const isExport = params.get("export") === "true";
+
+    if (viewParam) {
+      setActiveView(viewParam);
+    }
+    
+    if (isExport) {
+      document.body.classList.add("export-mode");
+      // Set a global flag for components to know they are in export mode
+      window.IS_EXPORT_MODE = true;
+    }
+  }, []);
+
   const headerConfig = {
     ingestion: {
       title: "Upload & Ingest",
@@ -142,7 +160,7 @@ function App() {
         </div>
       </aside>
 
-      <main className={`app-shell ${dashboardEditorMode ? "app-shell-dashboard-editor" : ""} ${chartsExploreMode ? "app-shell-charts-explore" : ""}`}>
+      <main className={`app-shell ${dashboardEditorMode ? "app-shell-dashboard-editor" : ""} ${chartsExploreMode ? "app-shell-charts-explore" : ""} ${window.IS_EXPORT_MODE ? "export-shell" : ""}`}>
         {activeHeader && !chartsExploreMode && !dashboardEditorMode && (
           <header className="app-header">
             <h1>{activeHeader.title}</h1>

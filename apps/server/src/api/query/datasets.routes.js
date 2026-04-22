@@ -12,6 +12,7 @@ const {
   restoreQuarantinedRow,
   restoreAllValidQuarantinedRows,
   deleteDataset,
+  bulkDeleteDatasets,
   queryDatasetData,
   validatePayload,
   previewGroupStage,
@@ -20,6 +21,7 @@ const {
 } = require("./datasets.controller");
 
 router.get("/", listDatasets);
+router.post("/bulk-delete", bulkDeleteDatasets);
 router.get("/:datasetId/metadata", getDatasetMetadata);
 router.get("/:datasetId/schema", getDatasetSchema);
 router.get("/:datasetId/schema/compact", getDatasetSchemaCompact);

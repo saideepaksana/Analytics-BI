@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Grip, Loader2, MoveDiagonal2, Pencil, Plus, PlusCircle, Save, Trash2, X, MoreVertical, Star, User, Clock, MessageSquare } from "lucide-react";
+import { ArrowLeft, Grip, Loader2, MoveDiagonal2, Pencil, Plus, PlusCircle, Save, Trash2, X, MoreVertical, Star, User, Clock, MessageSquare, Download, Image as ImageIcon, FileText as PdfIcon } from "lucide-react";
 import html2canvas from "html2canvas";
+import { useExportStatus } from "../../../hooks/useExportStatus";
 import ChartPreview from "../../charts/components/ChartPreview";
 import { queryDataset } from "../../../services/charts.service";
 import * as annotationsService from "../../../services/annotations.service";
@@ -191,6 +192,7 @@ function DashboardWidgetChart({ chart }) {
       measures={getMeasuresFromChart(chart)}
       style={{ ...chart.style, minHeight: "0px" }}
       stacking={chart.visualization?.series?.stack || false}
+      onRenderComplete={chart.onRenderComplete}
     />
   );
 }
@@ -210,6 +212,7 @@ function DashboardWidget({
   onAddAnnotation,
   onUpdateAnnotation,
   onDeleteAnnotation,
+  onRenderComplete,
 }) {
   const [showMenu, setShowMenu] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -391,7 +394,7 @@ function DashboardWidget({
 
       <div className="dashboard-widget-body">
         {chart ? (
-          <DashboardWidgetChart chart={chart} />
+          <DashboardWidgetChart chart={{ ...chart, onRenderComplete }} />
         ) : (
           <div className="dashboard-widget-error">Chart not found</div>
         )}
@@ -486,6 +489,8 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
   const readOnly = !isEditMode;
   const [name, setName] = useState(dashboard?.name || "Untitled Dashboard");
   const [savingLocal, setSavingLocal] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const { status, startExport, reset } = useExportStatus();
   const [widgets, setWidgets] = useState(() => {
     if (Array.isArray(dashboard?.widgets) && dashboard.widgets.length > 0) {
       return dashboard.widgets;
@@ -499,6 +504,39 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
     return [];
   });
   const [annotations, setAnnotations] = useState([]);
+
+  // Apply frozen state in export mode
+  const [renderedCount, setRenderedCount] = useState(0);
+  
+  useEffect(() => {
+    if (window.IS_EXPORT_MODE) {
+      try {
+        const stored = localStorage.getItem("export_frozen_state");
+        if (stored) {
+          const state = JSON.parse(stored);
+          if (state.layout) {
+            setWidgets(state.layout);
+          }
+        }
+      } catch (e) {
+        console.error("Failed to apply frozen state", e);
+        window.RENDER_COMPLETE = true;
+      }
+    }
+  }, []);
+
+  const handleChartRendered = useCallback(() => {
+    if (!window.IS_EXPORT_MODE) return;
+    
+    setRenderedCount(prev => {
+        const next = prev + 1;
+        if (next >= widgets.length) {
+            window.RENDER_COMPLETE = true;
+            console.log("[Export] All charts rendered. Signal sent.");
+        }
+        return next;
+    });
+  }, [widgets.length]);
 
   useEffect(() => {
     if (dashboard?.id) {
@@ -934,6 +972,22 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
     setSavingLocal(false);
   };
 
+  const handleExport = (format) => {
+    // Pipeline B: Capture frozen state
+    const frozenState = {
+      activeTab: null, // If tabs were implemented
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+      layout: widgets
+    };
+
+    startExport("visual", { 
+      dashboardId: dashboard.id, 
+      format, 
+      frozenState 
+    });
+    setShowExportMenu(false);
+  };
+
   const isSaving = saving || savingLocal;
 
   return (
@@ -965,6 +1019,42 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
               <button type="button" className="dashboard-primary-btn" onClick={() => setIsEditMode(true)}>
                 Edit dashboard
               </button>
+              
+              <div className="dashboard-export-wrapper" style={{ position: "relative" }}>
+                <button 
+                  type="button" 
+                  className={`dashboard-secondary-btn ${status ? "active" : ""}`} 
+                  onClick={() => setShowExportMenu(!showExportMenu)}
+                  disabled={status === "processing" || status === "initiating"}
+                >
+                  {status === "processing" || status === "initiating" ? (
+                    <Loader2 size={14} className="spinner" />
+                  ) : (
+                    <>
+                      <Download size={14} />
+                      Export
+                    </>
+                  )}
+                </button>
+
+                {showExportMenu && (
+                  <div className="export-dropdown" style={{ left: "auto", right: 0 }}>
+                    <button onClick={() => handleExport("pdf")}>
+                      <PdfIcon size={14} /> PDF Document
+                    </button>
+                    <button onClick={() => handleExport("png")}>
+                      <ImageIcon size={14} /> PNG Image
+                    </button>
+                  </div>
+                )}
+
+                {status === "completed" && (
+                  <div className="export-success-toast" style={{ left: "auto", right: 0 }} onClick={reset}>
+                    ✓ Ready
+                  </div>
+                )}
+              </div>
+
               <button type="button" className="dashboard-icon-only-btn">
                 <MoreVertical size={16} />
               </button>
@@ -1025,6 +1115,7 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
                   onAddAnnotation={handleAddAnnotation}
                   onUpdateAnnotation={handleUpdateAnnotation}
                   onDeleteAnnotation={handleDeleteAnnotation}
+                  onRenderComplete={handleChartRendered}
                 />
               ))}
               {widgetLayout.length === 0 ? (

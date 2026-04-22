@@ -1,7 +1,7 @@
 import React, { useMemo } from "react";
 import ReactECharts from "echarts-for-react";
 
-const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style = {}, annotations = [], isPreview = false, binSize = 10, stacking = false }) => {
+const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style = {}, annotations = [], isPreview = false, binSize = 10, stacking = false, onRenderComplete }) => {
   const option = useMemo(() => {
     if (!data || data.length === 0) {
       return {
@@ -380,6 +380,11 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
         style={{ height: "100%", width: "100%" }}
         notMerge={true}
         lazyUpdate={true}
+        onEvents={{
+          'finished': () => {
+            if (onRenderComplete) onRenderComplete();
+          }
+        }}
       />
     </div>
   );

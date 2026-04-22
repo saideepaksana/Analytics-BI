@@ -23,6 +23,8 @@ const logger = require("../core/logger");
 const QUEUE_NAMES = {
     BACKGROUND_TASKS: "background-tasks",
     BULK_INGESTION: "bulk-ingestion",
+    RAW_EXPORT: "raw-export",
+    DASHBOARD_EXPORT: "dashboard-export",
     // Extend here as new queues are introduced
 };
 
@@ -102,6 +104,18 @@ const bulkIngestionQueue = getQueue(
     RETRY_POLICIES.CONSERVATIVE
 );
 
+/** Raw data export queue (standard policy) */
+const rawExportQueue = getQueue(
+    QUEUE_NAMES.RAW_EXPORT,
+    RETRY_POLICIES.STANDARD
+);
+
+/** Dashboard visual export queue (standard policy, but can be heavy) */
+const dashboardExportQueue = getQueue(
+    QUEUE_NAMES.DASHBOARD_EXPORT,
+    RETRY_POLICIES.STANDARD
+);
+
 // ---------------------------------------------------------------------------
 // Convenience helpers
 // ---------------------------------------------------------------------------
@@ -160,6 +174,8 @@ module.exports = {
     waitUntilFinished,
     backgroundTasksQueue,
     bulkIngestionQueue,
+    rawExportQueue,
+    dashboardExportQueue,
     addBackgroundTask,
     addBulkIngestionJob,
 };

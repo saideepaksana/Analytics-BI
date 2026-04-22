@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { Edit2, Eye, Trash2, Loader2, Maximize2 } from "lucide-react";
+import { Edit2, Eye, Trash2, Loader2, Maximize2, Download, FileSpreadsheet, FileText } from "lucide-react";
 import ChartPreview from "./components/ChartPreview";
 import { queryDataset } from "../../services/charts.service";
+import { useExportStatus } from "../../hooks/useExportStatus";
 
 const cardDataCache = new Map();
 const cardRequestCache = new Map();
@@ -10,6 +11,8 @@ export default function ChartCard({ chart, onDelete, onEdit, onView }) {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const { status, progress, startExport, reset } = useExportStatus();
 
   useEffect(() => {
     const fetchChartData = async () => {
@@ -66,6 +69,20 @@ export default function ChartCard({ chart, onDelete, onEdit, onView }) {
     fetchChartData();
   }, [chart]);
 
+  const handleExport = (format) => {
+    const datasetId = chart.dataSource?.datasetId || chart.datasetId;
+    const context = {
+      selectedDimensions: chart.query?.dimensions?.map(d => d.field || d) || [],
+      selectedMeasures: chart.query?.measures?.map(m => m.field || m) || [],
+      filters: chart.query?.filters || {},
+      groupBy: chart.query?.groupBy || [],
+      sort: chart.query?.orderBy || []
+    };
+
+    startExport("raw", { datasetId, format, context });
+    setShowExportMenu(false);
+  };
+
   return (
     <div className="chart-card">
       <div className="chart-card-header">
@@ -97,6 +114,38 @@ export default function ChartCard({ chart, onDelete, onEdit, onView }) {
       </div>
 
       <div className="chart-card-actions">
+        <div className="chart-export-container" style={{ position: "relative" }}>
+          <button 
+            className={`chart-action-btn ${status ? "active" : ""}`} 
+            title="Download Data"
+            onClick={() => setShowExportMenu(!showExportMenu)}
+            disabled={status === "processing" || status === "initiating"}
+          >
+            {status === "processing" || status === "initiating" ? (
+              <Loader2 size={16} className="spinner" />
+            ) : (
+              <Download size={16} />
+            )}
+          </button>
+          
+          {showExportMenu && (
+            <div className="export-dropdown">
+              <button onClick={() => handleExport("csv")}>
+                <FileText size={14} /> CSV
+              </button>
+              <button onClick={() => handleExport("excel")}>
+                <FileSpreadsheet size={14} /> Excel
+              </button>
+            </div>
+          )}
+
+          {status === "completed" && (
+            <div className="export-success-toast" onClick={reset}>
+              ✓ Ready
+            </div>
+          )}
+        </div>
+
         <button className="chart-action-btn" title="View Details" onClick={onView}>
           <Eye size={16} />
         </button>

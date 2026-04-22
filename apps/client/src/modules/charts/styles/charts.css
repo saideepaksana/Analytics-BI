@@ -209,6 +209,89 @@
   to { opacity: 1; }
 }
 
+/* Export Styles */
+.export-dropdown {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  background: var(--bg-3, #1e2126);
+  border: 1px solid var(--border, #333);
+  border-radius: 12px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 100;
+  min-width: 140px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+  margin-bottom: 8px;
+  animation: slideUp 0.2s ease;
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.export-dropdown button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: none;
+  border: none;
+  color: #e2e8f0;
+  cursor: pointer;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+  width: 100%;
+  text-align: left;
+}
+
+.export-dropdown button:hover {
+  background: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+}
+
+.export-success-toast {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  background: #10b981;
+  color: white;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-bottom: 8px;
+  cursor: pointer;
+  animation: fadeIn 0.3s ease;
+}
+
+/* Export Mode Overrides */
+.export-mode .app-sidebar,
+.export-mode .app-header,
+.export-mode .dashboard-editor-topbar,
+.export-mode .dashboard-topbar-back-btn,
+.export-mode .dashboard-editor-actions,
+.export-mode .theme-toggle {
+  display: none !important;
+}
+
+.export-mode .app-shell {
+  margin: 0 !important;
+  padding: 0 !important;
+  width: 100vw !important;
+  background: transparent !important;
+}
+
+.export-mode .dashboard-canvas-grid {
+  background: #181b1f !important;
+  padding: 0 !important;
+  border: none !important;
+}
+
 @keyframes spin {
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }

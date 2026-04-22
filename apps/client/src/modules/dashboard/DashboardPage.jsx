@@ -46,6 +46,20 @@ export default function DashboardPage({ onEditorMode }) {
     loadData();
   }, [loadData]);
 
+  // Auto-open dashboard from URL if 'id' param exists (used by Puppeteer)
+  useEffect(() => {
+    if (!loading && dashboards.length > 0) {
+      const params = new URLSearchParams(window.location.search);
+      const id = params.get("id");
+      if (id) {
+        const dashboard = dashboards.find(d => d.id === id);
+        if (dashboard) {
+          openViewDashboard(dashboard);
+        }
+      }
+    }
+  }, [loading, dashboards]);
+
   const isEditorOpen = editorState.mode !== null;
 
   useEffect(() => {

@@ -461,6 +461,44 @@ exports.deleteDataset = async (req, res) => {
     }
 };
 
+// POST /api/datasets/bulk-delete
+exports.bulkDeleteDatasets = async (req, res) => {
+    try {
+        const { datasetIds } = req.body;
+        if (!Array.isArray(datasetIds) || datasetIds.length === 0) {
+            return res.status(400).json({ message: "datasetIds array is required" });
+        }
+
+        logger.info(`Bulk deleting ${datasetIds.length} datasets: ${datasetIds.join(", ")}`, "Datasets");
+
+        // Delete children first to minimize orphans if parent delete fails
+        // We use deleteMany for efficiency
+        const results = await Promise.allSettled([
+            CleanRecord.deleteMany({ datasetId: { $in: datasetIds } }),
+            DLQRecord.deleteMany({ datasetId: { $in: datasetIds } }),
+            RawRecord.deleteMany({ datasetId: { $in: datasetIds } }),
+        ]);
+
+        // Check if any child deletions failed
+        const failures = results.filter(r => r.status === "rejected");
+        if (failures.length > 0) {
+            failures.forEach(f => logger.error(`Bulk delete partial failure (children): ${f.reason}`, "Datasets"));
+        }
+
+        // Finally delete the parent metadata
+        const metaResult = await Metadata.deleteMany({ datasetId: { $in: datasetIds } });
+
+        return res.json({ 
+            message: `Successfully deleted ${metaResult.deletedCount} datasets`,
+            requestedCount: datasetIds.length,
+            deletedCount: metaResult.deletedCount
+        });
+    } catch (error) {
+        logger.error(`bulkDeleteDatasets error: ${error.message}`, "Datasets");
+        return res.status(500).json({ message: "Internal server error" });
+    }
+};
+
 // POST /api/datasets/:datasetId/quarantine/restore-all
 exports.restoreAllValidQuarantinedRows = async (req, res) => {
     let workerPool = null;

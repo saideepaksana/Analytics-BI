@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { formatDateTime } from "../../core/utils/formatters";
-import { deleteDataset, listDatasets } from "../../services/datasets.service";
+import { deleteDataset, listDatasets, bulkDeleteDatasets } from "../../services/datasets.service";
 import { downloadDatasetExport } from "../../services/export.service";
 import { Download, FileText, FileSpreadsheet, FileJson, ChevronDown, Search, SortAsc, SortDesc, Filter } from "lucide-react";
 import "./styles/datasets.css";
@@ -12,6 +12,8 @@ function DatasetsPage({ activeDatasetId, onOpenDataset }) {
   const [error, setError] = useState("");
   const [deleting, setDeleting] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   // New state for enhanced features
   const [searchTerm, setSearchTerm] = useState("");
@@ -128,11 +130,26 @@ function DatasetsPage({ activeDatasetId, onOpenDataset }) {
 
 
 
-  const handleBulkDelete = useCallback(async () => {
+  const handleBulkDelete = useCallback(() => {
     if (selectedDatasets.length === 0) return;
+    setConfirmBulkDelete(true);
+  }, [selectedDatasets]);
 
-    // Implement bulk delete logic
-    setError("Bulk delete not implemented yet");
+  const handleConfirmBulkDelete = useCallback(async () => {
+    setBulkDeleting(true);
+    setError("");
+
+    try {
+      await bulkDeleteDatasets(selectedDatasets);
+      // Optimistic local removal
+      setDatasets(prev => prev.filter(d => !selectedDatasets.includes(d.datasetId)));
+      setSelectedDatasets([]);
+      setConfirmBulkDelete(false);
+    } catch (err) {
+      setError(err.response?.data?.message || err.message || "Failed to delete selected datasets");
+    } finally {
+      setBulkDeleting(false);
+    }
   }, [selectedDatasets]);
 
   return (
@@ -316,6 +333,37 @@ function DatasetsPage({ activeDatasetId, onOpenDataset }) {
                   disabled={deleting !== null}
                 >
                   {deleting !== null ? "Deleting..." : "Delete Dataset"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmBulkDelete && (
+        <div className="modal-overlay">
+          <div className="modal-dialog">
+            <div className="modal-content">
+              <h3 className="danger-text">Delete Multiple Datasets?</h3>
+              <p>
+                Are you sure you want to delete <strong>{selectedDatasets.length}</strong> selected datasets?
+                This will permanently remove all associated data, records, and reports.
+              </p>
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="action-btn cancel-btn"
+                  onClick={() => setConfirmBulkDelete(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="action-btn danger-btn"
+                  onClick={handleConfirmBulkDelete}
+                  disabled={bulkDeleting}
+                >
+                  {bulkDeleting ? "Deleting..." : `Delete ${selectedDatasets.length} Datasets`}
                 </button>
               </div>
             </div>

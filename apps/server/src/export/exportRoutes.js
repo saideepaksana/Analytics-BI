@@ -1,11 +1,26 @@
 const express = require("express");
 const router = express.Router();
-const { exportCSV, exportExcel, exportPDF, getExportLog, generateEmbedToken } = require("./exportController");
+const { 
+    startRawExport, 
+    startVisualExport, 
+    getExportStatus, 
+    downloadExportFile,
+    getExportLog, 
+    generateEmbedToken 
+} = require("../api/export/exportController");
 
-router.get("/:datasetId/csv",  exportCSV);
-router.get("/:datasetId/xlsx", exportExcel);
-router.get("/:datasetId/pdf",  exportPDF);
-router.get("/:datasetId/log",  getExportLog);
-router.post("/embed/token",    generateEmbedToken);
+// Pipeline A: Raw Data Export
+router.post("/raw", startRawExport);
+
+// Pipeline B: Visual Dashboard Export
+router.post("/visual", startVisualExport);
+
+// Shared Job Status & Download
+router.get("/status/:jobId", getExportStatus);
+router.get("/download/:filename", downloadExportFile);
+
+// Legacy/Other
+router.get("/:datasetId/log", getExportLog);
+router.post("/embed/token", generateEmbedToken);
 
 module.exports = router;
