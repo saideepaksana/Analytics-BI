@@ -3,8 +3,7 @@ import { Edit2, Eye, Trash2, LayoutDashboard } from "lucide-react";
 import ChartPreview from "../../charts/components/ChartPreview";
 import { queryDataset } from "../../../services/charts.service";
 
-const previewDataCache = new Map();
-const previewRequestCache = new Map();
+
 
 const formatUpdatedAt = (value) => {
   if (!value) return "Not saved yet";
@@ -86,25 +85,9 @@ function PreviewWidgetTile({ chart, style }) {
       }
 
       const query = buildChartQuery(chart);
-      const cacheKey = `${chart.chartId || chart._id || chart.name || "chart"}:${JSON.stringify(query || {})}`;
-
-      if (previewDataCache.has(cacheKey)) {
-        if (!cancelled) {
-          setData(previewDataCache.get(cacheKey));
-          setReady(true);
-        }
-        return;
-      }
 
       try {
-        let request = previewRequestCache.get(cacheKey);
-        if (!request) {
-          request = queryDataset(datasetId, query).then((response) => response.results || []);
-          previewRequestCache.set(cacheKey, request);
-        }
-        const results = await request;
-        previewRequestCache.delete(cacheKey);
-        previewDataCache.set(cacheKey, results);
+        const results = await queryDataset(datasetId, query).then((response) => response.results || []);
         if (!cancelled) {
           setData(results);
           setReady(true);

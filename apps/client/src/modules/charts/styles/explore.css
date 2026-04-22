@@ -131,6 +131,15 @@
   flex: 1;
   overflow: hidden;
   min-height: 0;
+  position: relative;
+}
+
+.explore-drawer-wrapper {
+  display: flex;
+}
+
+.explore-drawer-handle {
+  display: none;
 }
 
 .explore-page {
@@ -1152,15 +1161,81 @@
 @media (max-width: 900px) {
   .explore-layout {
     flex-direction: column;
+    display: flex;
+    overflow-y: hidden;
+    overflow-x: hidden;
+  }
+  .explore-top-bar {
+    flex-wrap: wrap;
     height: auto;
   }
-  .source-panel,
+  .explore-chart-name {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .explore-drawer-wrapper {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: var(--drawer-height, 380px);
+    background: var(--bg, #0b0f19);
+    border-top: 1px solid var(--border, rgba(255,255,255,0.1));
+    box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.4);
+    border-radius: 20px 20px 0 0;
+    display: flex;
+    flex-direction: column;
+    z-index: 50;
+    overflow-y: auto;
+    padding-bottom: 80px;
+  }
+
+  .explore-drawer-handle {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 32px;
+    cursor: grab;
+    background: rgba(255, 255, 255, 0.02);
+    border-bottom: 1px solid var(--border, rgba(255,255,255,0.06));
+    flex-shrink: 0;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .explore-drawer-handle:active {
+    cursor: grabbing;
+  }
+  .handle-bar {
+    width: 36px;
+    height: 5px;
+    border-radius: 4px;
+    background: var(--text-secondary, #64748b);
+  }
+
+  .chart-panel {
+    min-height: 0;
+    flex: 1;
+    border-bottom: none;
+    padding-bottom: var(--drawer-height, 380px);
+  }
+
   .query-panel {
     width: 100%;
     min-width: 0;
-    max-height: 300px;
+    max-height: none;
     border-right: none;
     border-bottom: 1px solid var(--border, rgba(255,255,255,0.08));
+    flex: none;
+  }
+  .source-panel {
+    width: 100%;
+    min-width: 0;
+    max-height: none;
+    border-right: none;
+    border-bottom: none;
+    flex: none;
   }
 }
 

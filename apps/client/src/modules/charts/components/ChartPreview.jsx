@@ -376,7 +376,7 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
   return (
     <div className="chart-preview-wrapper" style={{ height: "100%", width: "100%", minHeight: isPreview ? "0px" : (style?.minHeight !== undefined ? style.minHeight : "400px") }}>
       <ReactECharts
-        option={option}
+        option={{ ...option, animation: !window.DISABLE_CHART_ANIMATIONS }}
         style={{ height: "100%", width: "100%" }}
         notMerge={true}
         lazyUpdate={true}

@@ -1,21 +1,21 @@
 import apiClient from "../core/http/apiClient";
 
-const defaultSection = (widgets = []) => ({
-  id: `section-${Date.now()}-${Math.round(Math.random() * 10000)}`,
-  name: "Sales Overview",
+const defaultTab = (widgets = []) => ({
+  id: `tab-${Date.now()}-${Math.round(Math.random() * 10000)}`,
+  name: "Main",
   widgets: Array.isArray(widgets) ? widgets : [],
 });
 
-const normalizeSections = (dashboard) => {
-  if (Array.isArray(dashboard.sections) && dashboard.sections.length > 0) {
-    return dashboard.sections.map((section) => ({
-      id: section.id || `section-${Date.now()}-${Math.round(Math.random() * 10000)}`,
-      name: section.name || "Untitled Section",
-      widgets: Array.isArray(section.widgets) ? section.widgets : [],
+const normalizeTabs = (dashboard) => {
+  if (Array.isArray(dashboard.tabs) && dashboard.tabs.length > 0) {
+    return dashboard.tabs.map((tab) => ({
+      id: tab.id || `tab-${Date.now()}-${Math.round(Math.random() * 10000)}`,
+      name: tab.name || "Untitled Tab",
+      widgets: Array.isArray(tab.widgets) ? tab.widgets : [],
     }));
   }
 
-  return [defaultSection(dashboard.widgets || [])];
+  return [defaultTab(dashboard.widgets || dashboard.layout || [])];
 };
 
 const normalizeDashboard = (dashboard) => {
@@ -24,18 +24,18 @@ const normalizeDashboard = (dashboard) => {
     dashboard.name = dashboard.title;
   }
 
-  const sections = normalizeSections(dashboard);
-  const activeSectionId =
-    sections.some((section) => section.id === dashboard.activeSectionId)
-      ? dashboard.activeSectionId
-      : sections[0]?.id;
-  const widgets = sections.flatMap((section) => section.widgets || []);
+  const tabs = normalizeTabs(dashboard);
+  const activeTabId =
+    tabs.some((tab) => tab.id === dashboard.activeTabId)
+      ? dashboard.activeTabId
+      : tabs[0]?.id;
+  const widgets = tabs.flatMap((tab) => tab.widgets || []);
 
   return {
     ...dashboard,
     id: dashboard._id || dashboard.id,
-    sections,
-    activeSectionId,
+    tabs,
+    activeTabId,
     widgets,
   };
 };
@@ -52,23 +52,23 @@ export const getDashboardById = async (dashboardId) => {
 };
 
 export const createDashboard = async (payload = {}) => {
-  const sections = Array.isArray(payload.sections) && payload.sections.length > 0
-    ? payload.sections
-    : [defaultSection(payload.widgets || [])];
+  const tabs = Array.isArray(payload.tabs) && payload.tabs.length > 0
+    ? payload.tabs
+    : [defaultTab(payload.widgets || [])];
 
-  const activeSectionId = sections.some((section) => section.id === payload.activeSectionId)
-    ? payload.activeSectionId
-    : sections[0]?.id;
+  const activeTabId = tabs.some((tab) => tab.id === payload.activeTabId)
+    ? payload.activeTabId
+    : tabs[0]?.id;
 
   const name = payload.name?.trim() || "Untitled Dashboard";
 
   // We wrap the full UI state into _rawFrontendState so the backend persists everything.
   const rawFrontendState = {
     name,
-    sections,
-    activeSectionId,
+    tabs,
+    activeTabId,
     thumbnail: payload.thumbnail || null,
-    widgets: sections.flatMap((section) => section.widgets || []),
+    widgets: tabs.flatMap((tab) => tab.widgets || []),
   };
 
   const response = await apiClient.post('/dashboards', {
@@ -88,31 +88,31 @@ export const updateDashboard = async (dashboardId, payload = {}) => {
   }
   const existingNormalized = normalizeDashboard(getRes.data.dashboard);
 
-  let sections = existingNormalized.sections;
-  if (Array.isArray(payload.sections) && payload.sections.length > 0) {
-    sections = payload.sections;
+  let tabs = existingNormalized.tabs;
+  if (Array.isArray(payload.tabs) && payload.tabs.length > 0) {
+    tabs = payload.tabs;
   } else if (payload.widgets) {
-    const activeId = payload.activeSectionId || existingNormalized.activeSectionId || existingNormalized.sections[0]?.id;
-    sections = existingNormalized.sections.map(sec =>
-      sec.id === activeId ? { ...sec, widgets: payload.widgets } : sec
+    const activeId = payload.activeTabId || existingNormalized.activeTabId || existingNormalized.tabs[0]?.id;
+    tabs = existingNormalized.tabs.map(t =>
+      t.id === activeId ? { ...t, widgets: payload.widgets } : t
     );
-    if (sections.length === 0) sections = [defaultSection(payload.widgets)];
+    if (tabs.length === 0) tabs = [defaultTab(payload.widgets)];
   }
-  const activeSectionId =
-    sections.some((section) => section.id === payload.activeSectionId)
-      ? payload.activeSectionId
-      : sections.some((section) => section.id === existingNormalized.activeSectionId)
-        ? existingNormalized.activeSectionId
-        : sections[0]?.id;
+  const activeTabId =
+    tabs.some((tab) => tab.id === payload.activeTabId)
+      ? payload.activeTabId
+      : tabs.some((tab) => tab.id === existingNormalized.activeTabId)
+        ? existingNormalized.activeTabId
+        : tabs[0]?.id;
 
   const rawFrontendState = {
     ...existingNormalized,
     ...payload,
     name: payload.name ? payload.name.trim() : existingNormalized.name,
     description: payload.description !== undefined ? payload.description.trim() : existingNormalized.description,
-    sections,
-    activeSectionId,
-    widgets: sections.flatMap((section) => section.widgets || []),
+    tabs,
+    activeTabId,
+    widgets: tabs.flatMap((tab) => tab.widgets || []),
   };
 
   const clientVersion = typeof payload.__v === "number" ? payload.__v : existingNormalized.__v || 0;

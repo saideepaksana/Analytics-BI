@@ -202,7 +202,15 @@
 /* ── Responsive ── */
 @media (max-width: 900px) {
   .app-frame {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+    width: 100vw;
+    overflow-x: hidden;
+  }
+
+  .app-shell {
+    padding: 20px 16px;
+    width: 100%;
+    min-width: 0;
   }
 
   .app-sidebar {

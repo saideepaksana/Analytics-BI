@@ -123,6 +123,48 @@ export default function ChartExplore({ chartId, onBack }) {
 
   const [schemaLoaded, setSchemaLoaded] = useState(false);
 
+  // ── Drawer State for Mobile ──
+  const [drawerHeight, setDrawerHeight] = useState(380);
+  const dragRef = useRef(false);
+  const startYRef = useRef(0);
+  const startHeightRef = useRef(0);
+
+  useEffect(() => {
+    const handleMove = (e) => {
+      if (!dragRef.current) return;
+      if (e.cancelable && e.type === "touchmove") e.preventDefault();
+      
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      const delta = startYRef.current - clientY;
+      const newHeight = Math.max(100, Math.min(window.innerHeight - 150, startHeightRef.current + delta));
+      setDrawerHeight(newHeight);
+    };
+
+    const handleUp = () => {
+      dragRef.current = false;
+      document.body.style.userSelect = "auto";
+    };
+
+    document.addEventListener("mousemove", handleMove);
+    document.addEventListener("mouseup", handleUp);
+    document.addEventListener("touchmove", handleMove, { passive: false });
+    document.addEventListener("touchend", handleUp);
+
+    return () => {
+      document.removeEventListener("mousemove", handleMove);
+      document.removeEventListener("mouseup", handleUp);
+      document.removeEventListener("touchmove", handleMove);
+      document.removeEventListener("touchend", handleUp);
+    };
+  }, []);
+
+  const handleDragDown = (e) => {
+    dragRef.current = true;
+    startYRef.current = e.touches ? e.touches[0].clientY : e.clientY;
+    startHeightRef.current = drawerHeight;
+    document.body.style.userSelect = "none";
+  };
+
   // ── Navigation Guard ──
   useEffect(() => {
     const handleBeforeUnload = (e) => {
@@ -490,65 +532,71 @@ export default function ChartExplore({ chartId, onBack }) {
 
       {error ? <div className="explore-error-banner">{error}</div> : null}
 
-      <div className="explore-layout">
-        <SourcePanel
-          datasets={datasets}
-          selectedDatasetId={selectedDatasetId}
-          pendingMetricAggregation={pendingMetricAggregation}
-          onSelectDataset={(id) => {
-            setSelectedDatasetId(id);
-            setResultData([]);
-            setRowCount(0);
-            setExecutionTimeMs(0);
-            setXAxis(null);
-            setMetrics([]);
-            setPendingMetricAggregation(null);
-            setFilters([]);
-            setSortBy([]);
-          }}
-          columns={columns}
-          onColumnClick={handleColumnClick}
-        />
+      <div className="explore-layout" style={{ '--drawer-height': `${drawerHeight}px` }}>
+        <div className="explore-drawer-wrapper">
+          <div className="explore-drawer-handle" onPointerDown={handleDragDown} onTouchStart={handleDragDown}>
+            <div className="handle-bar" />
+          </div>
 
-        <QueryPanel
-          chartType={chartType}
-          onSetChartType={(newType) => handleSetChartType(newType, chartType, xAxis, metrics)}
-          validationError={exploreValidationError}
-          columns={columns}
-          xAxis={xAxis}
-          onSetXAxis={(v) => setXAxis(v)}
-          xAxisSortBy={xAxisSortBy}
-          onSetXAxisSortBy={(v) => setXAxisSortBy(v)}
-          metrics={metrics}
-          onSetMetrics={setMetrics}
-          onAddMetric={(m) => setMetrics((prev) => [...prev, m])}
-          onRemoveMetric={(idx) => setMetrics((prev) => prev.filter((_, i) => i !== idx))}
-          contributionMode={contributionMode}
-          onSetContributionMode={setContributionMode}
-          filters={filters}
-          onAddFilter={(f) => setFilters((prev) => [...prev, f])}
-          onRemoveFilter={(idx) => setFilters((prev) => prev.filter((_, i) => i !== idx))}
-          onUpdateFilter={(idx, f) => setFilters((prev) => prev.map((item, i) => (i === idx ? f : item)))}
-          onUpdateChart={handleUpdateChart}
-          isLoading={isQuerying}
-          showLegend={showLegend}
-          onToggleLegend={() => setShowLegend((v) => !v)}
-          showGrid={showGrid}
-          onToggleGrid={() => setShowGrid((v) => !v)}
-          showLabels={showLabels}
-          onToggleLabels={() => setShowLabels((v) => !v)}
-          colorScheme={colorScheme}
-          onColorSchemeChange={setColorScheme}
-          colorSchemeOptions={Object.entries(COLOR_SCHEMES).map(([id, colors]) => ({
-            id,
-            label: id.charAt(0).toUpperCase() + id.slice(1),
-            colors,
-          }))}
-          binSize={binSize}
-          onSetBinSize={setBinSize}
-          stacking={stacking}
-          onSetStacking={setStacking}
-        />
+          <SourcePanel
+            datasets={datasets}
+            selectedDatasetId={selectedDatasetId}
+            pendingMetricAggregation={pendingMetricAggregation}
+            onSelectDataset={(id) => {
+              setSelectedDatasetId(id);
+              setResultData([]);
+              setRowCount(0);
+              setExecutionTimeMs(0);
+              setXAxis(null);
+              setMetrics([]);
+              setPendingMetricAggregation(null);
+              setFilters([]);
+              setSortBy([]);
+            }}
+            columns={columns}
+            onColumnClick={handleColumnClick}
+          />
+
+          <QueryPanel
+            chartType={chartType}
+            onSetChartType={(newType) => handleSetChartType(newType, chartType, xAxis, metrics)}
+            validationError={exploreValidationError}
+            columns={columns}
+            xAxis={xAxis}
+            onSetXAxis={(v) => setXAxis(v)}
+            xAxisSortBy={xAxisSortBy}
+            onSetXAxisSortBy={(v) => setXAxisSortBy(v)}
+            metrics={metrics}
+            onSetMetrics={setMetrics}
+            onAddMetric={(m) => setMetrics((prev) => [...prev, m])}
+            onRemoveMetric={(idx) => setMetrics((prev) => prev.filter((_, i) => i !== idx))}
+            contributionMode={contributionMode}
+            onSetContributionMode={setContributionMode}
+            filters={filters}
+            onAddFilter={(f) => setFilters((prev) => [...prev, f])}
+            onRemoveFilter={(idx) => setFilters((prev) => prev.filter((_, i) => i !== idx))}
+            onUpdateFilter={(idx, f) => setFilters((prev) => prev.map((item, i) => (i === idx ? f : item)))}
+            onUpdateChart={handleUpdateChart}
+            isLoading={isQuerying}
+            showLegend={showLegend}
+            onToggleLegend={() => setShowLegend((v) => !v)}
+            showGrid={showGrid}
+            onToggleGrid={() => setShowGrid((v) => !v)}
+            showLabels={showLabels}
+            onToggleLabels={() => setShowLabels((v) => !v)}
+            colorScheme={colorScheme}
+            onColorSchemeChange={setColorScheme}
+            colorSchemeOptions={Object.entries(COLOR_SCHEMES).map(([id, colors]) => ({
+              id,
+              label: id.charAt(0).toUpperCase() + id.slice(1),
+              colors,
+            }))}
+            binSize={binSize}
+            stacking={stacking}
+            onSetStacking={setStacking}
+            onSetBinSize={setBinSize}
+          />
+        </div>
 
         <ChartPanel
           chartType={chartType}

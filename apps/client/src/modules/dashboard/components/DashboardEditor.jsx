@@ -10,8 +10,7 @@ const ROW_HEIGHT = 42;
 const MIN_WIDGET_W = 4;
 const MIN_WIDGET_H = 5;
 
-const previewDataCache = new Map();
-const previewRequestCache = new Map();
+
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
@@ -130,25 +129,9 @@ function DashboardWidgetChart({ chart }) {
         }
 
         const query = buildChartQuery(chart);
-        const cacheKey = `${chart.chartId || chart._id || chart.name || "chart"}:${JSON.stringify(query)}`;
 
-        if (previewDataCache.has(cacheKey)) {
-          if (!cancelled) {
-            setData(previewDataCache.get(cacheKey));
-            setLoading(false);
-          }
-          return;
-        }
+        const results = await queryDataset(datasetId, query).then((response) => response.results || []);
 
-        let request = previewRequestCache.get(cacheKey);
-        if (!request) {
-          request = queryDataset(datasetId, query).then((response) => response.results || []);
-          previewRequestCache.set(cacheKey, request);
-        }
-
-        const results = await request;
-        previewRequestCache.delete(cacheKey);
-        previewDataCache.set(cacheKey, results);
         if (!cancelled) {
           setData(results);
         }
@@ -173,9 +156,8 @@ function DashboardWidgetChart({ chart }) {
 
   if (loading) {
     return (
-      <div className="dashboard-widget-loading">
-        <Loader2 size={18} className="spinner" />
-        <span>Loading chart...</span>
+      <div className="dashboard-widget-skeleton">
+        <Loader2 size={24} className="spinner" />
       </div>
     );
   }
@@ -972,15 +954,28 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
     const isFirstTab = activeTabId === firstTabId;
 
     try {
+      window.DISABLE_CHART_ANIMATIONS = true;
+
+      // Force a tiny redraw
+      await new Promise(r => setTimeout(r, 50));
+
       if (!isFirstTab && firstTabId) {
         setActiveTabId(firstTabId);
-        // Wait for React to render the first tab DOM and charts
-        await new Promise(r => setTimeout(r, 600)); 
+        // Wait for React to switch tab
+        await new Promise(r => setTimeout(r, 100)); 
       }
 
       const gridEl = document.querySelector(".dashboard-canvas-grid");
       if (gridEl) {
-        await new Promise(r => setTimeout(r, 200)); // wait for redraw
+        // Wait for all chart loading skeletons to disappear (max 10 seconds)
+        let retries = 100;
+        while (gridEl.querySelector(".dashboard-widget-skeleton") && retries > 0) {
+          await new Promise(r => setTimeout(r, 100));
+          retries--;
+        }
+
+        // Wait a bit more for echarts to finish canvas animations if any are still lingering
+        await new Promise(r => setTimeout(r, 800)); 
 
         const canvas = await html2canvas(gridEl, {
           scale: 0.5,
@@ -995,6 +990,8 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
       }
     } catch (err) {
       console.warn("Failed to generate dashboard thumbnail", err);
+    } finally {
+      window.DISABLE_CHART_ANIMATIONS = false;
     }
 
     if (!isFirstTab && firstTabId) {
