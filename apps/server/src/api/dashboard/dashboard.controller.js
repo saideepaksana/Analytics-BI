@@ -162,11 +162,21 @@ exports.patchDashboardState = async (req, res) => {
         }
 
         const mapped = dashboardMapper.toDB(incomingState);
-        const { layout } = mapped;
+        const { layout, tabs } = mapped;
 
-        if (layout !== undefined) {
+        // Optionally validate flat layout if provided
+        if (layout && layout.length > 0) {
             const layoutError = validateLayout(layout);
             if (layoutError) return res.status(400).json({ message: 'Invalid layout', detail: layoutError });
+        }
+
+        if (tabs && tabs.length > 0) {
+            for (const tab of tabs) {
+                if (tab.widgets) {
+                    const layoutError = validateLayout(tab.widgets);
+                    if (layoutError) return res.status(400).json({ message: `Invalid layout in tab ${tab.name}`, detail: layoutError });
+                }
+            }
         }
 
         const dashboard = await Dashboard.findOneAndUpdate(

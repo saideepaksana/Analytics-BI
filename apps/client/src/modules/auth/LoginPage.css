@@ -1,0 +1,293 @@
+/* ── Login Page ── */
+
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg, #09090b);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Animated gradient background orbs */
+.login-bg-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(100px);
+  opacity: 0.35;
+  pointer-events: none;
+  animation: orb-float 12s ease-in-out infinite alternate;
+}
+
+.login-bg-orb.orb-1 {
+  width: 420px;
+  height: 420px;
+  background: var(--brand, #06b6d4);
+  top: -120px;
+  left: -80px;
+  animation-delay: 0s;
+}
+
+.login-bg-orb.orb-2 {
+  width: 360px;
+  height: 360px;
+  background: var(--accent, #8b5cf6);
+  bottom: -100px;
+  right: -60px;
+  animation-delay: -4s;
+}
+
+.login-bg-orb.orb-3 {
+  width: 200px;
+  height: 200px;
+  background: #ec4899;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  opacity: 0.15;
+  animation-delay: -8s;
+}
+
+@keyframes orb-float {
+  0% { transform: translateY(0px) scale(1); }
+  50% { transform: translateY(-30px) scale(1.05); }
+  100% { transform: translateY(10px) scale(0.97); }
+}
+
+/* Glass card */
+.login-card {
+  position: relative;
+  z-index: 1;
+  width: min(420px, 90vw);
+  background: rgba(24, 24, 27, 0.75);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  padding: 40px 32px 36px;
+  box-shadow: 0 32px 64px rgba(0, 0, 0, 0.5);
+  animation: login-card-enter 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes login-card-enter {
+  from {
+    opacity: 0;
+    transform: translateY(24px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.login-card-logo {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, var(--brand, #06b6d4), var(--accent, #8b5cf6));
+  color: #000;
+  margin: 0 auto 20px;
+  box-shadow: 0 8px 24px rgba(6, 182, 212, 0.3);
+}
+
+.login-card h1 {
+  margin: 0 0 6px;
+  font-size: 24px;
+  font-weight: 800;
+  text-align: center;
+  color: var(--text, #fafafa);
+  letter-spacing: -0.5px;
+}
+
+.login-card .login-subtitle {
+  margin: 0 0 28px;
+  font-size: 14px;
+  color: var(--muted, #71717a);
+  text-align: center;
+  line-height: 1.5;
+}
+
+/* Form */
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.login-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.login-field label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary, #a1a1aa);
+  letter-spacing: 0.2px;
+}
+
+.login-field input,
+.login-field select {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: rgba(9, 9, 11, 0.6);
+  color: var(--text, #fafafa);
+  font-size: 14px;
+  font-family: inherit;
+  transition: border-color 200ms ease, box-shadow 200ms ease;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.login-field select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2371717a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  padding-right: 36px;
+  cursor: pointer;
+}
+
+.login-field input:focus,
+.login-field select:focus {
+  outline: none;
+  border-color: var(--brand, #06b6d4);
+  box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.15);
+}
+
+.login-field input::placeholder {
+  color: var(--muted, #71717a);
+}
+
+.login-error {
+  font-size: 12px;
+  color: var(--danger, #ef4444);
+  margin-top: 2px;
+  min-height: 16px;
+}
+
+/* Submit button */
+.login-submit-btn {
+  margin-top: 6px;
+  padding: 13px 20px;
+  border: none;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--brand, #06b6d4), var(--accent, #8b5cf6));
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 250ms ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.login-submit-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.1), transparent);
+  opacity: 0;
+  transition: opacity 200ms ease;
+}
+
+.login-submit-btn:hover:not(:disabled)::before {
+  opacity: 1;
+}
+
+.login-submit-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(6, 182, 212, 0.3);
+}
+
+.login-submit-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.login-submit-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Role badges */
+.login-role-badges {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.login-role-badge {
+  padding: 8px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  background: rgba(9, 9, 11, 0.6);
+  color: var(--text-secondary, #a1a1aa);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 200ms ease;
+  flex: 1;
+  text-align: center;
+  text-transform: capitalize;
+}
+
+.login-role-badge:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text, #fafafa);
+}
+
+.login-role-badge.selected {
+  border-color: var(--brand, #06b6d4);
+  background: rgba(6, 182, 212, 0.12);
+  color: var(--brand, #06b6d4);
+  box-shadow: 0 0 0 1px rgba(6, 182, 212, 0.2);
+}
+
+/* Footer text */
+.login-footer {
+  margin-top: 20px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--muted, #71717a);
+  letter-spacing: 0.3px;
+}
+
+/* ── Light theme ── */
+[data-theme="light"] .login-page {
+  background: #eef2f6;
+}
+
+[data-theme="light"] .login-card {
+  background: rgba(255, 255, 255, 0.85);
+  border-color: #e2e8f0;
+  box-shadow: 0 32px 64px rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="light"] .login-field input,
+[data-theme="light"] .login-field select {
+  background: rgba(248, 250, 252, 0.9);
+  border-color: #e2e8f0;
+  color: #0f172a;
+}
+
+[data-theme="light"] .login-role-badge {
+  background: rgba(248, 250, 252, 0.9);
+  border-color: #e2e8f0;
+  color: #475569;
+}
+
+[data-theme="light"] .login-role-badge.selected {
+  border-color: var(--brand, #0ea5e9);
+  background: rgba(14, 165, 233, 0.08);
+  color: var(--brand, #0ea5e9);
+}
+
+[data-theme="light"] .login-bg-orb {
+  opacity: 0.18;
+}

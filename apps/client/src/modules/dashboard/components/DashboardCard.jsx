@@ -143,7 +143,9 @@ function PreviewWidgetTile({ chart, style }) {
 }
 
 export default function DashboardCard({ dashboard, charts = [], onView, onEdit, onDelete }) {
-  const previewWidgets = Array.isArray(dashboard.widgets) ? dashboard.widgets : [];
+  const previewWidgets = dashboard.tabs && dashboard.tabs.length > 0 
+    ? dashboard.tabs[0].widgets 
+    : (Array.isArray(dashboard.widgets) ? dashboard.widgets : (Array.isArray(dashboard.layout) ? dashboard.layout : []));
   const widgetCount = Array.isArray(previewWidgets) ? previewWidgets.length : 0;
 
   const previewCols = 24;
@@ -181,6 +183,29 @@ export default function DashboardCard({ dashboard, charts = [], onView, onEdit, 
               alt="Dashboard Preview" 
               style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
             />
+          ) : previewWidgets.length > 0 ? (
+            <div className="preview-layout-grid">
+              {previewWidgets.map((widget, i) => {
+                const chart = chartMap.get(widget.chartId);
+                const wPercent = (widget.w / previewCols) * 100;
+                const hPercent = (widget.h / previewRows) * 100;
+                const lPercent = (widget.x / previewCols) * 100;
+                const tPercent = (widget.y / previewRows) * 100;
+
+                return (
+                  <PreviewWidgetTile
+                    key={widget.id || i}
+                    chart={chart}
+                    style={{
+                      left: `${lPercent}%`,
+                      top: `${tPercent}%`,
+                      width: `${wPercent}%`,
+                      height: `${hPercent}%`,
+                    }}
+                  />
+                );
+              })}
+            </div>
           ) : (
             <div className="preview-empty-state">
               <LayoutDashboard size={18} />

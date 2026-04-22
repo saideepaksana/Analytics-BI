@@ -213,6 +213,7 @@ function DashboardWidget({
   onUpdateAnnotation,
   onDeleteAnnotation,
   onRenderComplete,
+  onViewPopup,
 }) {
   const [showMenu, setShowMenu] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -245,9 +246,16 @@ function DashboardWidget({
   };
 
   return (
-    <article className={`dashboard-widget ${activeClass}`} style={style}>
+    <article 
+      className={`dashboard-widget ${activeClass}`} 
+      style={style}
+      onClick={() => {
+        if (readOnly && onViewPopup) onViewPopup(widget.id);
+      }}
+    >
       <header
         className={`dashboard-widget-header ${readOnly ? "read-only" : ""}`}
+        style={readOnly && onViewPopup ? { cursor: "pointer" } : undefined}
         onMouseDown={(event) => {
           if (readOnly) return;
           onDragStart(event, widget.id);
@@ -484,25 +492,43 @@ function DashboardWidget({
 }
 
 export default function DashboardEditor({ mode, dashboard, charts, saving, onBack, onSave, onAutoSave, onDelete }) {
-  const isNewOrEmpty = !dashboard?.id || (Array.isArray(dashboard?.widgets) && dashboard.widgets.length === 0);
+  const isNewOrEmpty = !dashboard?.id || (Array.isArray(dashboard?.tabs) ? dashboard.tabs.length === 0 : (Array.isArray(dashboard?.widgets) && dashboard.widgets.length === 0));
   const [isEditMode, setIsEditMode] = useState(isNewOrEmpty);
   const readOnly = !isEditMode;
   const [name, setName] = useState(dashboard?.name || "Untitled Dashboard");
   const [savingLocal, setSavingLocal] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const { status, startExport, reset } = useExportStatus();
-  const [widgets, setWidgets] = useState(() => {
-    if (Array.isArray(dashboard?.widgets) && dashboard.widgets.length > 0) {
-      return dashboard.widgets;
+  
+  const [tabs, setTabs] = useState(() => {
+    if (Array.isArray(dashboard?.tabs) && dashboard.tabs.length > 0) {
+      return dashboard.tabs;
     }
-
-    if (Array.isArray(dashboard?.sections) && dashboard.sections.length > 0) {
-      const activeSection = dashboard.sections.find((section) => section.id === dashboard.activeSectionId);
-      return activeSection?.widgets || dashboard.sections[0]?.widgets || [];
-    }
-
-    return [];
+    // Fallback
+    const fallbackWidgets = Array.isArray(dashboard?.layout) ? dashboard.layout : (Array.isArray(dashboard?.widgets) ? dashboard.widgets : []);
+    return [{ id: `tab-${Date.now()}`, name: "Main Tab", widgets: fallbackWidgets }];
   });
+
+  const [activeTabId, setActiveTabId] = useState(() => {
+    return tabs[0]?.id || `tab-${Date.now()}`;
+  });
+
+  const [editingTabId, setEditingTabId] = useState(null);
+  const [tempTabName, setTempTabName] = useState("");
+  const [popupWidgetId, setPopupWidgetId] = useState(null);
+
+  const widgets = useMemo(() => tabs.find(t => t.id === activeTabId)?.widgets || [], [tabs, activeTabId]);
+
+  const setWidgets = useCallback((updater) => {
+    setTabs(prevTabs => prevTabs.map(tab => {
+        if (tab.id === activeTabId) {
+            const newWidgets = typeof updater === 'function' ? updater(tab.widgets) : updater;
+            return { ...tab, widgets: newWidgets };
+        }
+        return tab;
+    }));
+  }, [activeTabId]);
+
   const [annotations, setAnnotations] = useState([]);
 
   // Apply frozen state in export mode
@@ -587,17 +613,19 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
   // Track the last known saved state to avoid redundant saves
   const lastStateRef = useRef({
     name: dashboard?.name || "",
-    widgets: JSON.stringify(widgets || []),
+    tabs: JSON.stringify(tabs || []),
+    activeTabId: activeTabId || "",
   });
 
   // Check for meaningful changes in layout or metadata
   const hasChanges = useCallback(() => {
-    const currentWidgetsJson = JSON.stringify(widgets || []);
+    const currentTabsJson = JSON.stringify(tabs || []);
     return (
       name !== lastStateRef.current.name ||
-      currentWidgetsJson !== lastStateRef.current.widgets
+      currentTabsJson !== lastStateRef.current.tabs ||
+      activeTabId !== lastStateRef.current.activeTabId
     );
-  }, [name, widgets]);
+  }, [name, tabs, activeTabId]);
 
   // Validate layout for collisions and dimension constraints
   const validateLayout = useCallback(() => {
@@ -628,16 +656,18 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
       onAutoSave?.({
         id: dashboard.id,
         name: name.trim(),
-        widgets,
+        tabs,
+        activeTabId,
       });
       lastStateRef.current = {
         name: name.trim(),
-        widgets: JSON.stringify(widgets),
+        tabs: JSON.stringify(tabs),
+        activeTabId,
       };
     }, 2000);
 
     return () => clearTimeout(timer);
-  }, [name, widgets, isEditMode, dashboard?.id, onAutoSave, hasChanges, validateLayout]);
+  }, [name, widgets, tabs, activeTabId, isEditMode, dashboard?.id, onAutoSave, hasChanges, validateLayout]);
 
   useEffect(() => {
     // Intentionally left blank:
@@ -747,17 +777,17 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
       return [...previous, nextWidget];
     });
     setShowChartLibrary(false);
-  }, [baseColumns]);
+  }, [baseColumns, setWidgets]);
 
   const removeWidget = useCallback((widgetId) => {
     setWidgets((previous) => previous.filter((widget) => widget.id !== widgetId));
-  }, []);
+  }, [setWidgets]);
 
   const updateWidget = useCallback((widgetId, updates) => {
     setWidgets((previous) =>
       previous.map((widget) => (widget.id === widgetId ? { ...widget, ...updates } : widget))
     );
-  }, []);
+  }, [setWidgets]);
 
   useEffect(() => {
     if (!action || !isEditMode) return undefined;
@@ -937,10 +967,20 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
       return;
     }
 
+    const firstTabId = tabs && tabs.length > 0 ? tabs[0].id : null;
+    const originalTabId = activeTabId;
+    const isFirstTab = activeTabId === firstTabId;
+
     try {
+      if (!isFirstTab && firstTabId) {
+        setActiveTabId(firstTabId);
+        // Wait for React to render the first tab DOM and charts
+        await new Promise(r => setTimeout(r, 600)); 
+      }
+
       const gridEl = document.querySelector(".dashboard-canvas-grid");
       if (gridEl) {
-        await new Promise(r => setTimeout(r, 100)); // wait for redraw
+        await new Promise(r => setTimeout(r, 200)); // wait for redraw
 
         const canvas = await html2canvas(gridEl, {
           scale: 0.5,
@@ -957,16 +997,23 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
       console.warn("Failed to generate dashboard thumbnail", err);
     }
 
+    if (!isFirstTab && firstTabId) {
+      // Return to original tab to preserve editor state smoothly if expected
+      setActiveTabId(originalTabId);
+    }
+
     onSave({
       id: dashboard?.id,
       name: name.trim(),
-      widgets,
+      tabs,
+      activeTabId,
       thumbnail
     });
 
     lastStateRef.current = {
       name: name.trim(),
-      widgets: JSON.stringify(widgets),
+      tabs: JSON.stringify(tabs),
+      activeTabId,
     };
 
     setSavingLocal(false);
@@ -975,7 +1022,7 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
   const handleExport = (format) => {
     // Pipeline B: Capture frozen state
     const frozenState = {
-      activeTab: null, // If tabs were implemented
+      activeTab: activeTabId,
       viewport: { width: window.innerWidth, height: window.innerHeight },
       layout: widgets
     };
@@ -1076,6 +1123,73 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
         </div>
       </div>
 
+      <div className="dashboard-tabs-bar">
+        {tabs.map((tab) => (
+          <div
+            key={tab.id}
+            className={`dashboard-tab-item ${tab.id === activeTabId ? "active" : ""}`}
+            onClick={() => setActiveTabId(tab.id)}
+            onDoubleClick={() => {
+              if (!isEditMode) return;
+              setEditingTabId(tab.id);
+              setTempTabName(tab.name || "");
+            }}
+          >
+            {editingTabId === tab.id ? (
+              <input
+                autoFocus
+                className="dashboard-tab-input"
+                value={tempTabName}
+                onChange={(e) => setTempTabName(e.target.value)}
+                onBlur={() => {
+                  setTabs(tabs.map(t => t.id === tab.id ? { ...t, name: tempTabName.trim() || t.name } : t));
+                  setEditingTabId(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                      setTabs(tabs.map(t => t.id === tab.id ? { ...t, name: tempTabName.trim() || t.name } : t));
+                      setEditingTabId(null);
+                  }
+                }}
+              />
+            ) : (
+              <span>{tab.name || `Tab ${tab.id}`}</span>
+            )}
+            {isEditMode && tabs.length > 1 && (
+              <button
+                type="button"
+                className="dashboard-tab-delete-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const newTabs = tabs.filter(t => t.id !== tab.id);
+                  setTabs(newTabs);
+                  if (activeTabId === tab.id) {
+                      setActiveTabId(newTabs[0].id);
+                  }
+                }}
+                title="Remove Tab"
+              >
+                <X size={12} />
+              </button>
+            )}
+          </div>
+        ))}
+        {isEditMode && (
+          <button
+            type="button"
+            className="dashboard-tab-add-btn"
+            onClick={() => {
+              const newId = `tab-${Date.now()}`;
+              setTabs([...tabs, { id: newId, name: `New Tab`, widgets: [] }]);
+              setActiveTabId(newId);
+            }}
+            title="Add new tab"
+          >
+            <Plus size={14} />
+          </button>
+        )}
+      </div>
+
       <div className="dashboard-editor-content">
         <section className="dashboard-canvas-pane">
           <div className="dashboard-canvas-wrapper" ref={canvasRef}>
@@ -1116,6 +1230,7 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
                   onUpdateAnnotation={handleUpdateAnnotation}
                   onDeleteAnnotation={handleDeleteAnnotation}
                   onRenderComplete={handleChartRendered}
+                  onViewPopup={setPopupWidgetId}
                 />
               ))}
               {widgetLayout.length === 0 ? (
@@ -1166,6 +1281,50 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
           </aside>
         </div>
       ) : null}
+
+      {popupWidgetId && !isEditMode && (
+        <div 
+          className="dashboard-library-drawer-overlay" 
+          style={{ justifyContent: 'center', alignItems: 'center' }}
+          onClick={() => setPopupWidgetId(null)}
+        >
+          <div 
+            className="popup-widget-container"
+            style={{
+              width: '90%',
+              height: '90%',
+              background: '#181b1f',
+              border: '1px solid #2f3848',
+              borderRadius: '12px',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ padding: '16px 24px', borderBottom: '1px solid #2b313d', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0, color: '#fff', fontSize: '1.2rem' }}>
+                {widgets.find(w => w.id === popupWidgetId)?.title || chartMap.get(widgets.find(w => w.id === popupWidgetId)?.chartId)?.name || "Chart Preview"}
+              </h3>
+              <button 
+                type="button" 
+                className="dashboard-widget-icon-btn" 
+                onClick={() => setPopupWidgetId(null)}
+                style={{ width: '32px', height: '32px', borderRadius: '50%' }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div style={{ flex: 1, minHeight: 0, padding: '24px' }}>
+              {chartMap.has(widgets.find(w => w.id === popupWidgetId)?.chartId) && (
+                <DashboardWidgetChart 
+                  chart={chartMap.get(widgets.find(w => w.id === popupWidgetId)?.chartId)} 
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

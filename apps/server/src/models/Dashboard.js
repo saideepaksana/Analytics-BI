@@ -10,6 +10,8 @@ const DashboardSchema = new Schema(
     isFavorite: { type: Boolean, default: false },
     status: { type: String, enum: ["draft", "published"], default: "draft" },
     layout: { type: Schema.Types.Mixed, default: [] },
+    tabs: { type: Schema.Types.Mixed, default: [] },
+    activeTabId: { type: String, default: null },
     chartRefs: [{ type: Schema.Types.ObjectId, ref: "Chart" }],
     // Normalized dashboard state fields
     filters: { type: Schema.Types.Mixed, default: {} },

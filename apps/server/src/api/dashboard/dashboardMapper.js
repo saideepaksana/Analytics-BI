@@ -12,6 +12,8 @@ function toDB(frontendState = {}) {
     isFavorite,
     status,
     layout,
+    tabs,
+    activeTabId,
     chartRefs,
     filters,
     metadata,
@@ -26,6 +28,8 @@ function toDB(frontendState = {}) {
     ...(isFavorite !== undefined ? { isFavorite: !!isFavorite } : {}),
     ...(status !== undefined ? { status: status || 'draft' } : {}),
     ...(layout !== undefined ? { layout: layout || [] } : {}),
+    ...(tabs !== undefined ? { tabs: Array.isArray(tabs) ? tabs : [] } : {}),
+    ...(activeTabId !== undefined ? { activeTabId } : {}),
     ...(chartRefs !== undefined ? { chartRefs: Array.isArray(chartRefs) ? chartRefs : [] } : {}),
     ...(filters !== undefined ? { filters: filters && typeof filters === 'object' ? filters : {} } : {}),
     ...(metadata !== undefined ? { metadata: metadata && typeof metadata === 'object' ? metadata : {} } : {}),
@@ -49,6 +53,8 @@ function fromDB(dbDoc = {}) {
     isFavorite: dbDoc.isFavorite,
     status: dbDoc.status,
     layout: dbDoc.layout,
+    tabs: dbDoc.tabs,
+    activeTabId: dbDoc.activeTabId,
     chartRefs: dbDoc.chartRefs,
     filters: dbDoc.filters,
     metadata: dbDoc.metadata,
@@ -57,6 +63,21 @@ function fromDB(dbDoc = {}) {
     updatedAt: dbDoc.updatedAt,
     createdAt: dbDoc.createdAt,
   };
+
+  // Backwards compatibility for frontend
+  if (!normalized.tabs || normalized.tabs.length === 0) {
+    if (normalized.layout && normalized.layout.length > 0) {
+      normalized.tabs = [{
+        id: "Main",
+        name: "Main",
+        widgets: normalized.layout
+      }];
+      normalized.activeTabId = "Main";
+    } else {
+      normalized.tabs = [];
+      normalized.activeTabId = null;
+    }
+  }
 
   if (dbDoc._rawFrontendState) {
     return {
