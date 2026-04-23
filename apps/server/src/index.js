@@ -37,19 +37,28 @@ const startWorkersIfAvailable = async () => {
   try {
     await probe.connect();
     await probe.ping();
-    const { initWorkers } = require("./jobs/worker");
-    initWorkers();
   } catch (error) {
     logger.warn(
       `Redis unavailable at startup (${error.message}). Background workers are disabled until Redis is reachable.`,
       "Server"
     );
+    return;
   } finally {
     try {
       await probe.quit();
     } catch {
       probe.disconnect();
     }
+  }
+
+  try {
+    const { initWorkers } = require("./jobs/worker");
+    initWorkers();
+  } catch (error) {
+    logger.error(
+      `Background worker initialization failed: ${error.message}`,
+      "Server"
+    );
   }
 };
 

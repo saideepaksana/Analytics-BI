@@ -8,6 +8,7 @@
 
 const path = require("path");
 const fs = require("fs");
+const os = require("os");
 const { Worker, DelayedError } = require("bullmq");
 const { redisConfig } = require("../core/redis");
 const { QUEUE_NAMES, backgroundTasksQueue, bulkIngestionQueue } = require("./queue");
@@ -15,12 +16,12 @@ const { RETRY_POLICIES, isPermanentFailure, PermanentError, TransientError } = r
 const { sendToDLQ, attachDLQListener } = require("./dlq");
 const { getConcurrency, globalSemaphore } = require("./orchestrator");
 const logger = require("../core/logger");
+const { getVisualExportAvailabilityError } = require("../features/export/utils/visualExportAvailability");
 
 const { runUploadProcessor } = require("./uploadProcessor");
 const { runRawExport } = require("../features/export/workers/rawExportWorker");
-const { runVisualExport } = require("../features/export/workers/visualExportWorker");
 
-const EXPORT_DIR = path.join(__dirname, "../../tmp/exports");
+const EXPORT_DIR = path.join(os.tmpdir(), "analytics-bi", "exports");
 
 /**
  * Periodically cleans up old export files (older than 1 hour)
@@ -89,8 +90,26 @@ const RAW_EXPORT_HANDLERS = {
     "raw-export": runRawExport,
 };
 
+let cachedVisualExportHandler = null;
+
+const getVisualExportHandler = () => {
+    const availabilityError = getVisualExportAvailabilityError();
+    if (availabilityError) {
+        throw new PermanentError(availabilityError);
+    }
+
+    if (!cachedVisualExportHandler) {
+        ({ runVisualExport: cachedVisualExportHandler } = require("../features/export/workers/visualExportWorker"));
+    }
+
+    return cachedVisualExportHandler;
+};
+
 const DASHBOARD_EXPORT_HANDLERS = {
-    "dashboard-export": runVisualExport,
+    "dashboard-export": async (job) => {
+        const handler = getVisualExportHandler();
+        return handler(job);
+    },
 };
 
 const workers = {};
@@ -148,6 +167,11 @@ const initWorkers = () => {
 
     startWorker(QUEUE_NAMES.RAW_EXPORT, makeProcessor(RAW_EXPORT_HANDLERS));
     startWorker(QUEUE_NAMES.DASHBOARD_EXPORT, makeProcessor(DASHBOARD_EXPORT_HANDLERS));
+
+    const visualExportAvailabilityError = getVisualExportAvailabilityError();
+    if (visualExportAvailabilityError) {
+        logger.warn(visualExportAvailabilityError, "Worker");
+    }
 };
 
 const shutdownWorkers = async () => {

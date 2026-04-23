@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { Loader2 } from "lucide-react";
+import { Download, FileSpreadsheet, FileText, Loader2 } from "lucide-react";
 import ExploreTopBar from "./ExploreTopBar";
 import SourcePanel from "./SourcePanel";
 import QueryPanel from "./QueryPanel";
 import ChartPanel from "./ChartPanel";
 import { listDatasets, getDatasetMetadata } from "../../../services/datasets.service";
 import { queryDataset, saveChartData, getChartById } from "../../../services/charts.service";
+import { useExportStatus } from "../../../hooks/useExportStatus";
+import { buildChartRawExportPayload } from "../../../services/export.service";
 import "../styles/explore.css";
 
 const COLOR_SCHEMES = {
@@ -120,6 +122,16 @@ export default function ChartExplore({ chartId, onBack }) {
   const [isDirty, setIsDirty] = useState(false);
   const [isChartOutdated, setIsChartOutdated] = useState(false);
   const [error, setError] = useState(null);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const {
+    status: exportStatus,
+    progress: exportProgress,
+    error: exportError,
+    startExport,
+    download,
+    isBusy: isExportBusy,
+    isComplete: isExportComplete,
+  } = useExportStatus();
 
   const [schemaLoaded, setSchemaLoaded] = useState(false);
 
@@ -440,6 +452,58 @@ export default function ChartExplore({ chartId, onBack }) {
     }
   }, [savedChartId, chartName, selectedDatasetId, chartType, xAxis, metrics, dimensionsList, filters, sortBy, showLegend, showGrid, showLabels, colorScheme, columns, binSize, stacking]);
 
+  const handleExport = useCallback((format) => {
+    if (!selectedDatasetId) {
+      return;
+    }
+
+    const isScatter = chartType === "scatter";
+    const isDistribution = chartType === "boxplot" || chartType === "histogram";
+    const isLineOrArea = chartType === "line" || chartType === "area";
+    const isLineAreaRaw = isLineOrArea && metrics.some((metric) => (metric.aggregation || "").toUpperCase() === "RAW");
+
+    const payload = buildChartRawExportPayload({
+      datasetId: selectedDatasetId,
+      chartId: savedChartId || chartId,
+      chartName,
+      query: {
+        dimensions: (isScatter || isDistribution) ? [] : (xAxis ? [{ field: xAxis }] : []),
+        measures: metrics.map((metric) => ({
+          field: metric.field,
+          aggregation: metric.aggregation,
+          label: metric.label,
+        })),
+        filters: filters.filter((filter) => filter.field && filter.operator),
+        sortBy,
+        orderBy: sortBy.length > 0
+          ? sortBy
+          : (metrics.length > 0 ? [{ field: metrics[0].label || metrics[0].field, direction: "desc" }] : []),
+        raw: isScatter || isDistribution || isLineAreaRaw,
+        rowLimit,
+        seriesLimit,
+        contributionMode,
+      },
+      source: "chart-explore",
+    });
+
+    startExport("raw", { ...payload, format });
+    setShowExportMenu(false);
+  }, [
+    chartId,
+    chartName,
+    chartType,
+    contributionMode,
+    filters,
+    metrics,
+    rowLimit,
+    savedChartId,
+    selectedDatasetId,
+    seriesLimit,
+    sortBy,
+    startExport,
+    xAxis,
+  ]);
+
   // ── Handle column click from source panel ──
   const handleColumnClick = useCallback((col, role) => {
     if (!col || !col.name) return;
@@ -528,9 +592,56 @@ export default function ChartExplore({ chartId, onBack }) {
         onSave={handleSave}
         onBack={handleBack}
         lastSaved={lastSaved}
+        extraActions={(
+          <div className="chart-export-container" style={{ position: "relative", marginRight: "10px" }}>
+            <button
+              className={`chart-action-btn ${exportStatus ? "active" : ""}`}
+              title="Export current chart data"
+              onClick={() => setShowExportMenu((prev) => !prev)}
+              disabled={isExportBusy || !selectedDatasetId || metrics.length === 0}
+              style={{ gap: "8px", padding: "10px 14px" }}
+            >
+              {isExportBusy ? (
+                <Loader2 size={16} className="spinner" />
+              ) : (
+                <>
+                  <Download size={16} />
+                  <span>Export</span>
+                </>
+              )}
+            </button>
+
+            {showExportMenu && (
+              <div className="export-dropdown" style={{ top: "calc(100% + 8px)", bottom: "auto", left: "auto", right: 0 }}>
+                <button onClick={() => handleExport("csv")}>
+                  <FileText size={14} /> CSV
+                </button>
+                <button onClick={() => handleExport("xlsx")}>
+                  <FileSpreadsheet size={14} /> Excel
+                </button>
+              </div>
+            )}
+
+            {isExportComplete ? (
+              <div
+                className="export-success-toast"
+                style={{ top: "calc(100% + 8px)", bottom: "auto", left: "auto", right: 0 }}
+                onClick={download}
+              >
+                Download ready
+              </div>
+            ) : null}
+          </div>
+        )}
       />
 
       {error ? <div className="explore-error-banner">{error}</div> : null}
+      {exportError ? <div className="explore-error-banner">{exportError}</div> : null}
+      {isExportBusy ? (
+        <div className="explore-error-banner" style={{ background: "rgba(15, 23, 42, 0.85)", borderColor: "rgba(148, 163, 184, 0.2)" }}>
+          Export in progress... {Math.max(0, Math.round(exportProgress || 0))}%
+        </div>
+      ) : null}
 
       <div className="explore-layout" style={{ '--drawer-height': `${drawerHeight}px` }}>
         <div className="explore-drawer-wrapper">

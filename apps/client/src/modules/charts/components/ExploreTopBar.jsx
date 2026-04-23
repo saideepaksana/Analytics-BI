@@ -13,6 +13,7 @@ export default function ExploreTopBar({
   onSave,
   onBack,
   lastSaved,
+  extraActions = null,
 }) {
   const formatTimeAgo = (date) => {
     if (!date) return "";
@@ -59,6 +60,7 @@ export default function ExploreTopBar({
       </div>
 
       <div className="explore-top-right">
+        {extraActions}
         <button
           className="explore-save-btn"
           onClick={onSave}

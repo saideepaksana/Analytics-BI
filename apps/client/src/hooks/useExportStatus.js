@@ -1,83 +1,180 @@
-import { useState, useCallback, useRef } from "react";
-import axios from "axios";
-import { API_BASE_URL } from "../core/config/env";
+import { useCallback, useEffect, useRef, useState } from "react";
+import apiClient, { getRequestErrorMessage } from "../core/http/apiClient";
+import { getExportDownloadUrl, getExportShareUrl } from "../services/export.service";
+
+const normalizeJobState = (state) => {
+  const value = String(state || "").toLowerCase();
+
+  if (value === "waiting" || value === "delayed" || value === "paused" || value === "queued") {
+    return "queued";
+  }
+
+  if (value === "active" || value === "processing") {
+    return "processing";
+  }
+
+  if (value === "completed") {
+    return "completed";
+  }
+
+  if (value === "failed") {
+    return "failed";
+  }
+
+  if (value === "initiating") {
+    return "initiating";
+  }
+
+  return null;
+};
+
+const triggerBrowserDownload = (url) => {
+  if (!url || typeof document === "undefined") {
+    return;
+  }
+
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.rel = "noopener";
+  anchor.style.display = "none";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+};
 
 export const useExportStatus = () => {
-    const [status, setStatus] = useState(null); // 'queued', 'processing', 'completed', 'failed'
-    const [progress, setProgress] = useState(0);
-    const [error, setError] = useState(null);
-    const [jobId, setJobId] = useState(null);
-    const pollingRef = useRef(null);
+  const [status, setStatus] = useState(null);
+  const [progress, setProgress] = useState(0);
+  const [error, setError] = useState(null);
+  const [jobId, setJobId] = useState(null);
+  const [downloadUrl, setDownloadUrl] = useState("");
+  const [shareUrl, setShareUrl] = useState("");
+  const [filename, setFilename] = useState("");
 
-    const stopPolling = useCallback(() => {
-        if (pollingRef.current) {
-            clearInterval(pollingRef.current);
-            pollingRef.current = null;
+  const pollingRef = useRef(null);
+  const hasAutoDownloadedRef = useRef(false);
+
+  const stopPolling = useCallback(() => {
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+  }, []);
+
+  const reset = useCallback(() => {
+    stopPolling();
+    setStatus(null);
+    setProgress(0);
+    setError(null);
+    setJobId(null);
+    setDownloadUrl("");
+    setShareUrl("");
+    setFilename("");
+    hasAutoDownloadedRef.current = false;
+  }, [stopPolling]);
+
+  const download = useCallback(() => {
+    if (downloadUrl) {
+      triggerBrowserDownload(downloadUrl);
+    }
+  }, [downloadUrl]);
+
+  const handleCompleted = useCallback((result) => {
+    const nextFilename = result?.filename || "";
+    const nextDownloadUrl = result?.downloadUrl || (nextFilename ? getExportDownloadUrl(nextFilename) : "");
+    const nextShareUrl = result?.shareUrl || (nextFilename ? getExportShareUrl(nextFilename) : "");
+
+    setStatus("completed");
+    setProgress(100);
+    setError(null);
+    setFilename(nextFilename);
+    setDownloadUrl(nextDownloadUrl);
+    setShareUrl(nextShareUrl);
+    stopPolling();
+
+    if (nextDownloadUrl && !hasAutoDownloadedRef.current) {
+      hasAutoDownloadedRef.current = true;
+      triggerBrowserDownload(nextDownloadUrl);
+    }
+  }, [stopPolling]);
+
+  const pollStatus = useCallback((id) => {
+    stopPolling();
+
+    pollingRef.current = setInterval(async () => {
+      try {
+        const response = await apiClient.get(`/export/status/${id}`);
+        const nextStatus = normalizeJobState(response.data?.state);
+        const nextProgress = Number(response.data?.progress);
+
+        if (Number.isFinite(nextProgress)) {
+          setProgress(nextProgress);
         }
-    }, []);
 
-    const pollStatus = useCallback((id) => {
-        stopPolling();
-        setJobId(id);
+        if (nextStatus === "completed") {
+          handleCompleted(response.data?.result);
+          return;
+        }
+
+        if (nextStatus === "failed") {
+          setStatus("failed");
+          setError(response.data?.error || "Export failed.");
+          stopPolling();
+          return;
+        }
+
+        if (nextStatus) {
+          setStatus(nextStatus);
+        }
+      } catch (pollError) {
+        // Keep polling on transient errors. We only surface errors once the job itself fails.
+        console.error("Export status polling error", pollError);
+      }
+    }, 2000);
+  }, [handleCompleted, stopPolling]);
+
+  const startExport = useCallback(async (type, payload) => {
+    reset();
+    setStatus("initiating");
+
+    try {
+      const response = await apiClient.post(`/export/${type}`, payload);
+      const nextJobId = response.data?.jobId || null;
+
+      if (nextJobId) {
+        setJobId(nextJobId);
         setStatus("queued");
-        setProgress(0);
-        setError(null);
+        pollStatus(nextJobId);
+      } else {
+        setStatus("failed");
+        setError("Export job did not return an ID.");
+      }
 
-        pollingRef.current = setInterval(async () => {
-            try {
-                const response = await axios.get(`${API_BASE_URL}/export/status/${id}`);
-                const { state, progress, result, error } = response.data;
+      return nextJobId;
+    } catch (exportError) {
+      setStatus("failed");
+      setError(getRequestErrorMessage(exportError, "Failed to start export."));
+      return null;
+    }
+  }, [pollStatus, reset]);
 
-                setProgress(progress);
-                
-                if (state === "completed") {
-                    setStatus("completed");
-                    stopPolling();
-                    // Auto-trigger download
-                    if (result && result.filename) {
-                        window.location.href = `${API_BASE_URL}/export/download/${result.filename}`;
-                    }
-                } else if (state === "failed") {
-                    setStatus("failed");
-                    setError(error || "Export failed.");
-                    stopPolling();
-                } else if (state === "active") {
-                    setStatus("processing");
-                }
-            } catch (err) {
-                console.error("Polling error", err);
-                // Don't stop on single error, might be transient
-            }
-        }, 2000);
-    }, [stopPolling]);
+  useEffect(() => () => stopPolling(), [stopPolling]);
 
-    const startExport = useCallback(async (type, payload) => {
-        try {
-            setStatus("initiating");
-            const response = await axios.post(`${API_BASE_URL}/export/${type}`, payload);
-            if (response.data.jobId) {
-                pollStatus(response.data.jobId);
-            }
-            return response.data.jobId;
-        } catch (err) {
-            setStatus("failed");
-            setError(err.response?.data?.error || "Failed to start export.");
-            return null;
-        }
-    }, [pollStatus]);
-
-    return {
-        status,
-        progress,
-        error,
-        jobId,
-        startExport,
-        reset: () => {
-            setStatus(null);
-            setProgress(0);
-            setError(null);
-            setJobId(null);
-            stopPolling();
-        }
-    };
+  return {
+    status,
+    progress,
+    error,
+    jobId,
+    downloadUrl,
+    shareUrl,
+    filename,
+    startExport,
+    download,
+    reset,
+    isBusy: status === "initiating" || status === "queued" || status === "processing",
+    isComplete: status === "completed",
+    isFailed: status === "failed",
+  };
 };
+
+export default useExportStatus;

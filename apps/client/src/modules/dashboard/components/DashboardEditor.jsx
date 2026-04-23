@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Grip, Loader2, MoveDiagonal2, Pencil, Plus, PlusCircle, Save, Trash2, X, MoreVertical, Star, User, Clock, MessageSquare, Download, Image as ImageIcon, FileText as PdfIcon } from "lucide-react";
+import { ArrowLeft, Grip, Loader2, MoveDiagonal2, Pencil, Plus, PlusCircle, Save, Trash2, X, MoreVertical, Star, User, Clock, MessageSquare, Download, Image as ImageIcon, FileSpreadsheet, FileText as PdfIcon } from "lucide-react";
 import html2canvas from "html2canvas";
 import { useExportStatus } from "../../../hooks/useExportStatus";
+import { buildChartQueryForExport, buildChartRawExportPayload, mergeNormalizedFilters } from "../../../services/export.service";
 import ChartPreview from "../../charts/components/ChartPreview";
 import { queryDataset } from "../../../services/charts.service";
 import * as annotationsService from "../../../services/annotations.service";
@@ -11,8 +12,6 @@ const MIN_WIDGET_W = 4;
 const MIN_WIDGET_H = 5;
 
 
-
-const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
 const rectanglesOverlap = (a, b) => {
   return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
@@ -71,46 +70,41 @@ const getDimensionsFromChart = (chart) => {
   return [];
 };
 
-const buildChartQuery = (chart) => {
-  const measures = getMeasuresFromChart(chart);
-  const dimensions = getDimensionsFromChart(chart);
-  const query = chart.query || {
-    dimensions,
-    measures,
-    filters: chart.filters || [],
-    groupBy: chart.groupBy || dimensions.map((dimension) => dimension.field || dimension),
-    orderBy: chart.orderBy || [],
+const buildChartQuery = (chart, dashboardFilters = []) => {
+  const baseQuery = buildChartQueryForExport({ chart });
+
+  if (baseQuery.dimensions.length === 0 && baseQuery.measures.length === 0) {
+    return {
+      ...baseQuery,
+      dimensions: getDimensionsFromChart(chart),
+      measures: getMeasuresFromChart(chart),
+      filters: mergeNormalizedFilters(chart?.query?.filters, dashboardFilters),
+    };
+  }
+
+  return {
+    ...baseQuery,
+    filters: mergeNormalizedFilters(baseQuery.filters, dashboardFilters),
   };
-  const chartType = chart.visualization?.type || chart.type;
-  const isScatter = chartType === "scatter";
-  const isLineOrArea = chartType === "line" || chartType === "area";
-  const hasRawMetric = (query.measures || []).some(
-    (measure) => (measure.aggregation || "").toUpperCase() === "RAW"
-  );
-
-  if (isScatter || (isLineOrArea && hasRawMetric)) {
-    return {
-      ...query,
-      raw: true,
-      dimensions: query.dimensions || dimensions,
-      measures: query.measures || measures,
-      groupBy: [],
-      orderBy: [],
-    };
-  }
-
-  if (!Array.isArray(query.measures) || query.measures.length === 0) {
-    return {
-      ...query,
-      dimensions,
-      measures,
-    };
-  }
-
-  return query;
 };
 
-function DashboardWidgetChart({ chart }) {
+const getFrozenExportState = () => {
+  if (typeof window === "undefined" || !window.IS_EXPORT_MODE) {
+    return { state: null, error: null };
+  }
+
+  try {
+    const stored = localStorage.getItem("export_frozen_state");
+    return {
+      state: stored ? JSON.parse(stored) : null,
+      error: null,
+    };
+  } catch (error) {
+    return { state: null, error };
+  }
+};
+
+function DashboardWidgetChart({ chart, dashboardFilters = [] }) {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -128,7 +122,8 @@ function DashboardWidgetChart({ chart }) {
           throw new Error("No dataset found");
         }
 
-        const query = buildChartQuery(chart);
+        const query = buildChartQuery(chart, dashboardFilters);
+        const cacheKey = `${chart.chartId || chart._id || chart.name || "chart"}:${JSON.stringify(query)}`;
 
         const results = await queryDataset(datasetId, query).then((response) => response.results || []);
 
@@ -152,7 +147,7 @@ function DashboardWidgetChart({ chart }) {
     return () => {
       cancelled = true;
     };
-  }, [chart]);
+  }, [chart, dashboardFilters]);
 
   if (loading) {
     return (
@@ -184,6 +179,7 @@ function DashboardWidget({
   chart,
   layout,
   readOnly,
+  dashboardFilters = [],
   annotations = [],
   onRemove,
   onDragStart,
@@ -203,6 +199,14 @@ function DashboardWidget({
   const [isEditingAnnotation, setIsEditingAnnotation] = useState(false);
   const [annotationToEdit, setAnnotationToEdit] = useState(null);
   const [tempAnnotation, setTempAnnotation] = useState("");
+  const {
+    progress: exportProgress,
+    error: exportError,
+    startExport,
+    download,
+    isBusy: isExportBusy,
+    isComplete: isExportComplete,
+  } = useExportStatus();
 
   const style = {
     left: `${layout.left}px`,
@@ -225,6 +229,23 @@ function DashboardWidget({
     setIsEditingAnnotation(false);
     setAnnotationToEdit(null);
     setTempAnnotation("");
+  };
+
+  const handleExport = (format) => {
+    if (!chart) {
+      return;
+    }
+
+    const payload = buildChartRawExportPayload({
+      chart,
+      chartId: widget.chartId,
+      chartName: widget.title || chart?.name,
+      dashboardFilters,
+      source: "dashboard-widget",
+    });
+
+    startExport("raw", { ...payload, format });
+    setShowMenu(false);
   };
 
   return (
@@ -278,37 +299,90 @@ function DashboardWidget({
           )}
         </div>
         <div className="dashboard-widget-actions">
-          {!readOnly && (
-            <>
-              <div style={{ position: "relative", display: "inline-block" }}>
-                <button
-                  type="button"
-                  className="dashboard-widget-icon-btn action"
-                  onMouseDown={(event) => event.stopPropagation()}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    setShowMenu(!showMenu);
-                  }}
-                  title="Menu"
-                >
-                  <MoreVertical size={13} />
-                </button>
-                {showMenu && (
-                  <div
-                    className="dashboard-widget-menu"
-                    style={{
-                      position: "absolute",
-                      right: 0,
-                      top: "100%",
-                      background: "var(--bg-3, #1e2126)",
-                      border: "1px solid var(--border, #333)",
-                      borderRadius: "4px",
-                      padding: "4px 0",
-                      zIndex: 100,
-                      minWidth: "120px",
-                      boxShadow: "0 4px 6px rgba(0,0,0,0.3)",
-                    }}
-                  >
+          <div style={{ position: "relative", display: "inline-block" }}>
+            <button
+              type="button"
+              className="dashboard-widget-icon-btn action"
+              onMouseDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation();
+                setShowMenu(!showMenu);
+              }}
+              title={readOnly ? "Export chart data" : "Menu"}
+              disabled={isExportBusy}
+            >
+              {isExportBusy ? <Loader2 size={13} className="spinner" /> : <MoreVertical size={13} />}
+            </button>
+            {showMenu && (
+              <div
+                className="dashboard-widget-menu"
+                style={{
+                  position: "absolute",
+                  right: 0,
+                  top: "100%",
+                  background: "var(--bg-3, #1e2126)",
+                  border: "1px solid var(--border, #333)",
+                  borderRadius: "4px",
+                  padding: "4px 0",
+                  zIndex: 100,
+                  minWidth: "148px",
+                  boxShadow: "0 4px 6px rgba(0,0,0,0.3)",
+                }}
+              >
+                {chart ? (
+                  <>
+                    <button
+                      type="button"
+                      style={{
+                        width: "100%",
+                        padding: "6px 12px",
+                        textAlign: "left",
+                        background: "none",
+                        border: "none",
+                        color: "var(--fg-1, #e0e0e0)",
+                        cursor: "pointer",
+                        fontSize: "12px",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                      }}
+                      onMouseDown={(event) => event.stopPropagation()}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleExport("csv");
+                      }}
+                    >
+                      <Download size={12} />
+                      Export CSV
+                    </button>
+                    <button
+                      type="button"
+                      style={{
+                        width: "100%",
+                        padding: "6px 12px",
+                        textAlign: "left",
+                        background: "none",
+                        border: "none",
+                        color: "var(--fg-1, #e0e0e0)",
+                        cursor: "pointer",
+                        fontSize: "12px",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                      }}
+                      onMouseDown={(event) => event.stopPropagation()}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleExport("xlsx");
+                      }}
+                    >
+                      <FileSpreadsheet size={12} />
+                      Export Excel
+                    </button>
+                  </>
+                ) : null}
+                {!readOnly ? (
+                  <>
                     <button
                       type="button"
                       style={{
@@ -362,29 +436,31 @@ function DashboardWidget({
                       <MessageSquare size={12} />
                       Add Annotation
                     </button>
-                  </div>
-                )}
+                  </>
+                ) : null}
               </div>
-              <button
-                type="button"
-                className="dashboard-widget-icon-btn danger"
-                onMouseDown={(event) => event.stopPropagation()}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onRemove(widget.id);
-                }}
-                title="Remove chart"
-              >
-                <Trash2 size={13} />
-              </button>
-            </>
-          )}
+            )}
+          </div>
+          {!readOnly ? (
+            <button
+              type="button"
+              className="dashboard-widget-icon-btn danger"
+              onMouseDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation();
+                onRemove(widget.id);
+              }}
+              title="Remove chart"
+            >
+              <Trash2 size={13} />
+            </button>
+          ) : null}
         </div>
       </header>
 
       <div className="dashboard-widget-body">
         {chart ? (
-          <DashboardWidgetChart chart={{ ...chart, onRenderComplete }} />
+          <DashboardWidgetChart chart={{ ...chart, onRenderComplete }} dashboardFilters={dashboardFilters} />
         ) : (
           <div className="dashboard-widget-error">Chart not found</div>
         )}
@@ -453,6 +529,24 @@ function DashboardWidget({
             </div>
           </div>
         )}
+
+        {isExportBusy ? (
+          <div className="dashboard-widget-annotation" style={{ opacity: 0.86 }}>
+            <p>Preparing export... {Math.max(0, Math.round(exportProgress || 0))}%</p>
+          </div>
+        ) : null}
+
+        {isExportComplete ? (
+          <div className="dashboard-widget-annotation" style={{ cursor: "pointer" }} onClick={download}>
+            <p>Download ready</p>
+          </div>
+        ) : null}
+
+        {exportError ? (
+          <div className="dashboard-widget-annotation">
+            <p>{exportError}</p>
+          </div>
+        ) : null}
       </div>
 
       {!readOnly ? (
@@ -473,65 +567,68 @@ function DashboardWidget({
   );
 }
 
-export default function DashboardEditor({ mode, dashboard, charts, saving, onBack, onSave, onAutoSave, onDelete }) {
-  const isNewOrEmpty = !dashboard?.id || (Array.isArray(dashboard?.tabs) ? dashboard.tabs.length === 0 : (Array.isArray(dashboard?.widgets) && dashboard.widgets.length === 0));
+export default function DashboardEditor({ mode, dashboard, charts, saving, onBack, onSave, onAutoSave }) {
+  const frozenExportState = useMemo(() => getFrozenExportState(), []);
+  const frozenState = frozenExportState.state;
+  const isNewOrEmpty = !dashboard?.id || (Array.isArray(dashboard?.widgets) && dashboard.widgets.length === 0);
   const [isEditMode, setIsEditMode] = useState(isNewOrEmpty);
   const readOnly = !isEditMode;
-  const [name, setName] = useState(dashboard?.name || "Untitled Dashboard");
+  const [name, setName] = useState(() => (
+    typeof frozenState?.dashboardName === "string" && frozenState.dashboardName.trim()
+      ? frozenState.dashboardName
+      : dashboard?.name || "Untitled Dashboard"
+  ));
   const [savingLocal, setSavingLocal] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
-  const { status, startExport, reset } = useExportStatus();
-  
-  const [tabs, setTabs] = useState(() => {
-    if (Array.isArray(dashboard?.tabs) && dashboard.tabs.length > 0) {
-      return dashboard.tabs;
+  const {
+    status,
+    progress: exportProgress,
+    error: exportError,
+    startExport,
+    download,
+    isBusy: isVisualExportBusy,
+    isComplete: isVisualExportComplete,
+  } = useExportStatus();
+  const [widgets, setWidgets] = useState(() => {
+    if (Array.isArray(frozenState?.visibleSection?.widgets)) {
+      return frozenState.visibleSection.widgets;
+    }
+
+    if (Array.isArray(dashboard?.widgets) && dashboard.widgets.length > 0) {
+      return dashboard.widgets;
     }
     // Fallback
     const fallbackWidgets = Array.isArray(dashboard?.layout) ? dashboard.layout : (Array.isArray(dashboard?.widgets) ? dashboard.widgets : []);
     return [{ id: `tab-${Date.now()}`, name: "Main Tab", widgets: fallbackWidgets }];
   });
-
-  const [activeTabId, setActiveTabId] = useState(() => {
-    return tabs[0]?.id || `tab-${Date.now()}`;
-  });
-
-  const [editingTabId, setEditingTabId] = useState(null);
-  const [tempTabName, setTempTabName] = useState("");
-  const [popupWidgetId, setPopupWidgetId] = useState(null);
-
-  const widgets = useMemo(() => tabs.find(t => t.id === activeTabId)?.widgets || [], [tabs, activeTabId]);
-
-  const setWidgets = useCallback((updater) => {
-    setTabs(prevTabs => prevTabs.map(tab => {
-        if (tab.id === activeTabId) {
-            const newWidgets = typeof updater === 'function' ? updater(tab.widgets) : updater;
-            return { ...tab, widgets: newWidgets };
-        }
-        return tab;
-    }));
-  }, [activeTabId]);
-
-  const [annotations, setAnnotations] = useState([]);
+  const [annotations, setAnnotations] = useState(() => (
+    Array.isArray(frozenState?.annotations) ? frozenState.annotations : []
+  ));
+  const hasFrozenAnnotationsRef = useRef(Array.isArray(frozenState?.annotations));
+  const [filters] = useState(() => (
+    Array.isArray(frozenState?.filters) || (frozenState?.filters && typeof frozenState.filters === "object")
+      ? frozenState.filters
+      : dashboard?.filters || {}
+  ));
+  const visibleSection = Array.isArray(dashboard?.sections) && dashboard.sections.length > 0
+    ? dashboard.sections.find((section) => section.id === dashboard.activeSectionId) || dashboard.sections[0]
+    : {
+        id: dashboard?.activeSectionId || null,
+        name: dashboard?.name || "Untitled Section",
+        widgets,
+      };
 
   // Apply frozen state in export mode
-  const [renderedCount, setRenderedCount] = useState(0);
+  const [, setRenderedCount] = useState(0);
   
   useEffect(() => {
-    if (window.IS_EXPORT_MODE) {
-      try {
-        const stored = localStorage.getItem("export_frozen_state");
-        if (stored) {
-          const state = JSON.parse(stored);
-          if (state.layout) {
-            setWidgets(state.layout);
-          }
-        }
-      } catch (e) {
-        console.error("Failed to apply frozen state", e);
-        window.RENDER_COMPLETE = true;
-      }
+    window.RENDER_COMPLETE = false;
+
+    if (frozenExportState.error) {
+      console.error("Failed to apply frozen state", frozenExportState.error);
+      window.RENDER_COMPLETE = true;
     }
-  }, []);
+  }, [frozenExportState.error]);
 
   const handleChartRendered = useCallback(() => {
     if (!window.IS_EXPORT_MODE) return;
@@ -548,9 +645,18 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
 
   useEffect(() => {
     if (dashboard?.id) {
+      if (window.IS_EXPORT_MODE && hasFrozenAnnotationsRef.current) {
+        return;
+      }
       annotationsService.getAnnotationsByDashboard(dashboard.id).then(setAnnotations);
     }
   }, [dashboard?.id]);
+
+  useEffect(() => {
+    if (window.IS_EXPORT_MODE && widgets.length === 0) {
+      window.RENDER_COMPLETE = true;
+    }
+  }, [widgets.length]);
 
   const handleAddAnnotation = async (chartId, text) => {
     try {
@@ -884,7 +990,7 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("mouseup", onMouseUp);
     };
-  }, [action?.type, action?.widgetId, cellWidth, baseColumns, isEditMode, widgets]);
+  }, [action, cellWidth, baseColumns, isEditMode, widgets]);
 
   const startDrag = (event, widgetId) => {
     if (!isEditMode) return;
@@ -1019,9 +1125,16 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
   const handleExport = (format) => {
     // Pipeline B: Capture frozen state
     const frozenState = {
-      activeTab: activeTabId,
+      activeTab: visibleSection?.id || null,
+      visibleSection: {
+        id: visibleSection?.id || null,
+        name: visibleSection?.name || "Untitled Section",
+        widgets,
+      },
       viewport: { width: window.innerWidth, height: window.innerHeight },
-      layout: widgets
+      dashboardName: name.trim(),
+      annotations,
+      filters,
     };
 
     startExport("visual", { 
@@ -1069,9 +1182,9 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
                   type="button" 
                   className={`dashboard-secondary-btn ${status ? "active" : ""}`} 
                   onClick={() => setShowExportMenu(!showExportMenu)}
-                  disabled={status === "processing" || status === "initiating"}
+                  disabled={isVisualExportBusy}
                 >
-                  {status === "processing" || status === "initiating" ? (
+                  {isVisualExportBusy ? (
                     <Loader2 size={14} className="spinner" />
                   ) : (
                     <>
@@ -1082,7 +1195,7 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
                 </button>
 
                 {showExportMenu && (
-                  <div className="export-dropdown" style={{ left: "auto", right: 0 }}>
+                  <div className="export-dropdown" style={{ top: "calc(100% + 8px)", bottom: "auto", left: "auto", right: 0 }}>
                     <button onClick={() => handleExport("pdf")}>
                       <PdfIcon size={14} /> PDF Document
                     </button>
@@ -1092,9 +1205,9 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
                   </div>
                 )}
 
-                {status === "completed" && (
-                  <div className="export-success-toast" style={{ left: "auto", right: 0 }} onClick={reset}>
-                    ✓ Ready
+                {isVisualExportComplete && (
+                  <div className="export-success-toast" style={{ top: "calc(100% + 8px)", bottom: "auto", left: "auto", right: 0 }} onClick={download}>
+                    Download ready
                   </div>
                 )}
               </div>
@@ -1216,6 +1329,7 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
                   chart={chartMap.get(widget.chartId)}
                   layout={widgetLayout[index]}
                   readOnly={!isEditMode}
+                  dashboardFilters={filters}
                   annotations={annotations.filter((ann) => ann.chartId === widget.chartId)}
                   onRemove={removeWidget}
                   onUpdateWidget={updateWidget}
@@ -1279,49 +1393,17 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
         </div>
       ) : null}
 
-      {popupWidgetId && !isEditMode && (
-        <div 
-          className="dashboard-library-drawer-overlay" 
-          style={{ justifyContent: 'center', alignItems: 'center' }}
-          onClick={() => setPopupWidgetId(null)}
-        >
-          <div 
-            className="popup-widget-container"
-            style={{
-              width: '90%',
-              height: '90%',
-              background: '#181b1f',
-              border: '1px solid #2f3848',
-              borderRadius: '12px',
-              display: 'flex',
-              flexDirection: 'column',
-              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)'
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ padding: '16px 24px', borderBottom: '1px solid #2b313d', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ margin: 0, color: '#fff', fontSize: '1.2rem' }}>
-                {widgets.find(w => w.id === popupWidgetId)?.title || chartMap.get(widgets.find(w => w.id === popupWidgetId)?.chartId)?.name || "Chart Preview"}
-              </h3>
-              <button 
-                type="button" 
-                className="dashboard-widget-icon-btn" 
-                onClick={() => setPopupWidgetId(null)}
-                style={{ width: '32px', height: '32px', borderRadius: '50%' }}
-              >
-                <X size={16} />
-              </button>
-            </div>
-            <div style={{ flex: 1, minHeight: 0, padding: '24px' }}>
-              {chartMap.has(widgets.find(w => w.id === popupWidgetId)?.chartId) && (
-                <DashboardWidgetChart 
-                  chart={chartMap.get(widgets.find(w => w.id === popupWidgetId)?.chartId)} 
-                />
-              )}
-            </div>
-          </div>
+      {isVisualExportBusy ? (
+        <div className="export-success-toast" style={{ right: 24, bottom: 24, left: "auto" }}>
+          Preparing dashboard export... {Math.max(0, Math.round(exportProgress || 0))}%
         </div>
-      )}
+      ) : null}
+
+      {exportError ? (
+        <div className="export-success-toast" style={{ right: 24, bottom: 24, left: "auto", background: "rgba(127, 29, 29, 0.92)" }}>
+          {exportError}
+        </div>
+      ) : null}
     </div>
   );
 }

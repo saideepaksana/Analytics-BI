@@ -1,11 +1,33 @@
 const path = require("path");
 const fs = require("fs");
+const os = require("os");
 const { ExportLog } = require("../../models/exportLog");
 const { rawExportQueue, dashboardExportQueue } = require("../../jobs/queue");
 const { validateRawExport, validateVisualExport } = require("../../features/export/utils/exportPayloadValidator");
+const { getVisualExportAvailabilityError } = require("../../features/export/utils/visualExportAvailability");
 const logger = require("../../core/logger");
 
-const EXPORT_DIR = path.join(__dirname, "../../../tmp/exports");
+const EXPORT_DIR = path.join(os.tmpdir(), "analytics-bi", "exports");
+
+const buildExportUrl = (req, filename) => {
+    if (!filename) return "";
+    const origin = `${req.protocol}://${req.get("host")}`;
+    return `${origin}/api/export/download/${encodeURIComponent(filename)}`;
+};
+
+const buildExportResult = (req, result = {}) => {
+    const filename = result?.filename || "";
+    const recordCount = Number(result?.recordCount) || 0;
+    const downloadUrl = filename ? buildExportUrl(req, filename) : "";
+
+    return {
+        ...result,
+        filename,
+        recordCount,
+        downloadUrl,
+        shareUrl: downloadUrl,
+    };
+};
 
 /**
  * Pipeline A: Start Raw Data Export
@@ -28,7 +50,7 @@ async function startRawExport(req, res) {
         });
     } catch (err) {
         logger.error(`Failed to start raw export: ${err.message}`, "exportController");
-        res.status(400).json({ error: err.message });
+        res.status(400).json({ error: err.message, message: err.message });
     }
 }
 
@@ -38,6 +60,14 @@ async function startRawExport(req, res) {
 async function startVisualExport(req, res) {
     try {
         validateVisualExport(req.body);
+        const visualExportAvailabilityError = getVisualExportAvailabilityError();
+        if (visualExportAvailabilityError) {
+            return res.status(503).json({
+                error: visualExportAvailabilityError,
+                message: visualExportAvailabilityError,
+            });
+        }
+
         const { dashboardId, format, frozenState } = req.body;
 
         const job = await dashboardExportQueue.add("dashboard-export", {
@@ -53,7 +83,7 @@ async function startVisualExport(req, res) {
         });
     } catch (err) {
         logger.error(`Failed to start visual export: ${err.message}`, "exportController");
-        res.status(400).json({ error: err.message });
+        res.status(400).json({ error: err.message, message: err.message });
     }
 }
 
@@ -78,8 +108,10 @@ async function getExportStatus(req, res) {
                     jobId,
                     state: log.status === "processing" ? "active" : log.status,
                     progress: log.status === "completed" ? 100 : 0,
-                    result: log.status === "completed" ? { filename: log.filename, recordCount: log.recordCount } : null,
-                    error: log.status === "failed" ? "Job record found but failed." : null
+                    result: log.status === "completed"
+                        ? buildExportResult(req, { filename: log.filename, recordCount: log.recordCount })
+                        : null,
+                    error: log.status === "failed" ? (log.failureReason || "Export failed.") : null
                 });
             }
             return res.status(404).json({ error: "Export job not found." });
@@ -93,7 +125,7 @@ async function getExportStatus(req, res) {
             jobId,
             state, // 'waiting', 'active', 'completed', 'failed', 'delayed', 'paused'
             progress,
-            result: state === "completed" ? result : null,
+            result: state === "completed" ? buildExportResult(req, result) : null,
             error: state === "failed" ? job.failedReason : null
         });
     } catch (err) {
@@ -108,6 +140,10 @@ async function downloadExportFile(req, res) {
     try {
         const { filename } = req.params;
         const userId = req.user?.id || "anonymous";
+
+        if (!filename || filename.includes("..") || filename.includes("/") || filename.includes("\\")) {
+            return res.status(403).json({ error: "Forbidden." });
+        }
 
         // 1. Security Check: Verify Ownership via ExportLog
         const log = await ExportLog.findOne({ filename }).lean();
@@ -129,11 +165,6 @@ async function downloadExportFile(req, res) {
 
         if (!filePath) {
             return res.status(404).json({ error: "Export file not found on disk." });
-        }
-
-        // Basic security: ensure the filename doesn't contain path traversal
-        if (filename.includes("..") || filename.includes("/")) {
-            return res.status(403).json({ error: "Forbidden." });
         }
 
         res.download(filePath);

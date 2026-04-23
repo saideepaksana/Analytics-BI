@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from "react";
-import { Edit2, Eye, Trash2, Loader2, Maximize2, Download, FileSpreadsheet, FileText } from "lucide-react";
+import { Edit2, Eye, Trash2, Loader2, Download, FileSpreadsheet, FileText } from "lucide-react";
 import ChartPreview from "./components/ChartPreview";
 import { queryDataset } from "../../services/charts.service";
 import { useExportStatus } from "../../hooks/useExportStatus";
+import { buildChartRawExportPayload } from "../../services/export.service";
 
 const cardDataCache = new Map();
 const cardRequestCache = new Map();
@@ -12,7 +13,7 @@ export default function ChartCard({ chart, onDelete, onEdit, onView }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showExportMenu, setShowExportMenu] = useState(false);
-  const { status, progress, startExport, reset } = useExportStatus();
+  const { status, progress, error: exportError, startExport, download, isBusy, isComplete } = useExportStatus();
 
   useEffect(() => {
     const fetchChartData = async () => {
@@ -70,16 +71,12 @@ export default function ChartCard({ chart, onDelete, onEdit, onView }) {
   }, [chart]);
 
   const handleExport = (format) => {
-    const datasetId = chart.dataSource?.datasetId || chart.datasetId;
-    const context = {
-      selectedDimensions: chart.query?.dimensions?.map(d => d.field || d) || [],
-      selectedMeasures: chart.query?.measures?.map(m => m.field || m) || [],
-      filters: chart.query?.filters || {},
-      groupBy: chart.query?.groupBy || [],
-      sort: chart.query?.orderBy || []
-    };
+    const payload = buildChartRawExportPayload({
+      chart,
+      source: "chart-card",
+    });
 
-    startExport("raw", { datasetId, format, context });
+    startExport("raw", { ...payload, format });
     setShowExportMenu(false);
   };
 
@@ -119,9 +116,9 @@ export default function ChartCard({ chart, onDelete, onEdit, onView }) {
             className={`chart-action-btn ${status ? "active" : ""}`} 
             title="Download Data"
             onClick={() => setShowExportMenu(!showExportMenu)}
-            disabled={status === "processing" || status === "initiating"}
+            disabled={isBusy}
           >
-            {status === "processing" || status === "initiating" ? (
+            {isBusy ? (
               <Loader2 size={16} className="spinner" />
             ) : (
               <Download size={16} />
@@ -133,15 +130,15 @@ export default function ChartCard({ chart, onDelete, onEdit, onView }) {
               <button onClick={() => handleExport("csv")}>
                 <FileText size={14} /> CSV
               </button>
-              <button onClick={() => handleExport("excel")}>
+              <button onClick={() => handleExport("xlsx")}>
                 <FileSpreadsheet size={14} /> Excel
               </button>
             </div>
           )}
 
-          {status === "completed" && (
-            <div className="export-success-toast" onClick={reset}>
-              ✓ Ready
+          {isComplete && (
+            <div className="export-success-toast" onClick={download}>
+              Download ready
             </div>
           )}
         </div>
@@ -160,6 +157,19 @@ export default function ChartCard({ chart, onDelete, onEdit, onView }) {
           <Trash2 size={16} />
         </button>
       </div>
+
+      {isBusy ? (
+        <div className="chart-card-meta" style={{ padding: "0 18px 14px" }}>
+          <span>Preparing export</span>
+          <span>{Math.max(0, Math.round(progress || 0))}%</span>
+        </div>
+      ) : null}
+
+      {exportError ? (
+        <div className="chart-error" style={{ margin: "0 18px 18px" }}>
+          {exportError}
+        </div>
+      ) : null}
     </div>
   );
 }

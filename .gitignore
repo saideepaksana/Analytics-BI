@@ -28,3 +28,6 @@ backend/.env
 
 # Local caches
 apps/server/.cache/
+apps/server/tmp/
+tmp/
+exports/

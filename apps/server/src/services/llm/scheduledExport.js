@@ -5,9 +5,10 @@ const { Parser: CsvParser } = require("json2csv");
 const ExcelJS = require("exceljs");
 const fs = require("fs");
 const path = require("path");
+const os = require("os");
 const logger = require("../../core/logger");
 
-const EXPORT_DIR = path.join(__dirname, "../../../../../exports");
+const EXPORT_DIR = path.join(os.tmpdir(), "analytics-bi", "scheduled-exports");
 if (!fs.existsSync(EXPORT_DIR)) fs.mkdirSync(EXPORT_DIR, { recursive: true });
 
 const scheduleRegistry = new Map();
