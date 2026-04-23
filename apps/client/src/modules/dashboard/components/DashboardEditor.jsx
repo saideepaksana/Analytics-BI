@@ -589,34 +589,71 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
     isBusy: isVisualExportBusy,
     isComplete: isVisualExportComplete,
   } = useExportStatus();
-  const [widgets, setWidgets] = useState(() => {
-    if (Array.isArray(frozenState?.visibleSection?.widgets)) {
-      return frozenState.visibleSection.widgets;
-    }
+  const [tabs, setTabs] = useState(() => {
+    if (Array.isArray(frozenState?.tabs)) return frozenState.tabs;
+    if (Array.isArray(dashboard?.tabs) && dashboard.tabs.length > 0) return dashboard.tabs;
 
-    if (Array.isArray(dashboard?.widgets) && dashboard.widgets.length > 0) {
-      return dashboard.widgets;
-    }
-    // Fallback
-    const fallbackWidgets = Array.isArray(dashboard?.layout) ? dashboard.layout : (Array.isArray(dashboard?.widgets) ? dashboard.widgets : []);
-    return [{ id: `tab-${Date.now()}`, name: "Main Tab", widgets: fallbackWidgets }];
+    const legacyWidgets = Array.isArray(frozenState?.visibleSection?.widgets)
+      ? frozenState.visibleSection.widgets
+      : Array.isArray(dashboard?.widgets) && dashboard.widgets.length > 0
+      ? dashboard.widgets
+      : Array.isArray(dashboard?.layout)
+      ? dashboard.layout
+      : [];
+
+    return [
+      {
+        id: frozenState?.visibleSection?.id || dashboard?.activeSectionId || `tab-${Date.now()}`,
+        name: frozenState?.visibleSection?.name || "Main Tab",
+        widgets: legacyWidgets,
+      },
+    ];
   });
+
+  const [activeTabId, setActiveTabId] = useState(() => {
+    if (frozenState?.activeTab) return frozenState.activeTab;
+    return dashboard?.activeTabId || (tabs[0]?.id);
+  });
+
+  const [editingTabId, setEditingTabId] = useState(null);
+  const [tempTabName, setTempTabName] = useState("");
+
+  const activeTab = useMemo(() => tabs.find((t) => t.id === activeTabId) || tabs[0], [tabs, activeTabId]);
+  const widgets = activeTab?.widgets || [];
+
+  const setWidgets = useCallback(
+    (updater) => {
+      setTabs((prev) =>
+        prev.map((t) => {
+          if (t.id === activeTabId) {
+            const nextWidgets = typeof updater === "function" ? updater(t.widgets) : updater;
+            return { ...t, widgets: nextWidgets };
+          }
+          return t;
+        })
+      );
+    },
+    [activeTabId]
+  );
   const [annotations, setAnnotations] = useState(() => (
     Array.isArray(frozenState?.annotations) ? frozenState.annotations : []
   ));
   const hasFrozenAnnotationsRef = useRef(Array.isArray(frozenState?.annotations));
-  const [filters] = useState(() => (
-    Array.isArray(frozenState?.filters) || (frozenState?.filters && typeof frozenState.filters === "object")
-      ? frozenState.filters
-      : dashboard?.filters || {}
+  const [filters, setFilters] = useState(() => (
+    frozenState?.filters || dashboard?.filters || {}
   ));
-  const visibleSection = Array.isArray(dashboard?.sections) && dashboard.sections.length > 0
-    ? dashboard.sections.find((section) => section.id === dashboard.activeSectionId) || dashboard.sections[0]
-    : {
-        id: dashboard?.activeSectionId || null,
-        name: dashboard?.name || "Untitled Section",
-        widgets,
-      };
+
+  useEffect(() => {
+    if (!window.IS_EXPORT_MODE && dashboard?.filters) {
+      setFilters(dashboard.filters);
+    }
+  }, [dashboard?.filters]);
+
+  const visibleSection = useMemo(() => ({
+    id: activeTab?.id,
+    name: activeTab?.name || "Untitled Section",
+    widgets,
+  }), [activeTab, widgets]);
 
   // Apply frozen state in export mode
   const [, setRenderedCount] = useState(0);
