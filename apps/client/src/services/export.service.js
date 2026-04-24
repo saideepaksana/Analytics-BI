@@ -20,6 +20,57 @@ export const getExportDownloadUrl = (filename) => {
 
 export const getExportShareUrl = (filename) => getExportDownloadUrl(filename);
 
+const normalizeDatasetColumnName = (column) => {
+  if (typeof column === "string") {
+    const field = column.trim();
+    return field || "";
+  }
+
+  if (!column || typeof column !== "object") {
+    return "";
+  }
+
+  return String(column.name || column.field || "").trim();
+};
+
+export const buildDatasetRawExportPayload = ({
+  datasetId,
+  schemaColumns = [],
+  source = "datasets-page",
+  rowLimit = 50000,
+} = {}) => {
+  const resolvedDatasetId = String(datasetId || "").trim();
+  if (!resolvedDatasetId) {
+    throw new Error("datasetId is required for dataset export.");
+  }
+
+  const columnNames = [...new Set(
+    (Array.isArray(schemaColumns) ? schemaColumns : [])
+      .map(normalizeDatasetColumnName)
+      .filter(Boolean)
+  )];
+
+  if (columnNames.length === 0) {
+    throw new Error("Unable to export because the dataset schema has no columns.");
+  }
+
+  return {
+    datasetId: resolvedDatasetId,
+    context: {
+      source,
+      query: {
+        dimensions: columnNames.map((field) => ({ field })),
+        measures: [],
+        filters: [],
+        orderBy: [],
+        raw: true,
+        rowLimit: Math.min(Math.max(parseInt(rowLimit, 10) || 50000, 1), 50000),
+        contributionMode: "none",
+      },
+    },
+  };
+};
+
 const normalizeDimension = (dimension) => {
   if (typeof dimension === "string") {
     const field = dimension.trim();

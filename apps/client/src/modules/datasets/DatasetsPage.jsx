@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { formatDateTime } from "../../core/utils/formatters";
-import { deleteDataset, listDatasets, bulkDeleteDatasets } from "../../services/datasets.service";
-import { downloadDatasetExport } from "../../services/export.service";
-import { Download, FileText, FileSpreadsheet, FileJson, ChevronDown, Search, SortAsc, SortDesc, Filter } from "lucide-react";
+import { deleteDataset, listDatasets, bulkDeleteDatasets, getDatasetSchema } from "../../services/datasets.service";
+import { buildDatasetRawExportPayload } from "../../services/export.service";
+import { useExportStatus } from "../../hooks/useExportStatus";
+import { Download, FileText, FileSpreadsheet, ChevronDown, Search, SortAsc, SortDesc, Loader2 } from "lucide-react";
 import "./styles/datasets.css";
 
 
@@ -20,6 +21,16 @@ function DatasetsPage({ activeDatasetId, onOpenDataset }) {
   const [sortBy, setSortBy] = useState("createdAt");
   const [sortOrder, setSortOrder] = useState("desc");
   const [selectedDatasets, setSelectedDatasets] = useState([]);
+  const [activeExportDatasetId, setActiveExportDatasetId] = useState(null);
+  const [exportMessage, setExportMessage] = useState("");
+  const {
+    status: exportStatus,
+    progress: exportProgress,
+    error: exportError,
+    startExport,
+    download,
+    isBusy: isExportBusy,
+  } = useExportStatus();
 
 
   // Track which dataset's export dropdown is open:
@@ -37,10 +48,62 @@ function DatasetsPage({ activeDatasetId, onOpenDataset }) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const handleExport = (datasetId, format) => {
-    downloadDatasetExport(datasetId, format);
+  const handleExport = useCallback(async (datasetId, format) => {
+    const normalizedFormat = String(format || "").toLowerCase();
+
     setOpenExportDropdown(null);
-  };
+    setExportMessage("");
+
+    if (!datasetId) {
+      setExportMessage("Dataset not found. Please refresh and try again.");
+      return;
+    }
+
+    if (!["csv", "xlsx", "excel"].includes(normalizedFormat)) {
+      setExportMessage("Only CSV and Excel exports are available for datasets.");
+      return;
+    }
+
+    setActiveExportDatasetId(datasetId);
+
+    try {
+      const schemaColumns = await getDatasetSchema(datasetId);
+      const payload = buildDatasetRawExportPayload({
+        datasetId,
+        schemaColumns,
+        source: "datasets-page",
+      });
+
+      const jobId = await startExport("raw", {
+        ...payload,
+        format: normalizedFormat === "excel" ? "xlsx" : normalizedFormat,
+      });
+
+      if (!jobId) {
+        setActiveExportDatasetId(null);
+        setExportMessage("Unable to start export. Please try again.");
+      }
+    } catch (startError) {
+      setActiveExportDatasetId(null);
+      setExportMessage(
+        startError.response?.data?.message ||
+          startError.message ||
+          "Failed to prepare export."
+      );
+    }
+  }, [startExport]);
+
+  const exportFailureMessage = useMemo(() => {
+    if (exportMessage) {
+      return exportMessage;
+    }
+
+    if (exportStatus === "failed") {
+      return exportError || "Export failed.";
+    }
+
+    return "";
+  }, [exportError, exportMessage, exportStatus]);
 
 
   const fetchDatasets = useCallback(async () => {
@@ -204,6 +267,7 @@ function DatasetsPage({ activeDatasetId, onOpenDataset }) {
 
       {loading ? <p>Loading datasets...</p> : null}
       {error ? <p className="error-text">{error}</p> : null}
+      {exportFailureMessage ? <p className="error-text">{exportFailureMessage}</p> : null}
 
       {!loading && !error && !hasDatasets ? (
         <p>No datasets found yet. Upload a file in Ingestion to create one.</p>
@@ -234,74 +298,90 @@ function DatasetsPage({ activeDatasetId, onOpenDataset }) {
               {filteredDatasets.map((dataset) => {
                 const isActive = dataset.datasetId === activeDatasetId;
                 const isSelected = selectedDatasets.includes(dataset.datasetId);
+                const isExportTargetRow = activeExportDatasetId === dataset.datasetId;
+                const isExportingRow = isExportTargetRow && isExportBusy;
+                const exportCompleteForRow = isExportTargetRow && exportStatus === "completed";
 
                 return (
-                  <>
-                    <tr key={dataset.datasetId} className={isActive ? "dataset-row-active" : ""}>
-                      <td>
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={(e) => handleSelectDataset(dataset.datasetId, e.target.checked)}
-                        />
-                      </td>
-                      <td className="mono">{dataset.datasetId}</td>
-                      <td>
-                        <span className="file-name-pill">
-                          {dataset.fileName || "-"}
-                        </span>
+                  <tr key={dataset.datasetId} className={isActive ? "dataset-row-active" : ""}>
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={(e) => handleSelectDataset(dataset.datasetId, e.target.checked)}
+                      />
+                    </td>
+                    <td className="mono">{dataset.datasetId}</td>
+                    <td>
+                      <span className="file-name-pill">
+                        {dataset.fileName || "-"}
+                      </span>
+                    </td>
+                    <td>{dataset.mode || "-"}</td>
+                    <td>{dataset.rowCount ?? 0}</td>
+                    <td>{dataset.quarantinedCount ?? 0}</td>
+                    <td>{formatDateTime(dataset.createdAt)}</td>
+                    <td>
+                      <div className="dataset-actions">
+                        <button
+                          type="button"
+                          className="action-btn"
+                          onClick={() => onOpenDataset?.(dataset.datasetId)}
+                        >
+                          Open in Review
+                        </button>
 
-                      </td>
-                      <td>{dataset.mode || "-"}</td>
-                      <td>{dataset.rowCount ?? 0}</td>
-                      <td>{dataset.quarantinedCount ?? 0}</td>
-                      <td>{formatDateTime(dataset.createdAt)}</td>
-                      <td>
-                        <div className="dataset-actions">
+                        <div className="export-dropdown-wrapper" ref={openExportDropdown === dataset.datasetId ? dropdownRef : null}>
                           <button
                             type="button"
-                            className="action-btn"
-                            onClick={() => onOpenDataset?.(dataset.datasetId)}
+                            className="action-btn secondary-btn"
+                            onClick={() => setOpenExportDropdown(openExportDropdown === dataset.datasetId ? null : dataset.datasetId)}
+                            disabled={isExportBusy && !isExportTargetRow}
                           >
-                            Open in Review
-                          </button>
-
-                          <div className="export-dropdown-wrapper" ref={openExportDropdown === dataset.datasetId ? dropdownRef : null}>
-                            <button
-                              type="button"
-                              className="action-btn secondary-btn"
-                              onClick={() => setOpenExportDropdown(openExportDropdown === dataset.datasetId ? null : dataset.datasetId)}
-                            >
-                              <Download size={14} className="icon-left" /> Export <ChevronDown size={14} className="icon-right" />
-                            </button>
-
-                            {openExportDropdown === dataset.datasetId && (
-                              <div className="export-dropdown-menu">
-                                <button type="button" onClick={() => handleExport(dataset.datasetId, "csv")}>
-                                  <FileText size={14} /> Export CSV
-                                </button>
-                                <button type="button" onClick={() => handleExport(dataset.datasetId, "xlsx")}>
-                                  <FileSpreadsheet size={14} /> Export Excel
-                                </button>
-                                <button type="button" onClick={() => handleExport(dataset.datasetId, "pdf")}>
-                                  <FileJson size={14} /> Export PDF
-                                </button>
-                              </div>
+                            {isExportingRow ? (
+                              <>
+                                <Loader2 size={14} className="icon-left spin-icon" /> Exporting {Math.max(0, Math.round(exportProgress || 0))}%
+                              </>
+                            ) : (
+                              <>
+                                <Download size={14} className="icon-left" /> Export <ChevronDown size={14} className="icon-right" />
+                              </>
                             )}
-                          </div>
+                          </button>
 
+                          {openExportDropdown === dataset.datasetId && !isExportBusy && (
+                            <div className="export-dropdown-menu">
+                              <button type="button" onClick={() => handleExport(dataset.datasetId, "csv")}>
+                                <FileText size={14} /> Export CSV
+                              </button>
+                              <button type="button" onClick={() => handleExport(dataset.datasetId, "xlsx")}>
+                                <FileSpreadsheet size={14} /> Export Excel
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        {exportCompleteForRow ? (
                           <button
                             type="button"
-                            className="action-btn delete-btn"
-                            onClick={() => handleShowDeleteConfirm(dataset.datasetId)}
-                            disabled={deleting === dataset.datasetId}
+                            className="action-btn secondary-btn"
+                            onClick={download}
                           >
-                            {deleting === dataset.datasetId ? "Deleting..." : "Delete"}
+                            Download Again
                           </button>
-                        </div>
-                      </td>
-                    </tr>
-                  </>
+                        ) : null}
+
+                        <button
+                          type="button"
+                          className="action-btn delete-btn"
+                          onClick={() => handleShowDeleteConfirm(dataset.datasetId)}
+                          disabled={deleting === dataset.datasetId}
+                        >
+                          {deleting === dataset.datasetId ? "Deleting..." : "Delete"}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
                 );
               })}
             </tbody>

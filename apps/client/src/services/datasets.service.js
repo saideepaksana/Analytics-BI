@@ -22,6 +22,11 @@ export const getDatasetMetadata = async (datasetId, { limit = 200, offset = 0, q
   return response.data;
 };
 
+export const getDatasetSchema = async (datasetId) => {
+  const response = await apiClient.get(`/datasets/${datasetId}/schema`);
+  return response.data?.columns || [];
+};
+
 export const updateSchemaColumn = async (datasetId, columnName, updates) => {
   const response = await apiClient.patch(`/datasets/${datasetId}/schema/${columnName}`, updates);
   return response.data;
