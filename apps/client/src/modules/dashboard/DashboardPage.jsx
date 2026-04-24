@@ -73,12 +73,19 @@ export default function DashboardPage({ onEditorMode }) {
     setEditorState({ mode: "edit", dashboard: { ...EMPTY_DRAFT } });
   };
 
-  const openEditDashboard = (dashboard) => {
-    setEditorState({ mode: "edit", dashboard });
-  };
-
   const openViewDashboard = (dashboard) => {
-    setEditorState({ mode: "view", dashboard });
+    const firstTabId =
+      Array.isArray(dashboard?.tabs) && dashboard.tabs.length > 0
+        ? dashboard.tabs[0].id
+        : dashboard?.activeTabId;
+
+    setEditorState({
+      mode: "view",
+      dashboard: {
+        ...dashboard,
+        activeTabId: firstTabId,
+      },
+    });
   };
 
   const closeEditor = () => {
@@ -189,7 +196,6 @@ export default function DashboardPage({ onEditorMode }) {
             dashboard={dashboard}
             charts={charts}
             onView={() => openViewDashboard(dashboard)}
-            onEdit={() => openEditDashboard(dashboard)}
             onDelete={() => handleDeleteDashboard(dashboard.id)}
           />
         ))}

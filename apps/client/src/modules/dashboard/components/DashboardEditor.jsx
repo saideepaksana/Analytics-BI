@@ -642,6 +642,7 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
   const [filters, setFilters] = useState(() => (
     frozenState?.filters || dashboard?.filters || {}
   ));
+  const [popupWidgetId, setPopupWidgetId] = useState(null);
 
   useEffect(() => {
     if (!window.IS_EXPORT_MODE && dashboard?.filters) {
@@ -822,6 +823,45 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
     });
     return map;
   }, [charts]);
+
+  const popupWidget = useMemo(
+    () => widgets.find((widget) => widget.id === popupWidgetId) || null,
+    [widgets, popupWidgetId]
+  );
+
+  const popupChart = useMemo(() => {
+    if (!popupWidget) return null;
+    return chartMap.get(popupWidget.chartId) || null;
+  }, [chartMap, popupWidget]);
+
+  const popupAnnotations = useMemo(() => {
+    if (!popupWidget) return [];
+    return annotations.filter((ann) => ann.chartId === popupWidget.chartId);
+  }, [annotations, popupWidget]);
+
+  useEffect(() => {
+    if (isEditMode && popupWidgetId) {
+      setPopupWidgetId(null);
+    }
+  }, [isEditMode, popupWidgetId]);
+
+  useEffect(() => {
+    if (popupWidgetId && !popupWidget) {
+      setPopupWidgetId(null);
+    }
+  }, [popupWidgetId, popupWidget]);
+
+  useEffect(() => {
+    if (!popupWidgetId) return undefined;
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setPopupWidgetId(null);
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [popupWidgetId]);
 
   const maxGridCols = useMemo(() => {
     let maxX = widgets.reduce((acc, widget) => Math.max(acc, (widget.x || 0) + (widget.w || MIN_WIDGET_W)), 0);
@@ -1378,7 +1418,7 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
                   onUpdateAnnotation={handleUpdateAnnotation}
                   onDeleteAnnotation={handleDeleteAnnotation}
                   onRenderComplete={handleChartRendered}
-                  onViewPopup={setPopupWidgetId}
+                  onViewPopup={!isEditMode ? setPopupWidgetId : undefined}
                 />
               ))}
               {widgetLayout.length === 0 ? (
@@ -1395,6 +1435,44 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
           </div>
         </section>
       </div>
+
+      {!isEditMode && popupWidgetId ? (
+        <div className="dashboard-view-overlay" onClick={() => setPopupWidgetId(null)}>
+          <div className="dashboard-view-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="dashboard-view-header">
+              <div>
+                <h3>{popupWidget?.title || popupChart?.name || "Chart Preview"}</h3>
+                <p>{popupChart?.visualization?.type || popupChart?.type || "chart"}</p>
+              </div>
+              <button
+                type="button"
+                className="dashboard-view-close"
+                onClick={() => setPopupWidgetId(null)}
+                aria-label="Close popup"
+                title="Close"
+              >
+                <X size={14} />
+              </button>
+            </div>
+
+            <div className="dashboard-view-content">
+              {popupChart ? (
+                <DashboardWidgetChart chart={popupChart} dashboardFilters={filters} />
+              ) : (
+                <div className="dashboard-widget-error">Chart not found</div>
+              )}
+            </div>
+
+            {popupAnnotations.length > 0 ? (
+              <div className="dashboard-view-annotations">
+                {popupAnnotations.map((ann) => (
+                  <p key={ann._id}>{ann.text}</p>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
 
       {isEditMode && showChartLibrary ? (
         <div className="dashboard-library-drawer-overlay" onClick={() => setShowChartLibrary(false)}>
