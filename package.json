@@ -11,7 +11,19 @@
   "scripts": {
     "dev:client": "npm run dev -w apps/client",
     "dev:server": "npm run dev -w apps/server",
+    "dev:host": "npm run dev -w apps/host",
+    "dev:mfe-auth": "npm run dev -w apps/mfe-auth",
+    "dev:mfe-analytics": "npm run dev -w apps/mfe-analytics",
+    "dev:mfe-data-mgmt": "npm run dev -w apps/mfe-data-mgmt",
+    "dev:mfe-tools": "npm run dev -w apps/mfe-tools",
+    "dev:mfe": "npm run dev:host & npm run dev:mfe-auth & npm run dev:mfe-analytics & npm run dev:mfe-data-mgmt & npm run dev:mfe-tools",
     "dev": "npm run dev:client & npm run dev:server",
+    "build:host": "npm run build -w apps/host",
+    "build:mfe-auth": "npm run build -w apps/mfe-auth",
+    "build:mfe-analytics": "npm run build -w apps/mfe-analytics",
+    "build:mfe-data-mgmt": "npm run build -w apps/mfe-data-mgmt",
+    "build:mfe-tools": "npm run build -w apps/mfe-tools",
+    "build:mfe": "npm run build:host && npm run build:mfe-auth && npm run build:mfe-analytics && npm run build:mfe-data-mgmt && npm run build:mfe-tools",
     "install:all": "npm install"
   },
   "repository": {
