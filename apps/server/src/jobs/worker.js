@@ -41,9 +41,16 @@ const cleanupOldExports = () => {
             if (now - stats.mtimeMs > TTL) {
                 try {
                     fs.unlinkSync(filePath);
-                    console.log(`[Cleanup] Deleted old export: ${file}`);
+                    logger.info("Deleted stale export artifact", "WorkerCleanup", {
+                        file,
+                        filePath,
+                    });
                 } catch (e) {
-                    console.error(`[Cleanup] Failed to delete ${file}:`, e.message);
+                    logger.warn("Failed to delete stale export artifact", "WorkerCleanup", {
+                        file,
+                        filePath,
+                        error: e,
+                    });
                 }
             }
         });
@@ -114,30 +121,63 @@ const DASHBOARD_EXPORT_HANDLERS = {
 
 const workers = {};
 
-const makeProcessor = (handlers) => async (job) => {
-    const handler = handlers[job.name];
-    if (!handler) {
-        logger.error(`No handler found for job name "${job.name}" in this worker pool.`, "Worker");
-        throw new PermanentError(`Unrecognized job: ${job.name}`);
-    }
+const makeProcessor = (handlers, queueName = "unknown") => async (job) => {
+    const context = {
+        queueName,
+        jobId: String(job.id),
+        jobName: job.name,
+    };
 
-    try {
-        await globalSemaphore.acquire();
-        logger.info(`Started job "${job.name}" (ID: ${job.id})`, "Worker");
-        const result = await handler(job);
-        logger.success(`Finished job "${job.name}" (ID: ${job.id})`, "Worker");
-        return result;
-    } catch (err) {
-        if (isPermanentFailure(err)) {
-            logger.error(`Permanent failure on job "${job.name}" (ID: ${job.id}): ${err.message}`, "Worker");
-            await sendToDLQ(job, err);
-            throw ensurePermanentError(err);
+    return logger.withContext(context, async () => {
+        const handler = handlers[job.name];
+        if (!handler) {
+            logger.error("No handler found for job in this worker pool", "Worker", {
+                queueName,
+                jobName: job.name,
+            });
+            throw new PermanentError(`Unrecognized job: ${job.name}`);
         }
-        logger.error(`Transient failure on job "${job.name}" (ID: ${job.id}), attempt ${job.attemptsMade + 1}. Error: ${err.message}`, "Worker");
-        throw ensureTransientError(err);
-    } finally {
-        globalSemaphore.release();
-    }
+
+        try {
+            await globalSemaphore.acquire();
+            logger.info("Started worker job", "Worker", {
+                queueName,
+                jobName: job.name,
+                attemptsMade: job.attemptsMade,
+                maxAttempts: job.opts?.attempts,
+            });
+
+            const result = await handler(job);
+
+            logger.success("Finished worker job", "Worker", {
+                queueName,
+                jobName: job.name,
+            });
+            return result;
+        } catch (err) {
+            if (isPermanentFailure(err)) {
+                logger.error("Permanent worker failure", "Worker", {
+                    queueName,
+                    jobName: job.name,
+                    attemptsMade: job.attemptsMade,
+                    error: err,
+                });
+                await sendToDLQ(job, err);
+                throw ensurePermanentError(err);
+            }
+
+            logger.error("Transient worker failure", "Worker", {
+                queueName,
+                jobName: job.name,
+                attemptsMade: job.attemptsMade,
+                nextAttempt: job.attemptsMade + 1,
+                error: err,
+            });
+            throw ensureTransientError(err);
+        } finally {
+            globalSemaphore.release();
+        }
+    });
 };
 
 const startWorker = (queueName, processor, opts = {}) => {
@@ -149,7 +189,10 @@ const startWorker = (queueName, processor, opts = {}) => {
         ...opts,
     });
     worker.once("ready", () => {
-        logger.success(`Ready — queue: "${queueName}" | concurrency: ${concurrency}`, "Worker");
+        logger.success("Worker ready", "Worker", {
+            queueName,
+            concurrency,
+        });
     });
     workers[queueName] = worker;
     return worker;
@@ -159,14 +202,14 @@ const initWorkers = () => {
     if (global.__workers_initialized__) return;
     global.__workers_initialized__ = true;
 
-    startWorker(QUEUE_NAMES.BACKGROUND_TASKS, makeProcessor(BACKGROUND_TASK_HANDLERS));
+    startWorker(QUEUE_NAMES.BACKGROUND_TASKS, makeProcessor(BACKGROUND_TASK_HANDLERS, QUEUE_NAMES.BACKGROUND_TASKS));
     attachDLQListener(QUEUE_NAMES.BACKGROUND_TASKS);
 
-    startWorker(QUEUE_NAMES.BULK_INGESTION, makeProcessor(BULK_INGESTION_HANDLERS));
+    startWorker(QUEUE_NAMES.BULK_INGESTION, makeProcessor(BULK_INGESTION_HANDLERS, QUEUE_NAMES.BULK_INGESTION));
     attachDLQListener(QUEUE_NAMES.BULK_INGESTION);
 
-    startWorker(QUEUE_NAMES.RAW_EXPORT, makeProcessor(RAW_EXPORT_HANDLERS));
-    startWorker(QUEUE_NAMES.DASHBOARD_EXPORT, makeProcessor(DASHBOARD_EXPORT_HANDLERS));
+    startWorker(QUEUE_NAMES.RAW_EXPORT, makeProcessor(RAW_EXPORT_HANDLERS, QUEUE_NAMES.RAW_EXPORT));
+    startWorker(QUEUE_NAMES.DASHBOARD_EXPORT, makeProcessor(DASHBOARD_EXPORT_HANDLERS, QUEUE_NAMES.DASHBOARD_EXPORT));
 
     const visualExportAvailabilityError = getVisualExportAvailabilityError();
     if (visualExportAvailabilityError) {

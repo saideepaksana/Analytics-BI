@@ -45,7 +45,8 @@ src/
 │   ├── systemPrompts.js                  # LLM system prompts for AI features
 │   ├── server.js                         # Server config helpers
 │   └── middleware/
-│       └── idempotencyMiddleware.js       # Global request deduplication
+│       ├── idempotencyMiddleware.js       # Global request deduplication
+│       └── requestLogger.js               # Request correlation ID + access logs
 │
 ├── models/                               # Mongoose schemas
 │   ├── Metadata.js                       # Dataset metadata + inferred column schema
@@ -341,9 +342,22 @@ Run manually with `node scripts/<scriptName>.js`:
 | `REDIS_HOST` | `127.0.0.1` | Redis host for BullMQ |
 | `REDIS_PORT` | `6379` | Redis port |
 | `CORS_ORIGIN` | `*` | Allowed CORS origin(s) |
-| `NODE_ENV` | — | Set to `production` to suppress debug logs |
+| `NODE_ENV` | — | Set to `production` for JSON log output and reduced verbosity |
+| `LOG_LEVEL` | `debug` (dev), `info` (prod) | Minimum log level (`trace`, `debug`, `info`, `success`, `warn`, `error`, `fatal`) |
+| `LOG_FORMAT` | `pretty` (dev), `json` (prod) | Log formatter output style |
+| `LOG_COLOR` | auto | Force ANSI color output (`true`/`false`) |
+| `LOG_SERVICE` | `analytics-bi-server` | Service name included in every log entry |
+| `LOG_SLOW_REQUEST_MS` | `1500` | Request latency threshold that upgrades request logs to `warn` |
+| `LOG_IGNORE_PATHS` | — | Comma-separated request paths to skip access logging |
 
 > If MongoDB is unreachable, the server automatically falls back to an **in-memory MongoDB** instance via `mongodb-memory-server` (dev dependency). Data will not persist across restarts in this mode.
+
+### Logging Features
+
+- Structured logging with JSON mode for production and pretty mode for local development.
+- Automatic request correlation via `x-request-id` (incoming value reused, otherwise generated).
+- Request lifecycle logs include method, path, status, latency, client IP, and user-agent.
+- Sensitive payload fields (tokens, passwords, cookies, keys) are automatically redacted before output.
 
 ---
 

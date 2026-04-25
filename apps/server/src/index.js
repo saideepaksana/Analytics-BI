@@ -19,9 +19,12 @@ const aiRoutes = require("./api/ai/ai.routes");
 const { setIO } = require("./core/socket");
 const logger = require("./core/logger");
 const { idempotencyMiddleware } = require("./core/middleware/idempotencyMiddleware");
+const { requestLoggingMiddleware } = require("./core/middleware/requestLogger");
 
 const app = express();
 const server = http.createServer(app);
+
+logger.info("Logger initialized", "Logger", logger.config);
 
 connectDB();
 
@@ -78,6 +81,7 @@ app.use(
   })
 );
 app.use(express.json());
+app.use(requestLoggingMiddleware());
 app.use(idempotencyMiddleware);
 
 const io = new Server(server, {
@@ -181,6 +185,26 @@ app.get("/", (req, res) => {
   res.send("Analytics BI Server is Running!!");
 });
 
+app.use((error, req, res, next) => {
+  logger.error("Unhandled HTTP route error", "HTTP", {
+    requestId: req.requestId,
+    method: req.method,
+    path: req.originalUrl || req.url,
+    statusCode: error?.status || error?.statusCode || 500,
+    error,
+  });
+
+  if (res.headersSent) {
+    next(error);
+    return;
+  }
+
+  const statusCode = Number(error?.status || error?.statusCode) || 500;
+  res.status(statusCode).json({
+    error: statusCode >= 500 ? "Internal Server Error" : error.message,
+  });
+});
+
 // Start the server with auto-port fallback when default is busy.
 const START_PORT = Number(process.env.PORT) || 5000;
 const PORT_SEARCH_LIMIT = Number(process.env.PORT_SEARCH_LIMIT) || 20;
@@ -190,7 +214,12 @@ const startServer = (port, attempt = 0) => {
   const onListening = () => {
     server.off("error", onError);
     activePort = port;
-    logger.info(`Server running on port ${activePort}`, "Server");
+    logger.info("Server running", "Server", {
+      port: activePort,
+      nodeEnv: process.env.NODE_ENV || "development",
+      logLevel: logger.config.level,
+      logFormat: logger.config.format,
+    });
   };
 
   const onError = (err) => {
@@ -262,3 +291,21 @@ const shutdown = async (signal = "SIGTERM") => {
 process.on("SIGINT", () => shutdown("SIGINT"));
 process.on("SIGTERM", () => shutdown("SIGTERM"));
 process.on("SIGUSR2", () => shutdown("SIGUSR2"));
+
+process.on("unhandledRejection", (reason) => {
+  logger.error("Unhandled promise rejection", "Process", {
+    reason,
+  });
+});
+
+process.on("uncaughtException", (error) => {
+  logger.fatal("Uncaught exception", "Process", {
+    error,
+  });
+});
+
+process.on("warning", (warning) => {
+  logger.warn("Node.js process warning", "Process", {
+    warning,
+  });
+});
