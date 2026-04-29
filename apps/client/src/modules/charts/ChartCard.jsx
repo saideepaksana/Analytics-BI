@@ -4,6 +4,7 @@ import ChartPreview from "./components/ChartPreview";
 import { queryDataset } from "../../services/charts.service";
 import { useExportStatus } from "../../hooks/useExportStatus";
 import { buildChartRawExportPayload } from "../../services/export.service";
+import { canEditChart, canDeleteChart } from "../../core/utils/permissions";
 
 const cardDataCache = new Map();
 const cardRequestCache = new Map();
@@ -146,16 +147,20 @@ export default function ChartCard({ chart, onDelete, onEdit, onView }) {
         <button className="chart-action-btn" title="View Details" onClick={onView}>
           <Eye size={16} />
         </button>
-        <button className="chart-action-btn" title="Edit Chart" onClick={onEdit}>
-          <Edit2 size={16} />
-        </button>
-        <button 
-          className="chart-action-btn danger" 
-          onClick={onDelete}
-          title="Delete Chart"
-        >
-          <Trash2 size={16} />
-        </button>
+        {canEditChart(chart) && (
+          <button className="chart-action-btn" title="Edit Chart" onClick={onEdit}>
+            <Edit2 size={16} />
+          </button>
+        )}
+        {canDeleteChart(chart) && (
+          <button 
+            className="chart-action-btn danger" 
+            onClick={onDelete}
+            title="Delete Chart"
+          >
+            <Trash2 size={16} />
+          </button>
+        )}
       </div>
 
       {isBusy ? (

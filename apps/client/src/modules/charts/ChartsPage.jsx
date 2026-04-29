@@ -4,6 +4,7 @@ import ChartCard from "./ChartCard";
 import ChartExplore from "./components/ChartExplore";
 import ChartPreview from "./components/ChartPreview";
 import { fetchCharts, deleteChartData, queryDataset } from "../../services/charts.service";
+import { canCreateChart } from "../../core/utils/permissions";
 import "./styles/charts.css";
 
 export default function ChartsPage({ onExploreMode }) {
@@ -131,10 +132,12 @@ export default function ChartsPage({ onExploreMode }) {
             Create your first data visualization by selecting a dataset and 
             configuring your chart settings.
           </p>
-          <button className="create-chart-btn" onClick={() => setExploreChartId("new")}>
-            <PlusCircle size={20} />
-            Create your first chart
-          </button>
+          {canCreateChart() && (
+            <button className="create-chart-btn" onClick={() => setExploreChartId("new")}>
+              <PlusCircle size={20} />
+              Create your first chart
+            </button>
+          )}
         </div>
       </div>
     );
@@ -145,10 +148,12 @@ export default function ChartsPage({ onExploreMode }) {
     <div className="charts-page">
       <div className="charts-grid-header">
         <h3>Saved Charts ({charts.length})</h3>
-        <button className="create-chart-btn" onClick={() => setExploreChartId("new")} style={{ padding: "8px 16px" }}>
-          <Plus size={18} />
-          New Chart
-        </button>
+        {canCreateChart() && (
+          <button className="create-chart-btn" onClick={() => setExploreChartId("new")} style={{ padding: "8px 16px" }}>
+            <Plus size={18} />
+            New Chart
+          </button>
+        )}
       </div>
 
       {error && <div className="page-error">{error}</div>}

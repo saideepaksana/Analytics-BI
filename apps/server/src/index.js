@@ -19,6 +19,7 @@ const aiRoutes = require("./api/ai/ai.routes");
 const { setIO } = require("./core/socket");
 const logger = require("./core/logger");
 const { idempotencyMiddleware } = require("./core/middleware/idempotencyMiddleware");
+const authMiddleware = require("./middleware/auth");
 
 const app = express();
 const server = http.createServer(app);
@@ -78,6 +79,7 @@ app.use(
   })
 );
 app.use(express.json());
+app.use(authMiddleware);
 app.use(idempotencyMiddleware);
 
 const io = new Server(server, {

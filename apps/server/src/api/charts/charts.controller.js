@@ -3,6 +3,20 @@ const logger = require("../../core/logger");
 const chartMapper = require("./chartMapper");
 const { validateChart, ChartValidationError } = require("./chartValidator");
 
+// Authorization helper functions
+const canEditChart = (chart, user) => {
+  if (!user) return true; // Backward compatibility - allow if no auth
+  if (user.role === 'admin') return true;
+  if (user.role === 'editor') return true;
+  if (user.role === 'viewer') return false;
+  // Owner can always edit their own charts
+  return chart.createdBy === user.id;
+};
+
+const canDeleteChart = (chart, user) => {
+  return canEditChart(chart, user);
+};
+
 /**
  * GET /api/charts
  * Lists charts with pagination and optional dataset filtering.
@@ -85,6 +99,12 @@ exports.saveChart = async (req, res) => {
       return res.status(400).json({ message: "datasetId is required" });
     }
 
+    // Check if this is an update (existing chart)
+    const existingChart = await Chart.findOne({ chartId: payload.chartId }).lean();
+    if (existingChart && !canEditChart(existingChart, req.user)) {
+      return res.status(403).json({ message: "You do not have permission to edit this chart" });
+    }
+
     const chart = await Chart.findOneAndUpdate(
       { chartId: payload.chartId },
       {
@@ -119,16 +139,27 @@ exports.deleteChart = async (req, res) => {
     const { id } = req.params;
     const isMongoId = id.match(/^[0-9a-fA-F]{24}$/);
 
-    const deleted = await Chart.findOneAndDelete({
+    const chart = await Chart.findOne({
+      $or: [
+        { chartId: id },
+        ...(isMongoId ? [{ _id: id }] : [])
+      ]
+    }).lean();
+
+    if (!chart) {
+      return res.status(404).json({ message: "Chart not found" });
+    }
+
+    if (!canDeleteChart(chart, req.user)) {
+      return res.status(403).json({ message: "You do not have permission to delete this chart" });
+    }
+
+    await Chart.findOneAndDelete({
       $or: [
         { chartId: id },
         ...(isMongoId ? [{ _id: id }] : [])
       ]
     });
-
-    if (!deleted) {
-      return res.status(404).json({ message: "Chart not found" });
-    }
 
     return res.json({ message: "Chart deleted successfully" });
   } catch (error) {

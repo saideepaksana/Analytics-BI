@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Eye, Trash2, LayoutDashboard } from "lucide-react";
 import ChartPreview from "../../charts/components/ChartPreview";
 import { queryDataset } from "../../../services/charts.service";
+import { canDeleteDashboard } from "../../../core/utils/permissions";
 
 
 
@@ -202,9 +203,11 @@ export default function DashboardCard({ dashboard, charts = [], onView, onDelete
         <button className="chart-action-btn" title="View Dashboard" onClick={onView}>
           <Eye size={16} />
         </button>
-        <button className="chart-action-btn danger" title="Delete Dashboard" onClick={onDelete}>
-          <Trash2 size={16} />
-        </button>
+        {canDeleteDashboard(dashboard) && (
+          <button className="chart-action-btn danger" title="Delete Dashboard" onClick={onDelete}>
+            <Trash2 size={16} />
+          </button>
+        )}
       </div>
     </div>
   );

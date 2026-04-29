@@ -4,6 +4,20 @@ const SchemaValidator = require('../../core/SchemaValidator');
 const dashboardStateSchema = require('./dashboardState.schema');
 const { loadDashboard, refreshDashboardCache } = require('./dashboardService');
 
+// Authorization helper functions
+const canEditDashboard = (dashboard, user) => {
+  if (!user) return true; // Backward compatibility - allow if no auth
+  if (user.role === 'admin') return true;
+  if (user.role === 'editor') return true;
+  if (user.role === 'viewer') return false;
+  // Owner can always edit their own dashboards
+  return dashboard.createdBy === user.id;
+};
+
+const canDeleteDashboard = (dashboard, user) => {
+  return canEditDashboard(dashboard, user);
+};
+
 /** GET /api/dashboards */
 exports.listDashboards = async (req, res) => {
     try {
@@ -46,8 +60,14 @@ exports.getDashboard = async (req, res) => {
 /** DELETE /api/dashboards/:dashboardId */
 exports.deleteDashboard = async (req, res) => {
     try {
-        const deleted = await Dashboard.findByIdAndDelete(req.params.dashboardId);
-        if (!deleted) return res.status(404).json({ message: 'Dashboard not found' });
+        const dashboard = await Dashboard.findById(req.params.dashboardId).lean();
+        if (!dashboard) return res.status(404).json({ message: 'Dashboard not found' });
+
+        if (!canDeleteDashboard(dashboard, req.user)) {
+            return res.status(403).json({ message: 'You do not have permission to delete this dashboard' });
+        }
+
+        await Dashboard.findByIdAndDelete(req.params.dashboardId);
         return res.json({ message: 'Dashboard deleted' });
     } catch (error) {
         return res.status(500).json({ message: 'Internal server error' });
@@ -58,15 +78,21 @@ exports.deleteDashboard = async (req, res) => {
  *  Legacy endpoint - kept for compatibility. */
 exports.saveDashboardLayout = async (req, res) => {
     try {
+        const dashboard = await Dashboard.findById(req.params.dashboardId).lean();
+        if (!dashboard) return res.status(404).json({ message: 'Dashboard not found' });
+
+        if (!canEditDashboard(dashboard, req.user)) {
+            return res.status(403).json({ message: 'You do not have permission to edit this dashboard' });
+        }
+
         const { layout } = req.body;
         if (!Array.isArray(layout)) return res.status(400).json({ message: 'layout must be an array' });
-        const dashboard = await Dashboard.findByIdAndUpdate(
+        const updatedDashboard = await Dashboard.findByIdAndUpdate(
             req.params.dashboardId,
             { $set: { layout, updatedBy: req.user?.id || 'anonymous' }, $inc: { __v: 1 } },
             { returnDocument: 'after', runValidators: false }
         ).lean();
-        if (!dashboard) return res.status(404).json({ message: 'Dashboard not found' });
-        return res.json({ dashboard: dashboardMapper.fromDB(dashboard) });
+        return res.json({ dashboard: dashboardMapper.fromDB(updatedDashboard) });
     } catch (error) {
         return res.status(500).json({ message: 'Internal server error' });
     }
@@ -79,6 +105,13 @@ const ALLOWED_STATUS_VALUES = new Set(['draft', 'published']);
 exports.patchDashboardMetadata = async (req, res) => {
     try {
         const { dashboardId } = req.params;
+        const dashboard = await Dashboard.findById(dashboardId).lean();
+        if (!dashboard) return res.status(404).json({ message: 'Dashboard not found' });
+
+        if (!canEditDashboard(dashboard, req.user)) {
+            return res.status(403).json({ message: 'You do not have permission to edit this dashboard' });
+        }
+
         const updates = req.body || {};
         const setObj = {};
 
@@ -116,14 +149,13 @@ exports.patchDashboardMetadata = async (req, res) => {
 
         setObj.updatedBy = req.user?.id || 'anonymous';
 
-        const dashboard = await Dashboard.findByIdAndUpdate(
+        const updatedDashboard = await Dashboard.findByIdAndUpdate(
             dashboardId,
             { $set: setObj, $inc: { __v: 1 } },
             { returnDocument: 'after', runValidators: true }
         ).lean();
 
-        if (!dashboard) return res.status(404).json({ message: 'Dashboard not found' });
-        return res.json({ message: 'Dashboard metadata updated', dashboard: dashboardMapper.fromDB(dashboard) });
+        return res.json({ message: 'Dashboard metadata updated', dashboard: dashboardMapper.fromDB(updatedDashboard) });
     } catch (error) {
         return res.status(500).json({ message: 'Internal server error' });
     }
@@ -149,6 +181,13 @@ exports.patchDashboardMetadata = async (req, res) => {
 exports.patchDashboardState = async (req, res) => {
     try {
         const { dashboardId } = req.params;
+        const dashboard = await Dashboard.findById(dashboardId).lean();
+        if (!dashboard) return res.status(404).json({ message: 'Dashboard not found' });
+
+        if (!canEditDashboard(dashboard, req.user)) {
+            return res.status(403).json({ message: 'You do not have permission to edit this dashboard' });
+        }
+
         const validation = SchemaValidator.validate(dashboardStateSchema, req.body || {});
         if (!validation.valid) {
             return res.status(400).json({ message: 'Invalid dashboard autosave payload', errors: validation.errors });
@@ -179,14 +218,14 @@ exports.patchDashboardState = async (req, res) => {
             }
         }
 
-        const dashboard = await Dashboard.findOneAndUpdate(
+        const updatedDashboard = await Dashboard.findOneAndUpdate(
             { _id: dashboardId, __v: clientVersion },
             { $set: { ...mapped, updatedBy: req.user?.id || 'anonymous' }, $inc: { __v: 1 } },
             { returnDocument: 'after', runValidators: true }
         ).lean();
 
-        if (!dashboard) return res.status(409).json({ message: 'Conflict: dashboard version mismatch.' });
-        return res.json({ dashboard: dashboardMapper.fromDB(dashboard) });
+        if (!updatedDashboard) return res.status(409).json({ message: 'Conflict: dashboard version mismatch.' });
+        return res.json({ dashboard: dashboardMapper.fromDB(updatedDashboard) });
     } catch (error) {
         return res.status(500).json({ message: 'Internal server error', detail: error.message });
     }

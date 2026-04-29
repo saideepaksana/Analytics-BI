@@ -9,6 +9,7 @@ import {
   updateDashboard,
 } from "../../services/dashboard.service";
 import { fetchCharts } from "../../services/charts.service";
+import { canCreateDashboard } from "../../core/utils/permissions";
 import "./styles/dashboard.css";
 
 const EMPTY_DRAFT = {
@@ -168,10 +169,12 @@ export default function DashboardPage({ onEditorMode }) {
           </div>
           <h2>No dashboards created yet</h2>
           <p>Create dashboard galleries from your saved charts and resize each panel to fit your analysis.</p>
-          <button className="create-chart-btn" onClick={openNewDashboard}>
-            <PlusCircle size={20} />
-            Create your first dashboard
-          </button>
+          {canCreateDashboard() && (
+            <button className="create-chart-btn" onClick={openNewDashboard}>
+              <PlusCircle size={20} />
+              Create your first dashboard
+            </button>
+          )}
         </div>
       </div>
     );
@@ -181,10 +184,12 @@ export default function DashboardPage({ onEditorMode }) {
     <div className="dashboards-page">
       <div className="charts-grid-header">
         <h3>Saved Dashboards ({dashboards.length})</h3>
-        <button className="create-chart-btn" onClick={openNewDashboard} style={{ padding: "8px 16px" }}>
-          <Plus size={18} />
-          New Dashboard
-        </button>
+        {canCreateDashboard() && (
+          <button className="create-chart-btn" onClick={openNewDashboard} style={{ padding: "8px 16px" }}>
+            <Plus size={18} />
+            New Dashboard
+          </button>
+        )}
       </div>
 
       {error ? <div className="page-error">{error}</div> : null}

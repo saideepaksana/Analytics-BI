@@ -1,8 +1,19 @@
 import axios from "axios";
 import { API_BASE_URL } from "../config/env";
+import { getCurrentUser } from "../utils/auth";
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
+});
+
+// Add user info to all requests
+apiClient.interceptors.request.use((config) => {
+  const user = getCurrentUser();
+  if (user) {
+    config.headers['X-User-ID'] = user.email;
+    config.headers['X-User-Role'] = user.role;
+  }
+  return config;
 });
 
 export const getRequestErrorMessage = (error, fallbackMessage = "Request failed") => {

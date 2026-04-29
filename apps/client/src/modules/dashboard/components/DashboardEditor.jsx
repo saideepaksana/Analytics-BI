@@ -5,7 +5,7 @@ import { useExportStatus } from "../../../hooks/useExportStatus";
 import { buildChartQueryForExport, buildChartRawExportPayload, mergeNormalizedFilters } from "../../../services/export.service";
 import ChartPreview from "../../charts/components/ChartPreview";
 import { queryDataset } from "../../../services/charts.service";
-import * as annotationsService from "../../../services/annotations.service";
+import { canEditDashboard } from "../../../core/utils/permissions";
 
 const ROW_HEIGHT = 42;
 const MIN_WIDGET_W = 4;
@@ -571,7 +571,7 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
   const frozenExportState = useMemo(() => getFrozenExportState(), []);
   const frozenState = frozenExportState.state;
   const isNewOrEmpty = !dashboard?.id || (Array.isArray(dashboard?.widgets) && dashboard.widgets.length === 0);
-  const [isEditMode, setIsEditMode] = useState(isNewOrEmpty);
+  const [isEditMode, setIsEditMode] = useState(mode === "edit" || isNewOrEmpty);
   const readOnly = !isEditMode;
   const [name, setName] = useState(() => (
     typeof frozenState?.dashboardName === "string" && frozenState.dashboardName.trim()
@@ -1250,9 +1250,11 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
         <div className="dashboard-editor-actions">
           {!isEditMode ? (
             <>
-              <button type="button" className="dashboard-primary-btn" onClick={() => setIsEditMode(true)}>
-                Edit dashboard
-              </button>
+              {canEditDashboard(dashboard) && (
+                <button type="button" className="dashboard-primary-btn" onClick={() => setIsEditMode(true)}>
+                  Edit dashboard
+                </button>
+              )}
               
               <div className="dashboard-export-wrapper" style={{ position: "relative" }}>
                 <button 
