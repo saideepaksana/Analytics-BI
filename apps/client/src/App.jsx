@@ -17,16 +17,11 @@ import {
   Home,
   LayoutDashboard,
   LogOut,
-  Menu,
-  Moon,
   PieChart,
   Settings,
   ShieldAlert,
-  Sparkles,
-  Sun,
   Upload,
   UserCircle2,
-  X,
 } from "lucide-react";
 import HomePage from "./modules/home/HomePage";
 import PublicLandingPage from "./modules/home/PublicLandingPage";
@@ -70,37 +65,6 @@ const NAV_ITEMS = [
   { id: "dashboards", label: "Dashboards", icon: LayoutDashboard, to: "/app/dashboards", roles: ROLE_POLICIES.dashboards },
   { id: "settings", label: "Settings", icon: Settings, to: "/app/settings", roles: ROLE_POLICIES.settings },
 ];
-
-const HEADER_CONFIG = {
-  home: {
-    title: "Personal Workspace",
-    subtitle: "Track your datasets, charts, and dashboards from a single operational cockpit.",
-  },
-  ingestion: {
-    title: "Upload and Ingest",
-    subtitle: "Push files into the pipeline and monitor processing in real time.",
-  },
-  review: {
-    title: "Data Review",
-    subtitle: "Inspect metadata, schema quality, and quarantined records by dataset.",
-  },
-  datasets: {
-    title: "Datasets",
-    subtitle: "Search, export, and manage your ingested collections.",
-  },
-  charts: {
-    title: "Chart Studio",
-    subtitle: "Build, preview, and refine visual analytics from your datasets.",
-  },
-  dashboards: {
-    title: "Dashboard Center",
-    subtitle: "Assemble executive dashboards and share insight-ready views.",
-  },
-  settings: {
-    title: "Settings",
-    subtitle: "Personalize your workspace experience and profile details.",
-  },
-};
 
 const LEGACY_VIEW_TO_ROUTE = {
   home: "home",
@@ -212,7 +176,6 @@ function WorkspaceLayout({
   onProfileChange,
 }) {
   const navigate = useNavigate();
-  const location = useLocation();
 
   const [searchParams] = useSearchParams();
   const [activeDatasetId, setActiveDatasetId] = useState("");
@@ -221,19 +184,17 @@ function WorkspaceLayout({
   const [dashboardEditorMode, setDashboardEditorMode] = useState(false);
   const [activeTasks, setActiveTasks] = useState([]);
   const [completionPopup, setCompletionPopup] = useState(null);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(
-    () => localStorage.getItem("analytics-sidebar-collapsed") === "true"
+
+  const effectiveUser = useMemo(
+    () =>
+      user || {
+        ...EXPORT_USER,
+        preferences,
+      },
+    [preferences, user]
   );
 
-  const effectiveUser = user || {
-    ...EXPORT_USER,
-    preferences,
-  };
-
   const effectiveTheme = getEffectiveTheme(preferences.theme);
-  const sectionKey = location.pathname.split("/")[2] || "home";
-  const activeHeader = HEADER_CONFIG[sectionKey] || null;
   const isImmersive = chartsExploreMode || dashboardEditorMode;
 
   const visibleNavItems = useMemo(() => {
@@ -243,10 +204,6 @@ function WorkspaceLayout({
 
     return NAV_ITEMS.filter((item) => item.roles.includes(effectiveUser.role));
   }, [effectiveUser.role, isExportMode]);
-
-  useEffect(() => {
-    localStorage.setItem("analytics-sidebar-collapsed", String(sidebarCollapsed));
-  }, [sidebarCollapsed]);
 
   const datasetIdFromQuery = searchParams.get("datasetId") || "";
   const resolvedDatasetId = datasetIdFromQuery || activeDatasetId;
@@ -301,7 +258,6 @@ function WorkspaceLayout({
   const navigateToSection = useCallback(
     (sectionId) => {
       const item = NAV_ITEMS.find((entry) => entry.id === sectionId);
-      setSidebarOpen(false);
       navigate(item?.to || "/app/home");
     },
     [navigate]
@@ -314,7 +270,6 @@ function WorkspaceLayout({
       }
 
       setActiveDatasetId(datasetId);
-      setSidebarOpen(false);
       navigate(`/app/review?datasetId=${encodeURIComponent(datasetId)}`);
 
       if (options.openModal) {
@@ -323,24 +278,6 @@ function WorkspaceLayout({
     },
     [navigate]
   );
-
-  const toggleSidebar = useCallback(() => {
-    const isMobile = window.innerWidth <= 1024;
-
-    if (isMobile) {
-      setSidebarOpen((previous) => !previous);
-      return;
-    }
-
-    setSidebarOpen(false);
-    setSidebarCollapsed((previous) => !previous);
-  }, []);
-
-  const toggleTheme = useCallback(() => {
-    onPreferencesChange({
-      theme: effectiveTheme === "dark" ? "light" : "dark",
-    });
-  }, [effectiveTheme, onPreferencesChange]);
 
   const contextValue = useMemo(
     () => ({
@@ -395,47 +332,48 @@ function WorkspaceLayout({
 
   return (
     <div
-      className={`workspace-shell ${sidebarOpen ? "sidebar-open" : ""} ${
-        sidebarCollapsed ? "sidebar-collapsed" : ""
-      } ${isImmersive ? "workspace-immersive" : ""}`}
+      className={`workspace-shell ${isImmersive ? "workspace-immersive" : ""}`}
       data-theme={effectiveTheme}
     >
-      <aside className="workspace-sidebar" aria-label="Primary navigation">
-        <div className="workspace-brand">
-          <span className="workspace-brand-mark">
-            <Sparkles size={17} />
-          </span>
-          <div>
-            <strong>Analytics BI</strong>
-            <span>Enterprise Data Intelligence</span>
+      <div className="workspace-main">
+        <header className="workspace-topbar">
+          <div className="workspace-topbar-brand">
+            <span className="workspace-brand-mark" aria-hidden="true">
+              <img src="/analytics-bi.svg" alt="" />
+            </span>
+            <div>
+              <strong>Analytics BI</strong>
+            </div>
           </div>
-        </div>
 
-        <nav className="workspace-nav">
-          {visibleNavItems.map((item) => {
-            const Icon = item.icon;
-            return (
-              <NavLink
-                key={item.id}
-                to={item.to}
-                className={({ isActive }) =>
-                  `workspace-nav-link ${isActive ? "active" : ""}`
-                }
-                title={sidebarCollapsed ? item.label : undefined}
-                onClick={() => setSidebarOpen(false)}
-              >
-                <Icon size={16} />
-                <span>{item.label}</span>
-              </NavLink>
-            );
-          })}
-        </nav>
+          <div className="workspace-topbar-left">
+            <div className="workspace-user-chip">
+              <UserCircle2 size={16} />
+              <span>{effectiveUser.fullName}</span>
+              <em>{effectiveUser.role}</em>
+            </div>
+          </div>
 
-        <div className="workspace-sidebar-foot">
+          <nav className="workspace-topnav" aria-label="Primary navigation">
+            {visibleNavItems.map((item) => {
+              const Icon = item.icon;
+              return (
+                <NavLink
+                  key={item.id}
+                  to={item.to}
+                  className={({ isActive }) =>
+                    `workspace-topnav-link ${isActive ? "active" : ""}`
+                  }
+                >
+                  <Icon size={15} />
+                  <span>{item.label}</span>
+                </NavLink>
+              );
+            })}
+          </nav>
           <button
             type="button"
-            className="workspace-logout-btn"
-            title={sidebarCollapsed ? "Sign out" : undefined}
+            className="workspace-logout-btn topbar"
             onClick={() => {
               logout();
               navigate("/", { replace: true });
@@ -444,32 +382,12 @@ function WorkspaceLayout({
             <LogOut size={15} />
             <span>Sign out</span>
           </button>
-        </div>
-      </aside>
-
-      <div className="workspace-main">
-        <header className="workspace-topbar">
-          <div className="workspace-topbar-left">
-            <button type="button" className="workspace-icon-btn" onClick={toggleSidebar} aria-label="Toggle navigation menu">
-              {sidebarOpen ? <X size={18} /> : <Menu size={18} />}
-            </button>
-            <div className="workspace-user-chip">
-              <UserCircle2 size={16} />
-              <span>{effectiveUser.fullName}</span>
-              <em>{effectiveUser.role}</em>
-            </div>
-          </div>
-
-
         </header>
 
         <main className={`workspace-content ${isImmersive ? "immersive" : ""}`}>
-
           <Outlet context={contextValue} />
         </main>
       </div>
-
-      {sidebarOpen ? <button type="button" className="workspace-sidebar-overlay" onClick={() => setSidebarOpen(false)} aria-label="Close navigation" /> : null}
 
       {reviewModalDatasetId ? (
         <DataReviewModal
@@ -489,8 +407,7 @@ function WorkspaceLayout({
 }
 
 function WorkspaceHomeRoute() {
-  const { user, navigateToSection, activeTasks } = useWorkspace();
-  const firstName = user.fullName?.trim().split(" ")[0] || "there";
+  const { navigateToSection } = useWorkspace();
 
   return <HomePage onNavigate={navigateToSection} />;
 }
