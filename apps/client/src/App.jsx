@@ -460,25 +460,10 @@ function WorkspaceLayout({
             </div>
           </div>
 
-          <div className="workspace-topbar-right">
-            <button type="button" className="workspace-icon-btn" onClick={toggleTheme} aria-label="Toggle light and dark theme">
-              {effectiveTheme === "light" ? <Moon size={16} /> : <Sun size={16} />}
-            </button>
 
-            <NavLink to="/app/settings" className="workspace-settings-link">
-              <Settings size={15} />
-              <span>Settings</span>
-            </NavLink>
-          </div>
         </header>
 
         <main className={`workspace-content ${isImmersive ? "immersive" : ""}`}>
-          {activeHeader && !isImmersive ? (
-            <header className="workspace-page-header">
-              <h1>{activeHeader.title}</h1>
-              <p>{activeHeader.subtitle}</p>
-            </header>
-          ) : null}
 
           <Outlet context={contextValue} />
         </main>
@@ -507,30 +492,7 @@ function WorkspaceHomeRoute() {
   const { user, navigateToSection, activeTasks } = useWorkspace();
   const firstName = user.fullName?.trim().split(" ")[0] || "there";
 
-  return (
-    <>
-      <section className="workspace-welcome-card">
-        <div>
-          <h2>Welcome back, {firstName}</h2>
-          <p>
-            Keep building insights. You currently have {activeTasks.length} active background
-            {activeTasks.length === 1 ? " task" : " tasks"}.
-          </p>
-        </div>
-
-        <div className="workspace-welcome-actions">
-          <button type="button" className="workspace-quick-btn" onClick={() => navigateToSection("ingestion")}>
-            New upload
-          </button>
-          <button type="button" className="workspace-quick-btn ghost" onClick={() => navigateToSection("dashboards")}>
-            Open dashboards
-          </button>
-        </div>
-      </section>
-
-      <HomePage onNavigate={navigateToSection} />
-    </>
-  );
+  return <HomePage onNavigate={navigateToSection} />;
 }
 
 function WorkspaceIngestionRoute() {

@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
 import {
   Brush,
-  LayoutTemplate,
+  Lock,
   MoonStar,
-  Palette,
   Save,
   ShieldCheck,
   UserRound,
@@ -16,18 +15,6 @@ const THEME_OPTIONS = [
   { value: "dark", label: "Dark" },
 ];
 
-const DENSITY_OPTIONS = [
-  { value: "comfortable", label: "Comfortable" },
-  { value: "compact", label: "Compact" },
-];
-
-const ACCENT_OPTIONS = [
-  { value: "teal", label: "Teal" },
-  { value: "amber", label: "Amber" },
-  { value: "rose", label: "Rose" },
-  { value: "indigo", label: "Indigo" },
-];
-
 export default function SettingsPage({
   user,
   preferences,
@@ -37,6 +24,8 @@ export default function SettingsPage({
   const [profileDraft, setProfileDraft] = useState({
     fullName: user?.fullName || "",
     company: user?.company || "",
+    newPassword: "",
+    confirmPassword: "",
   });
   const [preferencesDraft, setPreferencesDraft] = useState(preferences);
   const [status, setStatus] = useState("");
@@ -45,6 +34,8 @@ export default function SettingsPage({
     setProfileDraft({
       fullName: user?.fullName || "",
       company: user?.company || "",
+      newPassword: "",
+      confirmPassword: "",
     });
   }, [user?.fullName, user?.company]);
 
@@ -115,15 +106,57 @@ export default function SettingsPage({
           </label>
         </div>
 
+        <div className="settings-grid two-col">
+          <label className="settings-field">
+            <span>
+              <Lock size={14} />
+              New Password
+            </span>
+            <input
+              type="password"
+              value={profileDraft.newPassword}
+              onChange={(event) => {
+                setProfileDraft((previous) => ({
+                  ...previous,
+                  newPassword: event.target.value,
+                }));
+                setStatus("");
+              }}
+              placeholder="Leave blank to keep current"
+            />
+          </label>
+
+          <label className="settings-field">
+            <span>
+              <Lock size={14} />
+              Confirm Password
+            </span>
+            <input
+              type="password"
+              value={profileDraft.confirmPassword}
+              onChange={(event) => {
+                setProfileDraft((previous) => ({
+                  ...previous,
+                  confirmPassword: event.target.value,
+                }));
+                setStatus("");
+              }}
+              placeholder="Confirm new password"
+            />
+          </label>
+        </div>
+
         <p className="settings-meta">
           <ShieldCheck size={14} />
           Signed in as {user?.email || "unknown"}
         </p>
 
-        <button type="button" className="settings-save-btn" onClick={saveProfile}>
-          <Save size={14} />
-          Save Profile
-        </button>
+        <div className="settings-card-footer">
+          <button type="button" className="settings-save-btn" onClick={saveProfile}>
+            <Save size={14} />
+            Save Profile
+          </button>
+        </div>
       </div>
 
       <div className="settings-card">
@@ -134,7 +167,7 @@ export default function SettingsPage({
           </h3>
         </div>
 
-        <div className="settings-grid two-col">
+        <div className="settings-grid">
           <label className="settings-field">
             <span>
               <MoonStar size={14} />
@@ -151,58 +184,14 @@ export default function SettingsPage({
               ))}
             </select>
           </label>
-
-          <label className="settings-field">
-            <span>
-              <LayoutTemplate size={14} />
-              Density
-            </span>
-            <select
-              value={preferencesDraft.density}
-              onChange={(event) => updatePreference("density", event.target.value)}
-            >
-              {DENSITY_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="settings-field">
-            <span>
-              <Palette size={14} />
-              Accent color
-            </span>
-            <select
-              value={preferencesDraft.accent}
-              onChange={(event) => updatePreference("accent", event.target.value)}
-            >
-              {ACCENT_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="settings-toggle">
-            <input
-              type="checkbox"
-              checked={Boolean(preferencesDraft.reduceMotion)}
-              onChange={(event) => updatePreference("reduceMotion", event.target.checked)}
-            />
-            <div>
-              <strong>Reduce motion</strong>
-              <p>Use fewer transitions and animated effects</p>
-            </div>
-          </label>
         </div>
 
-        <button type="button" className="settings-save-btn" onClick={savePreferences}>
-          <Save size={14} />
-          Save Preferences
-        </button>
+        <div className="settings-card-footer">
+          <button type="button" className="settings-save-btn" onClick={savePreferences}>
+            <Save size={14} />
+            Save Preferences
+          </button>
+        </div>
       </div>
 
       {status ? <p className="settings-status">{status}</p> : null}

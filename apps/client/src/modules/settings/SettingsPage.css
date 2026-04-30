@@ -120,8 +120,13 @@
   font-size: 12px;
 }
 
+.settings-card-footer {
+  margin-top: 20px;
+  display: flex;
+  justify-content: flex-end;
+}
+
 .settings-save-btn {
-  margin-top: 14px;
   border: 1px solid transparent;
   border-radius: 10px;
   padding: 11px 14px;
