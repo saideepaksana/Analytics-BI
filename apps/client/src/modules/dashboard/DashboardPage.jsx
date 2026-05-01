@@ -89,6 +89,13 @@ export default function DashboardPage({ onEditorMode }) {
     });
   };
 
+  const openEditDashboard = (dashboard) => {
+    setEditorState({
+      mode: "edit",
+      dashboard,
+    });
+  };
+
   const closeEditor = () => {
     setEditorState({ mode: null, dashboard: null });
   };
@@ -201,6 +208,7 @@ export default function DashboardPage({ onEditorMode }) {
             dashboard={dashboard}
             charts={charts}
             onView={() => openViewDashboard(dashboard)}
+            onEdit={() => openEditDashboard(dashboard)}
             onDelete={() => handleDeleteDashboard(dashboard.id)}
           />
         ))}

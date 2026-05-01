@@ -258,6 +258,26 @@
   letter-spacing: 0.3px;
 }
 
+.login-auth-switch {
+  margin-top: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-secondary, #a1a1aa);
+}
+
+.login-auth-switch a {
+  color: var(--brand, #06b6d4);
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.login-auth-switch a:hover {
+  text-decoration: underline;
+}
+
 /* ── Light theme ── */
 [data-theme="light"] .login-page {
   background: #eef2f6;

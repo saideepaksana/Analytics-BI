@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Eye, Trash2, LayoutDashboard } from "lucide-react";
+import { Edit2, Eye, Trash2, LayoutDashboard } from "lucide-react";
 import ChartPreview from "../../charts/components/ChartPreview";
 import { queryDataset } from "../../../services/charts.service";
 import { canDeleteDashboard } from "../../../core/utils/permissions";
@@ -126,7 +126,7 @@ function PreviewWidgetTile({ chart, style }) {
   );
 }
 
-export default function DashboardCard({ dashboard, charts = [], onView, onDelete }) {
+export default function DashboardCard({ dashboard, charts = [], onView, onEdit, onDelete }) {
   const previewWidgets = dashboard.tabs && dashboard.tabs.length > 0 
     ? dashboard.tabs[0].widgets 
     : (Array.isArray(dashboard.widgets) ? dashboard.widgets : (Array.isArray(dashboard.layout) ? dashboard.layout : []));
@@ -203,11 +203,20 @@ export default function DashboardCard({ dashboard, charts = [], onView, onDelete
         <button className="chart-action-btn" title="View Dashboard" onClick={onView}>
           <Eye size={16} />
         </button>
+<<<<<<< HEAD
         {canDeleteDashboard(dashboard) && (
           <button className="chart-action-btn danger" title="Delete Dashboard" onClick={onDelete}>
             <Trash2 size={16} />
           </button>
         )}
+=======
+        <button className="chart-action-btn" title="Edit Dashboard" onClick={onEdit}>
+          <Edit2 size={16} />
+        </button>
+        <button className="chart-action-btn danger" title="Delete Dashboard" onClick={onDelete}>
+          <Trash2 size={16} />
+        </button>
+>>>>>>> d45504991a052d0f6ddbaa407d4cee3bcb94923c
       </div>
     </div>
   );

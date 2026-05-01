@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Sparkles } from "lucide-react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { login } from "../../core/utils/auth";
 import "./LoginPage.css";
 
@@ -7,7 +8,10 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const ROLES = ["admin", "editor", "viewer"];
 
 export default function LoginPage({ onLogin }) {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [role, setRole] = useState("viewer");
   const [error, setError] = useState("");
 
@@ -25,9 +29,20 @@ export default function LoginPage({ onLogin }) {
       return;
     }
 
+    if (password.trim().length < 6) {
+      setError("Password must be at least 6 characters");
+      return;
+    }
+
     setError("");
-    login(trimmedEmail, role);
-    onLogin?.();
+    const user = login(trimmedEmail, role, {
+      fullName: trimmedEmail.split("@")[0],
+    });
+
+    onLogin?.(user);
+
+    const next = searchParams.get("next") || "/app/home";
+    navigate(next, { replace: true });
   };
 
   return (
@@ -64,6 +79,21 @@ export default function LoginPage({ onLogin }) {
           </div>
 
           <div className="login-field">
+            <label htmlFor="login-password">Password</label>
+            <input
+              id="login-password"
+              type="password"
+              placeholder="At least 6 characters"
+              value={password}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                if (error) setError("");
+              }}
+              autoComplete="current-password"
+            />
+          </div>
+
+          <div className="login-field">
             <label>Role</label>
             <div className="login-role-badges">
               {ROLES.map((r) => (
@@ -82,11 +112,16 @@ export default function LoginPage({ onLogin }) {
           <button
             type="submit"
             className="login-submit-btn"
-            disabled={!email.trim()}
+            disabled={!email.trim() || !password.trim()}
           >
             Sign in
           </button>
         </form>
+
+        <div className="login-auth-switch">
+          <span>New here?</span>
+          <Link to="/auth/signup">Create account</Link>
+        </div>
 
         <p className="login-footer">Mock authentication &bull; No real credentials required</p>
       </div>
