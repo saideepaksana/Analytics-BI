@@ -2,20 +2,11 @@ const Chart = require("../../models/Chart");
 const logger = require("../../core/logger");
 const chartMapper = require("./chartMapper");
 const { validateChart, ChartValidationError } = require("./chartValidator");
+const { isOwnerOrEditor } = require("../../middleware/rbac");
 
-// Authorization helper functions
-const canEditChart = (chart, user) => {
-  if (!user) return true; // Backward compatibility - allow if no auth
-  if (user.role === 'admin') return true;
-  if (user.role === 'editor') return true;
-  if (user.role === 'viewer') return false;
-  // Owner can always edit their own charts
-  return chart.createdBy === user.id;
-};
-
-const canDeleteChart = (chart, user) => {
-  return canEditChart(chart, user);
-};
+// Aliases for readability within this controller
+const canEditChart = isOwnerOrEditor;
+const canDeleteChart = isOwnerOrEditor;
 
 /**
  * GET /api/charts

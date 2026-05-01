@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Grip, Loader2, MoveDiagonal2, Pencil, Plus, PlusCircle, Save, Trash2, X, MoreVertical, Star, User, Clock, MessageSquare, Download, Image as ImageIcon, FileSpreadsheet, FileText as PdfIcon } from "lucide-react";
+import { ArrowLeft, Grip, Loader2, MoveDiagonal2, Pencil, Plus, PlusCircle, Save, Trash2, X, MoreVertical, Star, User, Clock, MessageSquare, Download, Image as ImageIcon, FileSpreadsheet, FileText as PdfIcon, Send, FileEdit } from "lucide-react";
 import html2canvas from "html2canvas";
 import { useExportStatus } from "../../../hooks/useExportStatus";
 import { buildChartQueryForExport, buildChartRawExportPayload, mergeNormalizedFilters } from "../../../services/export.service";
 import ChartPreview from "../../charts/components/ChartPreview";
 import { queryDataset } from "../../../services/charts.service";
-import { canEditDashboard } from "../../../core/utils/permissions";
+import { canEditDashboard, canPublishDashboard } from "../../../core/utils/permissions";
+import { saveDraft as saveDraftService, publishDashboard as publishDashboardService } from "../../../services/dashboard.service";
 
 const ROW_HEIGHT = 42;
 const MIN_WIDGET_W = 4;
@@ -567,12 +568,15 @@ function DashboardWidget({
   );
 }
 
-export default function DashboardEditor({ mode, dashboard, charts, saving, onBack, onSave, onAutoSave }) {
+export default function DashboardEditor({ mode, dashboard, charts, saving, onBack, onSave, onAutoSave, onPublish, onUnpublish }) {
   const frozenExportState = useMemo(() => getFrozenExportState(), []);
   const frozenState = frozenExportState.state;
   const isNewOrEmpty = !dashboard?.id || (Array.isArray(dashboard?.widgets) && dashboard.widgets.length === 0);
   const [isEditMode, setIsEditMode] = useState(mode === "edit" || isNewOrEmpty);
   const readOnly = !isEditMode;
+  const [publishingLocal, setPublishingLocal] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [draftSavedMsg, setDraftSavedMsg] = useState(null);
   const [name, setName] = useState(() => (
     typeof frozenState?.dashboardName === "string" && frozenState.dashboardName.trim()
       ? frozenState.dashboardName
@@ -1224,6 +1228,44 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
 
   const isSaving = saving || savingLocal;
 
+  /** Save current content as draft without publishing */
+  const handleSaveDraft = async () => {
+    if (!dashboard?.id) return;
+    setSavingDraft(true);
+    try {
+      const draftContent = {
+        name: name.trim(),
+        tabs,
+        activeTabId,
+      };
+      await saveDraftService(dashboard.id, draftContent);
+      setDraftSavedMsg('Draft saved!');
+      setTimeout(() => setDraftSavedMsg(null), 3000);
+    } catch (err) {
+      console.error('Failed to save draft', err);
+    } finally {
+      setSavingDraft(false);
+    }
+  };
+
+  /** Publish the current dashboard */
+  const handlePublish = async () => {
+    if (!dashboard?.id) return;
+    // First save the current state as draft then publish
+    setPublishingLocal(true);
+    try {
+      await saveDraftService(dashboard.id, { name: name.trim(), tabs, activeTabId });
+      const published = await publishDashboardService(dashboard.id);
+      onPublish?.(published);
+      setDraftSavedMsg('Published!');
+      setTimeout(() => setDraftSavedMsg(null), 3000);
+    } catch (err) {
+      console.error('Failed to publish dashboard', err);
+    } finally {
+      setPublishingLocal(false);
+    }
+  };
+
   return (
     <div className="dashboard-editor-page">
       <div className="dashboard-editor-topbar">
@@ -1250,6 +1292,20 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
         <div className="dashboard-editor-actions">
           {!isEditMode ? (
             <>
+              {/* Draft indicator badge in view mode */}
+              {dashboard?.status === 'draft' && (
+                <span style={{
+                  fontSize: '11px',
+                  padding: '3px 10px',
+                  borderRadius: '4px',
+                  background: 'rgba(245,158,11,0.18)',
+                  color: '#f59e0b',
+                  fontWeight: 600,
+                  border: '1px solid rgba(245,158,11,0.3)',
+                  letterSpacing: '0.05em',
+                  textTransform: 'uppercase',
+                }}>DRAFT</span>
+              )}
               {canEditDashboard(dashboard) && (
                 <button type="button" className="dashboard-primary-btn" onClick={() => setIsEditMode(true)}>
                   Edit dashboard
@@ -1301,9 +1357,36 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
                 <Plus size={14} />
                 Add chart
               </button>
+              {/* Save Draft button – available for existing dashboards */}
+              {dashboard?.id && (
+                <button
+                  type="button"
+                  className="dashboard-secondary-btn"
+                  onClick={handleSaveDraft}
+                  disabled={savingDraft}
+                  title="Save current state as draft (not published)"
+                >
+                  {savingDraft ? <Loader2 size={14} className="spinner" /> : <FileEdit size={14} />}
+                  {savingDraft ? 'Saving...' : 'Save Draft'}
+                </button>
+              )}
               <button type="button" className="dashboard-primary-btn" onClick={submitSave} disabled={isSaving}>
-                {isSaving ? <Loader2 size={14} className="spinner" /> : "Save"}
+                {isSaving ? <Loader2 size={14} className="spinner" /> : 'Save'}
               </button>
+              {/* Publish button – available for editors/owners with a saved dashboard */}
+              {dashboard?.id && canPublishDashboard(dashboard) && dashboard?.status !== 'published' && (
+                <button
+                  type="button"
+                  className="dashboard-primary-btn"
+                  style={{ background: 'linear-gradient(135deg, #10b981, #059669)' }}
+                  onClick={handlePublish}
+                  disabled={publishingLocal}
+                  title="Publish this dashboard to make it visible to all users"
+                >
+                  {publishingLocal ? <Loader2 size={14} className="spinner" /> : <Send size={14} />}
+                  {publishingLocal ? 'Publishing...' : 'Publish'}
+                </button>
+              )}
               <button type="button" className="dashboard-secondary-btn discard" onClick={() => setIsEditMode(false)}>
                 Discard
               </button>

@@ -133,3 +133,37 @@ export const deleteDashboard = async (dashboardId) => {
   const response = await apiClient.delete(`/dashboards/${dashboardId}`);
   return { deleted: true };
 };
+
+/**
+ * Publish a draft dashboard to make it live
+ */
+export const publishDashboard = async (dashboardId) => {
+  const response = await apiClient.post(`/dashboards/${dashboardId}/publish`);
+  return normalizeDashboard(response.data.dashboard);
+};
+
+/**
+ * Unpublish a dashboard (revert to draft)
+ */
+export const unpublishDashboard = async (dashboardId) => {
+  const response = await apiClient.post(`/dashboards/${dashboardId}/unpublish`);
+  return normalizeDashboard(response.data.dashboard);
+};
+
+/**
+ * Save draft state without publishing
+ */
+export const saveDraft = async (dashboardId, draftState) => {
+  const response = await apiClient.post(`/dashboards/${dashboardId}/save-draft`, {
+    draftState
+  });
+  return normalizeDashboard(response.data.dashboard);
+};
+
+/**
+ * Get draft state of a dashboard
+ */
+export const getDraftState = async (dashboardId) => {
+  const response = await apiClient.get(`/dashboards/${dashboardId}/draft`);
+  return response.data.draftState;
+};

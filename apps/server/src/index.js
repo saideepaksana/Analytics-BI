@@ -19,11 +19,9 @@ const aiRoutes = require("./api/ai/ai.routes");
 const { setIO } = require("./core/socket");
 const logger = require("./core/logger");
 const { idempotencyMiddleware } = require("./core/middleware/idempotencyMiddleware");
-<<<<<<< HEAD
 const authMiddleware = require("./middleware/auth");
-=======
 const { requestLoggingMiddleware } = require("./core/middleware/requestLogger");
->>>>>>> d45504991a052d0f6ddbaa407d4cee3bcb94923c
+const { securityHeaders, permissionsPolicy, sanitizeInput, rateLimitMiddleware, sqlInjectionProtection } = require("./middleware/security");
 
 const app = express();
 const server = http.createServer(app);
@@ -78,18 +76,33 @@ mongoose.connection.once("open", async () => {
 });
 
 //middleware
+app.use(securityHeaders);
+app.use(permissionsPolicy);
+const CORS_WHITELIST = (process.env.CORS_ORIGIN || 'http://localhost:5173')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
 app.use(
   cors({
-    origin: process.env.CORS_ORIGIN || "*",
+    origin: (origin, callback) => {
+      // Allow requests with no origin (curl, Postman, same-origin)
+      if (!origin || CORS_WHITELIST.includes(origin) || CORS_WHITELIST.includes('*')) {
+        callback(null, true);
+      } else {
+        callback(new Error(`CORS policy: origin ${origin} is not allowed`));
+      }
+    },
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-User-ID", "X-User-Role", "X-Idempotency-Key", "X-CSRF-Token"],
+    credentials: true,
   })
 );
-app.use(express.json());
-<<<<<<< HEAD
+app.use(express.json({ limit: '10mb' }));
+app.use(sanitizeInput);
+app.use(rateLimitMiddleware);
+app.use(sqlInjectionProtection);
 app.use(authMiddleware);
-=======
 app.use(requestLoggingMiddleware());
->>>>>>> d45504991a052d0f6ddbaa407d4cee3bcb94923c
 app.use(idempotencyMiddleware);
 
 const io = new Server(server, {

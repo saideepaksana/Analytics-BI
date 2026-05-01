@@ -3,25 +3,36 @@ const dashboardMapper = require('./dashboardMapper');
 const SchemaValidator = require('../../core/SchemaValidator');
 const dashboardStateSchema = require('./dashboardState.schema');
 const { loadDashboard, refreshDashboardCache } = require('./dashboardService');
+const { isOwnerOrEditor } = require('../../middleware/rbac');
 
-// Authorization helper functions
-const canEditDashboard = (dashboard, user) => {
-  if (!user) return true; // Backward compatibility - allow if no auth
-  if (user.role === 'admin') return true;
-  if (user.role === 'editor') return true;
-  if (user.role === 'viewer') return false;
-  // Owner can always edit their own dashboards
-  return dashboard.createdBy === user.id;
-};
-
-const canDeleteDashboard = (dashboard, user) => {
-  return canEditDashboard(dashboard, user);
-};
+// Alias for readability within this controller
+const canEditDashboard = isOwnerOrEditor;
+const canDeleteDashboard = isOwnerOrEditor;
 
 /** GET /api/dashboards */
 exports.listDashboards = async (req, res) => {
     try {
-        const dashboards = await Dashboard.find().sort({ updatedAt: -1 }).lean();
+        const user = req.user;
+        let filter = {};
+        
+        // If user is authenticated, show their own drafts plus all published
+        if (user && user.role !== 'viewer') {
+            // Show all published + user's own drafts
+            filter = {
+                $or: [
+                    { status: 'published' },
+                    { createdBy: user.id }
+                ]
+            };
+        } else if (user) {
+            // Viewers can only see published
+            filter = { status: 'published' };
+        } else {
+            // Unauthenticated users see only published
+            filter = { status: 'published' };
+        }
+        
+        const dashboards = await Dashboard.find(filter).sort({ updatedAt: -1 }).lean();
         return res.json({ dashboards: dashboards.map(dashboardMapper.fromDB) });
     } catch (error) {
         return res.status(500).json({ message: 'Internal server error' });
@@ -51,6 +62,12 @@ exports.getDashboard = async (req, res) => {
     try {
         const dashboard = await Dashboard.findById(req.params.dashboardId).lean();
         if (!dashboard) return res.status(404).json({ message: 'Dashboard not found' });
+
+        // Hide draft dashboards from non-owners (return 404 to avoid enumeration)
+        if (dashboard.status === 'draft' && !isOwnerOrEditor(dashboard, req.user)) {
+            return res.status(404).json({ message: 'Dashboard not found' });
+        }
+
         return res.json({ dashboard: dashboardMapper.fromDB(dashboard) });
     } catch (error) {
         return res.status(500).json({ message: 'Internal server error' });
@@ -267,5 +284,141 @@ exports.refreshDashboard = async (req, res) => {
         return res.json({ message: 'Dashboard cache refreshed' });
     } catch (error) {
         return res.status(500).json({ message: 'Internal server error' });
+    }
+};
+
+/** POST /api/dashboards/:dashboardId/publish
+ * Publish a draft dashboard to make it live for all users */
+exports.publishDashboard = async (req, res) => {
+    try {
+        const { dashboardId } = req.params;
+        const dashboard = await Dashboard.findById(dashboardId).lean();
+        if (!dashboard) return res.status(404).json({ message: 'Dashboard not found' });
+
+        if (!canEditDashboard(dashboard, req.user)) {
+            return res.status(403).json({ message: 'You do not have permission to publish this dashboard' });
+        }
+
+        // If there's draft state, promote it to live
+        const updateData = {
+            status: 'published',
+            publishedAt: new Date(),
+            publishedBy: req.user?.id || 'anonymous',
+            version: (dashboard.version || 0) + 1,
+            updatedBy: req.user?.id || 'anonymous'
+        };
+
+        // If there's draft state, copy it to live
+        if (dashboard.draftState) {
+            updateData.layout = dashboard.draftState.layout || dashboard.layout;
+            updateData.tabs = dashboard.draftState.tabs || dashboard.tabs;
+            updateData.activeTabId = dashboard.draftState.activeTabId || dashboard.activeTabId;
+            updateData._rawFrontendState = dashboard.draftState;
+            updateData.filters = dashboard.draftState.filters || dashboard.filters;
+            updateData.draftState = null; // Clear draft after publishing
+        }
+
+        const updatedDashboard = await Dashboard.findByIdAndUpdate(
+            dashboardId,
+            { $set: updateData, $inc: { __v: 1 } },
+            { returnDocument: 'after', runValidators: true }
+        ).lean();
+
+        return res.json({ 
+            message: 'Dashboard published successfully', 
+            dashboard: dashboardMapper.fromDB(updatedDashboard) 
+        });
+    } catch (error) {
+        return res.status(500).json({ message: 'Internal server error', detail: error.message });
+    }
+};
+
+/** POST /api/dashboards/:dashboardId/unpublish
+ * Unpublish a dashboard (revert to draft) */
+exports.unpublishDashboard = async (req, res) => {
+    try {
+        const { dashboardId } = req.params;
+        const dashboard = await Dashboard.findById(dashboardId).lean();
+        if (!dashboard) return res.status(404).json({ message: 'Dashboard not found' });
+
+        if (!canEditDashboard(dashboard, req.user)) {
+            return res.status(403).json({ message: 'You do not have permission to unpublish this dashboard' });
+        }
+
+        const updatedDashboard = await Dashboard.findByIdAndUpdate(
+            dashboardId,
+            { 
+                $set: { 
+                    status: 'draft',
+                    publishedAt: null,
+                    publishedBy: null,
+                    updatedBy: req.user?.id || 'anonymous'
+                }, 
+                $inc: { __v: 1 } 
+            },
+            { returnDocument: 'after', runValidators: true }
+        ).lean();
+
+        return res.json({ 
+            message: 'Dashboard unpublished', 
+            dashboard: dashboardMapper.fromDB(updatedDashboard) 
+        });
+    } catch (error) {
+        return res.status(500).json({ message: 'Internal server error', detail: error.message });
+    }
+};
+
+/** GET /api/dashboards/:dashboardId/draft
+ * Get draft state of a dashboard (only owner can see their draft) */
+exports.getDraftState = async (req, res) => {
+    try {
+        const { dashboardId } = req.params;
+        const dashboard = await Dashboard.findById(dashboardId).lean();
+        if (!dashboard) return res.status(404).json({ message: 'Dashboard not found' });
+
+        // Only owner can see draft state
+        if (!canEditDashboard(dashboard, req.user)) {
+            return res.status(403).json({ message: 'You do not have permission to view draft state' });
+        }
+
+        return res.json({ draftState: dashboard.draftState || null });
+    } catch (error) {
+        return res.status(500).json({ message: 'Internal server error', detail: error.message });
+    }
+};
+
+/** POST /api/dashboards/:dashboardId/save-draft
+ * Save draft state without publishing */
+exports.saveDraft = async (req, res) => {
+    try {
+        const { dashboardId } = req.params;
+        const dashboard = await Dashboard.findById(dashboardId).lean();
+        if (!dashboard) return res.status(404).json({ message: 'Dashboard not found' });
+
+        if (!canEditDashboard(dashboard, req.user)) {
+            return res.status(403).json({ message: 'You do not have permission to save draft' });
+        }
+
+        const { draftState } = req.body;
+        
+        const updatedDashboard = await Dashboard.findByIdAndUpdate(
+            dashboardId,
+            { 
+                $set: { 
+                    draftState: draftState || null,
+                    status: 'draft',
+                    updatedBy: req.user?.id || 'anonymous'
+                }, 
+                $inc: { __v: 1 } 
+            },
+            { returnDocument: 'after', runValidators: true }
+        ).lean();
+
+        return res.json({ 
+            message: 'Draft saved', 
+            dashboard: dashboardMapper.fromDB(updatedDashboard) 
+        });
+    } catch (error) {
+        return res.status(500).json({ message: 'Internal server error', detail: error.message });
     }
 };

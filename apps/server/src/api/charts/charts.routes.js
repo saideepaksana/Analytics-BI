@@ -5,6 +5,7 @@ const {
   saveChart,
   deleteChart,
 } = require("./charts.controller");
+const { requireAuth, canMutate } = require("../../middleware/rbac");
 
 const router = express.Router();
 
@@ -13,16 +14,16 @@ const router = express.Router();
  * Base path: /api/charts
  */
 
-// List all charts (supports filtering by datasetId)
+// List all charts (supports filtering by datasetId) – readable by all
 router.get("/", listCharts);
 
-// Get a single chart by chartId or _id
+// Get a single chart by chartId or _id – readable by all
 router.get("/:id", getChartById);
 
-// Create or update a chart
-router.post("/", saveChart);
+// Create or update a chart – editor/admin only
+router.post("/", requireAuth, canMutate, saveChart);
 
-// Delete a chart by chartId or _id
-router.delete("/:id", deleteChart);
+// Delete a chart by chartId or _id – editor/admin only
+router.delete("/:id", requireAuth, canMutate, deleteChart);
 
 module.exports = router;

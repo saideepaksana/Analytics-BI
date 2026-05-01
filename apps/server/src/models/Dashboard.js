@@ -8,7 +8,15 @@ const DashboardSchema = new Schema(
     description: { type: String, default: "" },
     tags: { type: [String], default: [] },
     isFavorite: { type: Boolean, default: false },
+    // Draft vs Live status
     status: { type: String, enum: ["draft", "published"], default: "draft" },
+    // Version tracking for draft/live
+    version: { type: Number, default: 1 },
+    publishedAt: { type: Date, default: null },
+    publishedBy: { type: String, default: null },
+    // Draft content (private until published)
+    draftState: { type: Schema.Types.Mixed, default: null },
+    // Live/published content
     layout: { type: Schema.Types.Mixed, default: [] },
     tabs: { type: Schema.Types.Mixed, default: [] },
     activeTabId: { type: String, default: null },
@@ -31,5 +39,6 @@ DashboardSchema.index({ title: "text", description: "text" });
 DashboardSchema.index({ status: 1, updatedAt: -1 });
 DashboardSchema.index({ createdBy: 1, updatedAt: -1 });
 DashboardSchema.index({ isFavorite: 1, updatedAt: -1 });
+DashboardSchema.index({ publishedAt: -1 });
 
 module.exports = mongoose.model("Dashboard", DashboardSchema);

@@ -7,6 +7,8 @@ import {
   deleteDashboard,
   listDashboards,
   updateDashboard,
+  publishDashboard,
+  unpublishDashboard,
 } from "../../services/dashboard.service";
 import { fetchCharts } from "../../services/charts.service";
 import { canCreateDashboard } from "../../core/utils/permissions";
@@ -90,9 +92,17 @@ export default function DashboardPage({ onEditorMode }) {
   };
 
   const openEditDashboard = (dashboard) => {
+    const firstTabId =
+      Array.isArray(dashboard?.tabs) && dashboard.tabs.length > 0
+        ? dashboard.tabs[0].id
+        : dashboard?.activeTabId;
+
     setEditorState({
       mode: "edit",
-      dashboard,
+      dashboard: {
+        ...dashboard,
+        activeTabId: firstTabId,
+      },
     });
   };
 
@@ -109,6 +119,24 @@ export default function DashboardPage({ onEditorMode }) {
       }
     } catch (err) {
       console.error("Failed to delete dashboard", err);
+    }
+  };
+
+  const handlePublishDashboard = async (dashboardId) => {
+    try {
+      const published = await publishDashboard(dashboardId);
+      setDashboards((previous) => previous.map((d) => (d.id === published.id ? published : d)));
+    } catch (err) {
+      console.error("Failed to publish dashboard", err);
+    }
+  };
+
+  const handleUnpublishDashboard = async (dashboardId) => {
+    try {
+      const unpublished = await unpublishDashboard(dashboardId);
+      setDashboards((previous) => previous.map((d) => (d.id === unpublished.id ? unpublished : d)));
+    } catch (err) {
+      console.error("Failed to unpublish dashboard", err);
     }
   };
 
@@ -154,6 +182,14 @@ export default function DashboardPage({ onEditorMode }) {
         onSave={handleSaveDashboard}
         onAutoSave={handleAutoSave}
         onDelete={handleDeleteDashboard}
+        onPublish={(published) => {
+          setDashboards((prev) => prev.map((d) => (d.id === published.id ? published : d)));
+          setEditorState((prev) => ({ ...prev, dashboard: published }));
+        }}
+        onUnpublish={(unpublished) => {
+          setDashboards((prev) => prev.map((d) => (d.id === unpublished.id ? unpublished : d)));
+          setEditorState((prev) => ({ ...prev, dashboard: unpublished }));
+        }}
       />
     );
   }
@@ -210,6 +246,8 @@ export default function DashboardPage({ onEditorMode }) {
             onView={() => openViewDashboard(dashboard)}
             onEdit={() => openEditDashboard(dashboard)}
             onDelete={() => handleDeleteDashboard(dashboard.id)}
+            onPublish={() => handlePublishDashboard(dashboard.id)}
+            onUnpublish={() => handleUnpublishDashboard(dashboard.id)}
           />
         ))}
       </div>
