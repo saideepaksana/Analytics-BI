@@ -21,8 +21,13 @@ apiClient.interceptors.request.use((config) => {
   }
 
   if (user) {
-    config.headers['X-User-ID'] = user.email;
-    config.headers['X-User-Role'] = user.role;
+    if (config.headers.set) {
+      config.headers.set('X-User-ID', user.email);
+      config.headers.set('X-User-Role', user.role);
+    } else {
+      config.headers['X-User-ID'] = user.email;
+      config.headers['X-User-Role'] = user.role;
+    }
   }
   return config;
 });

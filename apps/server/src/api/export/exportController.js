@@ -3,9 +3,14 @@ const fs = require("fs");
 const os = require("os");
 const crypto = require("crypto");
 const { ExportLog } = require("../../models/exportLog");
+const Dashboard = require("../../models/Dashboard");
 const { rawExportQueue, dashboardExportQueue } = require("../../jobs/queue");
 const { validateRawExport, validateVisualExport } = require("../../features/export/utils/exportPayloadValidator");
 const { getVisualExportAvailabilityError } = require("../../features/export/utils/visualExportAvailability");
+const dashboardMapper = require("../dashboard/dashboardMapper");
+const { loadDashboard } = require("../dashboard/dashboardService");
+const { isOwnerOrEditor } = require("../../middleware/rbac");
+const embedTokenService = require("../../services/embedTokenService");
 const logger = require("../../core/logger");
 
 const EXPORT_DIR = path.join(os.tmpdir(), "analytics-bi", "exports");
@@ -28,6 +33,13 @@ const buildExportResult = (req, result = {}) => {
         downloadUrl,
         shareUrl: downloadUrl,
     };
+};
+
+const parseExpirationHours = (value) => {
+    if (value === undefined || value === null || value === "") return undefined;
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed <= 0) return undefined;
+    return Math.min(Math.max(parsed, 1), 720);
 };
 
 /**
@@ -188,15 +200,72 @@ async function getExportLog(req, res) {
 
 async function generateEmbedToken(req, res) {
     try {
-        const { datasetId, dashboardId } = req.body;
-        const token = Buffer.from(
-            JSON.stringify({ datasetId, dashboardId, iat: Date.now(), exp: Date.now() + 86400000 })
-        ).toString("base64url");
-        const embedUrl = `${process.env.CLIENT_URL || "http://localhost:5173"}/embed/${dashboardId}?token=${token}`;
+        const { dashboardId, expirationHours, allowedOrigins } = req.body || {};
+
+        if (!dashboardId) {
+            return res.status(400).json({ error: "dashboardId is required." });
+        }
+
+        if (!req.user) {
+            return res.status(401).json({ error: "Authentication required." });
+        }
+
+        const dashboard = await Dashboard.findById(dashboardId).lean();
+        if (!dashboard) {
+            return res.status(404).json({ error: "Dashboard not found." });
+        }
+
+        if (!isOwnerOrEditor(dashboard, req.user)) {
+            return res.status(403).json({ error: "Access denied." });
+        }
+
+        if (dashboard.status !== "published") {
+            return res.status(403).json({ error: "Dashboard is not published." });
+        }
+
+        const normalizedOrigins = embedTokenService.normalizeAllowedOrigins(
+            allowedOrigins ?? process.env.EMBED_ALLOWED_ORIGINS
+        );
+        const expiresInHours = parseExpirationHours(expirationHours);
+        const { token, expiresAt } = embedTokenService.generateToken({
+            dashboardId: String(dashboard._id),
+            userId: req.user.id,
+            scope: "view",
+            expiresInHours,
+            allowedOrigins: normalizedOrigins,
+        });
+
+        const clientUrl = (process.env.CLIENT_URL || "http://localhost:5173").replace(/\/+$/, "");
+        const embedUrl = `${clientUrl}/embed/${dashboardId}?token=${encodeURIComponent(token)}`;
         const iframeSnippet = `<iframe src="${embedUrl}" width="100%" height="600" frameborder="0" allowfullscreen></iframe>`;
-        res.json({ token, embedUrl, iframeSnippet });
+
+        res.json({ token, embedUrl, iframeSnippet, expiresAt });
     } catch (err) {
+        logger.error(`Failed to generate embed token: ${err.message}`, "exportController");
         res.status(500).json({ error: "Failed to generate embed token." });
+    }
+}
+
+async function getEmbeddedDashboard(req, res) {
+    try {
+        const { dashboardId } = req.params;
+        const fullDashboard = await loadDashboard(dashboardId);
+        const dashboard = dashboardMapper.fromDB(fullDashboard);
+
+        res.json({
+            dashboard,
+            charts: fullDashboard.charts || {},
+            filters: dashboard?.filters || {},
+            metadata: {
+                loadedAt: fullDashboard.loadedAt,
+            },
+        });
+    } catch (err) {
+        if (err.message === "Dashboard not found") {
+            return res.status(404).json({ error: "Dashboard not found." });
+        }
+        logger.error(`Failed to load embedded dashboard: ${err.message}`, "exportController");
+        res.status(500).json({ error: "Failed to load embedded dashboard." });
     }
 }
 
@@ -206,5 +275,6 @@ module.exports = {
     getExportStatus,
     downloadExportFile,
     getExportLog,
-    generateEmbedToken
+    generateEmbedToken,
+    getEmbeddedDashboard
 };

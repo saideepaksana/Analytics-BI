@@ -6,8 +6,12 @@ const {
     getExportStatus, 
     downloadExportFile,
     getExportLog, 
-    generateEmbedToken 
+    generateEmbedToken,
+    getEmbeddedDashboard
 } = require("../api/export/exportController");
+const embedTokenAuth = require("../middleware/embedTokenAuth");
+const embedRateLimiter = require("../middleware/embedRateLimiter");
+const embedCors = require("../middleware/embedCors");
 
 // Pipeline A: Raw Data Export
 router.post("/raw", startRawExport);
@@ -22,5 +26,6 @@ router.get("/download/:filename", downloadExportFile);
 // Legacy/Other
 router.get("/:datasetId/log", getExportLog);
 router.post("/embed/token", generateEmbedToken);
+router.get("/embed/:dashboardId", embedTokenAuth, embedRateLimiter, embedCors, getEmbeddedDashboard);
 
 module.exports = router;

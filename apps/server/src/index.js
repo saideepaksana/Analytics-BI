@@ -18,6 +18,12 @@ const annotationsRoutes = require("./api/annotations/annotations.routes");
 const aiRoutes = require("./api/ai/ai.routes");
 const { setIO } = require("./core/socket");
 const logger = require("./core/logger");
+let configureEmbedSocket = null;
+try {
+  ({ configureEmbedSocket } = require("./core/embedSocket"));
+} catch (error) {
+  logger.warn(`Embed socket disabled: ${error.message}`, "Server");
+}
 const { idempotencyMiddleware } = require("./core/middleware/idempotencyMiddleware");
 const authMiddleware = require("./middleware/auth");
 const { requestLoggingMiddleware } = require("./core/middleware/requestLogger");
@@ -78,8 +84,9 @@ mongoose.connection.once("open", async () => {
 //middleware
 app.use(securityHeaders);
 app.use(permissionsPolicy);
-const CORS_WHITELIST = (process.env.CORS_ORIGIN || 'http://localhost:5173')
-  .split(',')
+const corsOrigins = process.env.CORS_ORIGIN || "http://localhost:5173";
+const embedOrigins = process.env.EMBED_ALLOWED_ORIGINS || "";
+const CORS_WHITELIST = [...corsOrigins.split(","), ...embedOrigins.split(",")]
   .map((o) => o.trim())
   .filter(Boolean);
 app.use(
@@ -113,6 +120,9 @@ const io = new Server(server, {
 });
 
 setIO(io);
+if (typeof configureEmbedSocket === "function") {
+  configureEmbedSocket(io);
+}
 
 io.on("connection", (socket) => {
   socket.on("upload:subscribe", ({ uploadId } = {}) => {

@@ -114,6 +114,7 @@ export default function DashboardPage({ onEditorMode }) {
   const closeEditor = () => {
     setSaveError(null);
     setEditorState({ mode: null, dashboard: null });
+    loadData();
   };
 
   const handleDeleteDashboard = async (dashboardId) => {
@@ -228,8 +229,12 @@ export default function DashboardPage({ onEditorMode }) {
           <div className="empty-charts-icon">
             <LayoutDashboard size={64} opacity={0.8} />
           </div>
-          <h2>No dashboards created yet</h2>
-          <p>Create dashboard galleries from your saved charts and resize each panel to fit your analysis.</p>
+          <h2>No dashboards found</h2>
+          <p>
+            {canCreateDashboard() 
+              ? "Create your first dashboard to get started with your data visualization journey."
+              : "There are no public dashboards available at the moment."}
+          </p>
           {canCreateDashboard() && (
             <button className="create-chart-btn" onClick={openNewDashboard}>
               <PlusCircle size={20} />

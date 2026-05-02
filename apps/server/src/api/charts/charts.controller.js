@@ -14,9 +14,11 @@ const canDeleteChart = isOwnerOrEditor;
  */
 exports.listCharts = async (req, res) => {
   try {
-    const limit = Math.min(parseInt(req.query.limit, 10) || 20, 200);
+    const limit = Math.min(parseInt(req.query.limit, 10) || 1000, 2000);
     const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
     const datasetId = String(req.query.datasetId || "").trim();
+
+    logger.info(`Listing charts for user: ${req.user?.id || 'anonymous'}`, "ChartsController");
 
     const filter = {};
     if (datasetId) {

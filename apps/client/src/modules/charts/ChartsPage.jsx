@@ -133,7 +133,7 @@ export default function ChartsPage({ onExploreMode }) {
           </div>
           <h2>No charts created yet</h2>
           <p>
-            Create your first data visualization by selecting a dataset and 
+            Create your first data visualization by selecting a dataset and
             configuring your chart settings.
           </p>
           {canCreateChart() && (
@@ -164,9 +164,9 @@ export default function ChartsPage({ onExploreMode }) {
 
       <div className="charts-grid">
         {charts.map((chart) => (
-          <ChartCard 
-            key={chart.chartId || chart._id} 
-            chart={chart} 
+          <ChartCard
+            key={chart.chartId || chart._id}
+            chart={chart}
             onDelete={() => handleDeleteChart(chart.chartId || chart._id)}
             onView={() => setViewChart(chart)}
             onEdit={() => setExploreChartId(chart.chartId || chart._id)}

@@ -4,6 +4,7 @@ const SchemaValidator = require('../../core/SchemaValidator');
 const dashboardStateSchema = require('./dashboardState.schema');
 const { loadDashboard, refreshDashboardCache } = require('./dashboardService');
 const { isOwnerOrEditor } = require('../../middleware/rbac');
+const { emitEmbedEvent } = require('../../core/embedSocket');
 
 // Alias for readability within this controller
 const canEditDashboard = isOwnerOrEditor;
@@ -292,6 +293,11 @@ exports.refreshDashboard = async (req, res) => {
     try {
         const { dashboardId } = req.params;
         await refreshDashboardCache(dashboardId);
+        emitEmbedEvent(dashboardId, "dashboard:data-update", {
+            dashboardId,
+            refreshedAt: new Date().toISOString(),
+            reason: "manual-refresh",
+        });
         return res.json({ message: 'Dashboard cache refreshed' });
     } catch (error) {
         return res.status(500).json({ message: 'Internal server error' });
