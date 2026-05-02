@@ -5,6 +5,7 @@ import { useExportStatus } from "../../../hooks/useExportStatus";
 import { buildChartQueryForExport, buildChartRawExportPayload, mergeNormalizedFilters } from "../../../services/export.service";
 import ChartPreview from "../../charts/components/ChartPreview";
 import { queryDataset } from "../../../services/charts.service";
+import * as annotationsService from "../../../services/annotations.service";
 import { canEditDashboard, canPublishDashboard } from "../../../core/utils/permissions";
 import { saveDraft as saveDraftService, publishDashboard as publishDashboardService } from "../../../services/dashboard.service";
 
@@ -568,7 +569,7 @@ function DashboardWidget({
   );
 }
 
-export default function DashboardEditor({ mode, dashboard, charts, saving, onBack, onSave, onAutoSave, onPublish, onUnpublish }) {
+export default function DashboardEditor({ mode, dashboard, charts, saving, saveError, onClearSaveError, onBack, onSave, onAutoSave, onPublish, onUnpublish }) {
   const frozenExportState = useMemo(() => getFrozenExportState(), []);
   const frozenState = frozenExportState.state;
   const isNewOrEmpty = !dashboard?.id || (Array.isArray(dashboard?.widgets) && dashboard.widgets.length === 0);
@@ -1126,6 +1127,7 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
   };
 
   const submitSave = async () => {
+    onClearSaveError?.();
     setSavingLocal(true);
     let thumbnail = dashboard?.thumbnail || null;
 
@@ -1186,21 +1188,25 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
       setActiveTabId(originalTabId);
     }
 
-    onSave({
-      id: dashboard?.id,
-      name: name.trim(),
-      tabs,
-      activeTabId,
-      thumbnail
-    });
+    try {
+      await onSave({
+        id: dashboard?.id,
+        name: name.trim(),
+        tabs,
+        activeTabId,
+        thumbnail
+      });
 
-    lastStateRef.current = {
-      name: name.trim(),
-      tabs: JSON.stringify(tabs),
-      activeTabId,
-    };
-
-    setSavingLocal(false);
+      lastStateRef.current = {
+        name: name.trim(),
+        tabs: JSON.stringify(tabs),
+        activeTabId,
+      };
+    } catch (err) {
+      console.error("Error saving dashboard:", err);
+    } finally {
+      setSavingLocal(false);
+    }
   };
 
   const handleExport = (format) => {
@@ -1370,9 +1376,16 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, onBac
                   {savingDraft ? 'Saving...' : 'Save Draft'}
                 </button>
               )}
-              <button type="button" className="dashboard-primary-btn" onClick={submitSave} disabled={isSaving}>
-                {isSaving ? <Loader2 size={14} className="spinner" /> : 'Save'}
-              </button>
+              <div className="dashboard-save-action">
+                <button type="button" className="dashboard-primary-btn" onClick={submitSave} disabled={isSaving}>
+                  {isSaving ? <Loader2 size={14} className="spinner" /> : 'Save'}
+                </button>
+                {saveError ? (
+                  <div className="dashboard-save-error" role="status">
+                    {saveError}
+                  </div>
+                ) : null}
+              </div>
               {/* Publish button – available for editors/owners with a saved dashboard */}
               {dashboard?.id && canPublishDashboard(dashboard) && dashboard?.status !== 'published' && (
                 <button

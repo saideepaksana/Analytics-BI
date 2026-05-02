@@ -253,6 +253,29 @@
 .dashboard-editor-actions {
   display: flex;
   gap: 10px;
+  align-items: center;
+}
+
+.dashboard-save-action {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.dashboard-save-error {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  max-width: 260px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  background: rgba(127, 29, 29, 0.92);
+  color: #fee2e2;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+  z-index: 5;
 }
 
 .dashboard-secondary-btn,

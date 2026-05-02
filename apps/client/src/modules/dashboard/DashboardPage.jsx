@@ -23,7 +23,8 @@ export default function DashboardPage({ onEditorMode }) {
   const [dashboards, setDashboards] = useState([]);
   const [charts, setCharts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [loadError, setLoadError] = useState(null);
+  const [saveError, setSaveError] = useState(null);
   const [saving, setSaving] = useState(false);
   const [editorState, setEditorState] = useState({ mode: null, dashboard: null });
 
@@ -36,9 +37,9 @@ export default function DashboardPage({ onEditorMode }) {
       ]);
       setDashboards(loadedDashboards);
       setCharts(loadedCharts);
-      setError(null);
+      setLoadError(null);
     } catch (err) {
-      setError("Failed to load dashboards. Please refresh.");
+      setLoadError("Failed to load dashboards. Please refresh.");
       console.error(err);
     } finally {
       setLoading(false);
@@ -73,6 +74,7 @@ export default function DashboardPage({ onEditorMode }) {
   const activeDashboard = useMemo(() => editorState.dashboard || EMPTY_DRAFT, [editorState.dashboard]);
 
   const openNewDashboard = () => {
+    setSaveError(null);
     setEditorState({ mode: "edit", dashboard: { ...EMPTY_DRAFT } });
   };
 
@@ -82,6 +84,7 @@ export default function DashboardPage({ onEditorMode }) {
         ? dashboard.tabs[0].id
         : dashboard?.activeTabId;
 
+    setSaveError(null);
     setEditorState({
       mode: "view",
       dashboard: {
@@ -97,6 +100,7 @@ export default function DashboardPage({ onEditorMode }) {
         ? dashboard.tabs[0].id
         : dashboard?.activeTabId;
 
+    setSaveError(null);
     setEditorState({
       mode: "edit",
       dashboard: {
@@ -107,6 +111,7 @@ export default function DashboardPage({ onEditorMode }) {
   };
 
   const closeEditor = () => {
+    setSaveError(null);
     setEditorState({ mode: null, dashboard: null });
   };
 
@@ -161,10 +166,11 @@ export default function DashboardPage({ onEditorMode }) {
         savedDashboard = await createDashboard(payload);
         setDashboards((previous) => [savedDashboard, ...previous]);
       }
+      setSaveError(null);
       setEditorState({ mode: "view", dashboard: savedDashboard });
     } catch (err) {
       console.error("Failed to save dashboard", err);
-      setError("Unable to save dashboard. Try again.");
+      setSaveError("Unable to save dashboard. Try again.");
     } finally {
       setSaving(false);
     }
@@ -178,6 +184,8 @@ export default function DashboardPage({ onEditorMode }) {
         dashboard={activeDashboard}
         charts={charts}
         saving={saving}
+        saveError={saveError}
+        onClearSaveError={() => setSaveError(null)}
         onBack={closeEditor}
         onSave={handleSaveDashboard}
         onAutoSave={handleAutoSave}
@@ -235,7 +243,7 @@ export default function DashboardPage({ onEditorMode }) {
         )}
       </div>
 
-      {error ? <div className="page-error">{error}</div> : null}
+      {loadError ? <div className="page-error">{loadError}</div> : null}
 
       <div className="dashboards-grid charts-grid">
         {dashboards.map((dashboard) => (

@@ -74,6 +74,8 @@ export const createDashboard = async (payload = {}) => {
   const response = await apiClient.post('/dashboards', {
     title: name,
     description: payload.description?.trim() || "",
+    tabs,
+    activeTabId,
     _rawFrontendState: rawFrontendState
   });
 

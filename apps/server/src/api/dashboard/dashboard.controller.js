@@ -15,8 +15,10 @@ exports.listDashboards = async (req, res) => {
         const user = req.user;
         let filter = {};
         
-        // If user is authenticated, show their own drafts plus all published
-        if (user && user.role !== 'viewer') {
+        // Admins can see everything; editors see published + their own drafts
+        if (user && user.role === 'admin') {
+            filter = {};
+        } else if (user && user.role !== 'viewer') {
             // Show all published + user's own drafts
             filter = {
                 $or: [
@@ -42,18 +44,27 @@ exports.listDashboards = async (req, res) => {
 /** POST /api/dashboards */
 exports.createDashboard = async (req, res) => {
     try {
-        const { title = 'New Dashboard', description = '', tags = [], layout = [], _rawFrontendState = null } = req.body;
-        const dashboard = await Dashboard.create({
+        const { title = 'New Dashboard', description = '', tags = [], layout = [], tabs = [], activeTabId = null, _rawFrontendState = null } = req.body;
+        
+        // Use mapper to ensure all fields are properly validated and saved
+        const mappedData = dashboardMapper.toDB({
             title,
             description,
             tags,
             layout,
+            tabs: Array.isArray(tabs) && tabs.length > 0 ? tabs : [],
+            activeTabId,
             _rawFrontendState,
+        });
+        
+        const dashboard = await Dashboard.create({
+            ...mappedData,
             createdBy: req.user?.id || 'anonymous',
         });
         return res.status(201).json({ dashboard: dashboardMapper.fromDB(dashboard.toJSON()) });
     } catch (error) {
-        return res.status(500).json({ message: 'Internal server error' });
+        console.error('Error creating dashboard:', error);
+        return res.status(500).json({ message: 'Internal server error', detail: error.message });
     }
 };
 
@@ -309,13 +320,16 @@ exports.publishDashboard = async (req, res) => {
         };
 
         // If there's draft state, copy it to live
-        if (dashboard.draftState) {
-            updateData.layout = dashboard.draftState.layout || dashboard.layout;
-            updateData.tabs = dashboard.draftState.tabs || dashboard.tabs;
-            updateData.activeTabId = dashboard.draftState.activeTabId || dashboard.activeTabId;
-            updateData._rawFrontendState = dashboard.draftState;
-            updateData.filters = dashboard.draftState.filters || dashboard.filters;
-            updateData.draftState = null; // Clear draft after publishing
+        if (dashboard.draftState && typeof dashboard.draftState === 'object') {
+            const normalizedDraft = { ...dashboard.draftState };
+            if (normalizedDraft.name && !normalizedDraft.title) {
+                normalizedDraft.title = normalizedDraft.name;
+            }
+            const mappedDraft = dashboardMapper.toDB(normalizedDraft);
+            Object.assign(updateData, mappedDraft, {
+                _rawFrontendState: normalizedDraft,
+                draftState: null, // Clear draft after publishing
+            });
         }
 
         const updatedDashboard = await Dashboard.findByIdAndUpdate(
@@ -400,15 +414,30 @@ exports.saveDraft = async (req, res) => {
         }
 
         const { draftState } = req.body;
-        
+        if (draftState !== undefined && draftState !== null && typeof draftState !== 'object') {
+            return res.status(400).json({ message: 'draftState must be an object when provided' });
+        }
+
+        const normalizedDraft = draftState ? { ...draftState } : null;
+        if (normalizedDraft?.name && !normalizedDraft.title) {
+            normalizedDraft.title = normalizedDraft.name;
+        }
+        const mappedDraft = normalizedDraft ? dashboardMapper.toDB(normalizedDraft) : null;
+
+        const setObj = {
+            draftState: normalizedDraft || null,
+            updatedBy: req.user?.id || 'anonymous',
+        };
+
+        // If the dashboard is already a draft, keep the primary fields in sync.
+        if (dashboard.status === 'draft' && mappedDraft) {
+            Object.assign(setObj, mappedDraft, { _rawFrontendState: normalizedDraft });
+        }
+
         const updatedDashboard = await Dashboard.findByIdAndUpdate(
             dashboardId,
             { 
-                $set: { 
-                    draftState: draftState || null,
-                    status: 'draft',
-                    updatedBy: req.user?.id || 'anonymous'
-                }, 
+                $set: setObj, 
                 $inc: { __v: 1 } 
             },
             { returnDocument: 'after', runValidators: true }

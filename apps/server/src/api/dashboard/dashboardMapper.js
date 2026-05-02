@@ -79,6 +79,22 @@ function fromDB(dbDoc = {}) {
     }
   }
 
+  if (dbDoc.status === 'draft' && dbDoc.draftState && typeof dbDoc.draftState === 'object') {
+    const draftState = { ...dbDoc.draftState };
+    if (draftState.name && !draftState.title) {
+      draftState.title = draftState.name;
+    }
+    return {
+      ...normalized,
+      ...draftState,
+      status: normalized.status,
+      _id: normalized._id,
+      __v: normalized.__v,
+      updatedAt: normalized.updatedAt,
+      createdAt: normalized.createdAt,
+    };
+  }
+
   if (dbDoc._rawFrontendState) {
     return {
       ...dbDoc._rawFrontendState,

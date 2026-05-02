@@ -190,8 +190,11 @@ const SQL_PATTERNS = [
 // NoSQL injection operators (MongoDB)
 const NOSQL_PATTERNS = /\$where|\$regex|\$gt|\$lt|\$ne|\$in|\$nin|\$exists/;
 
+const DATA_URL_PATTERN = /^data:[a-z]+\/[a-z0-9+.-]+;base64,/i;
+
 const detectSqlInjection = (value) => {
   if (typeof value !== 'string') return false;
+  if (DATA_URL_PATTERN.test(value)) return false;
   return SQL_PATTERNS.some((p) => p.test(value));
 };
 
