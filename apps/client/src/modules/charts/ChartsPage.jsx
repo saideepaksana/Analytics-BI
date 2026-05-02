@@ -206,6 +206,7 @@ export default function ChartsPage({ onExploreMode }) {
                   dimensions={viewChart.query?.dimensions?.map((d) => d.field || d) || []}
                   measures={viewChart.query?.measures || []}
                   style={viewChart.style}
+                  title={viewChart.name}
                 />
               )}
             </div>

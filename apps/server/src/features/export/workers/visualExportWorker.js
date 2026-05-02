@@ -16,9 +16,11 @@ const logger = require("../../../core/logger");
 // Namespacing: /tmp/exports/visual
 const EXPORT_DIR = path.join(os.tmpdir(), "analytics-bi", "exports", "visual");
 const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:5173";
-// Visual export captures the rendered dashboard canvas grid.
+// Visual export captures the rendered dashboard widgets only.
 const EXPORT_SELECTOR = ".dashboard-canvas-grid";
-const PDF_MARGIN = 20;
+const WIDGET_CROP_PADDING = 0;
+const PDF_MARGIN = 0;
+const PX_TO_PT = 0.75;
 
 const waitForStream = (stream) => {
     return new Promise((resolve, reject) => {
@@ -28,26 +30,42 @@ const waitForStream = (stream) => {
 };
 
 const getExportBounds = async (page) => {
-    return page.evaluate((selector) => {
+    return page.evaluate((selector, padding) => {
         const element = document.querySelector(selector);
         if (!element) return { x: 0, y: 0, width: 1280, height: 800 };
-        
+
         const rect = element.getBoundingClientRect();
-        const widgets = Array.from(element.querySelectorAll('.dashboard-widget'));
-        
-        let contentHeight = rect.height;
-        if (widgets.length > 0) {
-            // After height injection, the rect.height should already be the tight content height
-            contentHeight = rect.height;
+        const widgets = Array.from(element.querySelectorAll(".dashboard-widget"));
+
+        if (widgets.length === 0) {
+            return {
+                x: Math.max(0, Math.floor(rect.left + window.scrollX)),
+                y: Math.max(0, Math.floor(rect.top + window.scrollY)),
+                width: Math.max(1, Math.ceil(rect.width)),
+                height: Math.max(1, Math.ceil(rect.height)),
+            };
         }
 
-        return {
-            x: Math.max(0, Math.floor(rect.left + window.scrollX)),
-            y: Math.max(0, Math.floor(rect.top + window.scrollY)),
-            width: Math.max(1, Math.ceil(rect.width)),
-            height: Math.max(1, Math.ceil(contentHeight)),
-        };
-    }, EXPORT_SELECTOR);
+        let minLeft = Number.POSITIVE_INFINITY;
+        let minTop = Number.POSITIVE_INFINITY;
+        let maxRight = Number.NEGATIVE_INFINITY;
+        let maxBottom = Number.NEGATIVE_INFINITY;
+
+        widgets.forEach((widget) => {
+            const r = widget.getBoundingClientRect();
+            minLeft = Math.min(minLeft, r.left);
+            minTop = Math.min(minTop, r.top);
+            maxRight = Math.max(maxRight, r.right);
+            maxBottom = Math.max(maxBottom, r.bottom);
+        });
+
+        const x = Math.max(0, Math.floor(minLeft + window.scrollX - padding));
+        const y = Math.max(0, Math.floor(minTop + window.scrollY - padding));
+        const width = Math.max(1, Math.ceil(maxRight - minLeft + padding * 2));
+        const height = Math.max(1, Math.ceil(maxBottom - minTop + padding * 2));
+
+        return { x, y, width, height };
+    }, EXPORT_SELECTOR, WIDGET_CROP_PADDING);
 };
 
 /**
@@ -56,16 +74,11 @@ const getExportBounds = async (page) => {
  */
 const appendTabToPdf = async (page, pdfDoc, job, tabIndex, totalTabs, tabName) => {
     const bounds = await getExportBounds(page);
-    
-    const pageWidth = 841.89; // A4 Landscape width in pts
-    const pageHeight = 595.28; // A4 Landscape height in pts
-    const usableWidth = pageWidth - (PDF_MARGIN * 2);
-    // Reserve space for the header if it's the first slice of the tab
-    const headerHeight = 30;
-    const usableHeight = pageHeight - (PDF_MARGIN * 2);
-    
-    const sliceHeight = Math.max(1, Math.floor(bounds.width * (usableHeight / usableWidth)));
-    const totalSlices = Math.max(1, Math.ceil(bounds.height / sliceHeight));
+
+    const pageWidthPt = Math.max(1, Math.ceil(bounds.width * PX_TO_PT));
+    const pageHeightPt = Math.max(1, Math.ceil(bounds.height * PX_TO_PT));
+    const totalSlices = 1;
+    const sliceHeight = bounds.height;
 
     for (let sliceIndex = 0; sliceIndex < totalSlices; sliceIndex += 1) {
         const yOffset = sliceIndex * sliceHeight;
@@ -83,28 +96,15 @@ const appendTabToPdf = async (page, pdfDoc, job, tabIndex, totalTabs, tabName) =
         });
 
         pdfDoc.addPage({
-            size: "A4",
-            layout: "landscape",
+            size: [pageWidthPt, pageHeightPt],
             margin: PDF_MARGIN,
         });
 
-        let currentY = PDF_MARGIN;
-        
-        // Add tab name as header on the first slice of each tab
-        if (sliceIndex === 0 && tabName) {
-            pdfDoc
-                .fillColor("#0f172a")
-                .font("Helvetica-Bold")
-                .fontSize(18)
-                .text(tabName, PDF_MARGIN, currentY);
-            currentY += headerHeight;
-        }
+        const renderedWidth = pageWidthPt;
+        const renderedHeight = Math.max(1, Math.floor(clipHeight * PX_TO_PT));
 
-        const availableImageHeight = pageHeight - currentY - PDF_MARGIN;
-        const renderedHeight = Math.min(availableImageHeight, (clipHeight * usableWidth) / bounds.width);
-        
-        pdfDoc.image(imageBuffer, PDF_MARGIN, currentY, {
-            width: usableWidth,
+        pdfDoc.image(imageBuffer, 0, 0, {
+            width: renderedWidth,
             height: renderedHeight,
         });
 
@@ -195,7 +195,7 @@ const writeDashboardPdf = async (page, filePath, job) => {
 };
 
 const runVisualExport = async (job) => {
-    const { dashboardId, format, frozenState, userId, userRole } = job.data;
+    const { dashboardId, format, frozenState, userId, userRole, exportTheme } = job.data;
     const jobId = job.id;
     const isAdmin = userRole === "admin";
     
@@ -301,27 +301,32 @@ const runVisualExport = async (job) => {
             logger.warn(`Render signal timeout for ${filename}. Proceeding with partial render.`, "VisualExportWorker");
         }
 
-        // Apply styles and theme AFTER navigation and render complete
-        await page.evaluate(() => {
-            document.documentElement.setAttribute("data-theme", "light");
-        });
+        const resolvedTheme = exportTheme || "dark";
 
-        // Inject styles to fix dark theme bleeding and hide UI elements
+        // Apply styles and theme AFTER navigation and render complete
+        await page.evaluate((theme) => {
+            document.documentElement.setAttribute("data-theme", theme);
+        }, resolvedTheme);
+
+        // Inject styles to hide UI elements and prevent borders/shadows in exports
         await page.addStyleTag({
             content: `
-                .dashboard-editor-page, 
-                .dashboard-canvas-wrapper, 
-                .dashboard-canvas-grid, 
-                .dashboard-widget {
-                    background: #ffffff !important;
-                    background-color: #ffffff !important;
-                    color: #000000 !important;
+                html, body {
+                    background: #0b0f19 !important;
                 }
-                .dashboard-editor-topbar, 
+                .dashboard-canvas-wrapper,
+                .dashboard-canvas-grid {
+                    background: #0b0f19 !important;
+                }
+                .dashboard-canvas-wrapper {
+                    padding: 0 !important;
+                }
+                .dashboard-editor-topbar,
                 .dashboard-tabs-bar {
                     display: none !important;
                 }
-                .dashboard-canvas-grid {
+                .dashboard-canvas-grid,
+                .dashboard-widget {
                     border: none !important;
                     box-shadow: none !important;
                 }

@@ -651,19 +651,55 @@
 
 .dashboard-widget {
   position: absolute;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--surface);
-  box-shadow: var(--shadow-card);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0;
+  background: #000;
+  box-shadow: 0 12px 28px -14px rgba(0, 0, 0, 0.45);
+  padding: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   transition: all 0.2s cubic-bezier(0.2, 0, 0.2, 1);
 }
 
+.dashboard-widget:hover {
+  border-color: rgba(59, 130, 246, 0.45);
+  background: rgba(255, 255, 255, 0.05);
+  transform: translateY(-2px);
+  box-shadow: 0 18px 36px -14px rgba(0, 0, 0, 0.55);
+}
+
 .export-mode .dashboard-widget {
   box-shadow: none !important;
   border-color: var(--border-strong) !important;
+}
+
+.export-mode .dashboard-widget-header {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  right: 12px;
+  padding: 0;
+  justify-content: center;
+  background: transparent;
+  pointer-events: none;
+}
+
+.export-mode .dashboard-widget-title-wrap {
+  width: 100%;
+  justify-content: center;
+}
+
+.export-mode .dashboard-widget-title-wrap h5 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  text-align: center;
+  max-width: 92%;
+}
+
+.export-mode .dashboard-widget-body {
+  padding-top: 28px;
 }
 
 .dashboard-widget.is-dragging,
@@ -687,7 +723,7 @@
 
 .dashboard-widget-header {
   position: relative;
-  padding: 10px 14px;
+  padding: 8px 10px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -705,6 +741,8 @@
   gap: 6px;
   color: var(--text);
   min-width: 0;
+  flex: 1;
+  justify-content: center;
 }
 
 .dashboard-widget-drag-handle {
@@ -714,6 +752,8 @@
   justify-content: center;
   padding: 0;
   margin: 0;
+  position: absolute;
+  left: 12px;
 }
 
 .dashboard-widget-title-wrap h5 {
@@ -723,25 +763,30 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  text-align: center;
+  width: 100%;
 }
 
 .dashboard-widget-actions {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
+  position: relative;
+  right: 0;
 }
 
 .dashboard-widget-icon-btn {
-  border: 1px solid rgba(148, 163, 184, 0.26);
-  width: 22px;
-  height: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  width: 30px;
+  height: 30px;
   display: grid;
   place-items: center;
   padding: 0;
-  border-radius: 4px;
-  background: transparent;
-  color: #92a0b9;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #94a3b8;
   cursor: pointer;
+  transition: all 0.2s ease;
 }
 
 .dashboard-widget-icon-btn.subtle {
@@ -804,14 +849,19 @@
 }
 
 .dashboard-widget-icon-btn:hover {
-  border-color: rgba(148, 163, 184, 0.48);
-  background: rgba(148, 163, 184, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
 }
 
 .dashboard-widget-body {
   flex: 1;
   min-height: 0;
   overflow: hidden;
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+  margin-bottom: 0;
 }
 
 .dashboard-widget-body .chart-preview-wrapper {

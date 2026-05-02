@@ -57,6 +57,8 @@ export default function QueryPanel({
   onColorSchemeChange,
   showLabels = false,
   onToggleLabels,
+  showTitle = false,
+  onToggleTitle,
   // Distribution chart specific
   binSize = 10,
   onSetBinSize,
@@ -410,6 +412,18 @@ export default function QueryPanel({
                 className={`toggle-switch ${showLegend ? "on" : ""}`}
                 onClick={onToggleLegend}
                 aria-label="Toggle chart legend"
+              />
+            </div>
+
+            <div className="customize-toggle">
+              <div className="customize-toggle-copy">
+                <label>Show Title</label>
+                <span>Display the chart title inside the visualization.</span>
+              </div>
+              <button
+                className={`toggle-switch ${showTitle ? "on" : ""}`}
+                onClick={onToggleTitle}
+                aria-label="Toggle chart title"
               />
             </div>
 

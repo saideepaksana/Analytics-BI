@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { Edit2, Eye, Trash2, Loader2, Download, FileSpreadsheet, FileText } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { Edit2, Eye, Trash2, Loader2, Download, FileSpreadsheet, FileText, Image as ImageIcon } from "lucide-react";
 import ChartPreview from "./components/ChartPreview";
 import { queryDataset } from "../../services/charts.service";
 import { useExportStatus } from "../../hooks/useExportStatus";
@@ -14,6 +14,7 @@ export default function ChartCard({ chart, onDelete, onEdit, onView }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const chartInstanceRef = useRef(null);
   const { status, progress, error: exportError, startExport, download, isBusy, isComplete } = useExportStatus();
 
   const datasetId = chart.dataSource?.datasetId || chart.datasetId;
@@ -79,6 +80,35 @@ export default function ChartCard({ chart, onDelete, onEdit, onView }) {
     setShowExportMenu(false);
   };
 
+  const handleExportPng = () => {
+    const chartInstance = chartInstanceRef.current;
+    if (!chartInstance) return;
+
+    const themeBg = getComputedStyle(document.body)
+      .getPropertyValue("--bg-main")
+      .trim() || "#0b0f19";
+
+    const dataUrl = chartInstance.getDataURL({
+      type: "png",
+      pixelRatio: 2,
+      backgroundColor: themeBg,
+    });
+
+    const safeName = String(chart?.name || "chart")
+      .trim()
+      .replace(/[^a-zA-Z0-9_-]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 80) || "chart";
+
+    const link = document.createElement("a");
+    link.href = dataUrl;
+    link.download = `${safeName}.png`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setShowExportMenu(false);
+  };
+
   return (
     <div className="chart-card">
       <div className="chart-card-header">
@@ -105,6 +135,8 @@ export default function ChartCard({ chart, onDelete, onEdit, onView }) {
             style={chart.style}
             binSize={chart.visualization?.binSize}
             stacking={chart.visualization?.series?.stack || false}
+            title={chart.name}
+            onChartReady={(instance) => { chartInstanceRef.current = instance; }}
           />
         )}
       </div>
@@ -126,6 +158,9 @@ export default function ChartCard({ chart, onDelete, onEdit, onView }) {
           
           {showExportMenu && (
             <div className="export-dropdown">
+              <button onClick={handleExportPng} disabled={!chartInstanceRef.current || loading}>
+                <ImageIcon size={14} /> PNG
+              </button>
               <button onClick={() => handleExport("csv")}>
                 <FileText size={14} /> CSV
               </button>

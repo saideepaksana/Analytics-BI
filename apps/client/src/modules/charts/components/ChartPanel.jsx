@@ -24,6 +24,9 @@ export default function ChartPanel({
   binSize = 10,
   stacking = false,
   showLabels = false,
+  showTitle = true,
+  chartTitle = "",
+  onChartReady,
 }) {
   const [bottomTab, setBottomTab] = useState("results");
   const echartsRef = useRef(null);
@@ -67,6 +70,16 @@ export default function ChartPanel({
     }
 
     const colors = [...colorPalette, "#ec4899", "#06b6d4"];
+    const titleText = showTitle ? String(chartTitle || "").trim() : "";
+    const titleOption = titleText
+      ? {
+          text: titleText,
+          left: "center",
+          top: 6,
+          textStyle: { color: "#e2e8f0", fontSize: 14, fontWeight: 600 },
+        }
+      : null;
+    const gridTop = titleText ? "16%" : "10%";
     const darkTooltip = {
       backgroundColor: "rgba(15, 23, 42, 0.95)",
       borderColor: "#1e293b",
@@ -124,8 +137,9 @@ export default function ChartPanel({
 
       return {
         backgroundColor: "transparent",
+        title: titleOption,
         tooltip: { ...darkTooltip, trigger: "item" },
-        grid: { top: "10%", left: "10%", right: "10%", bottom: "15%", containLabel: true },
+        grid: { top: gridTop, left: "10%", right: "10%", bottom: "15%", containLabel: true },
         xAxis: {
           type: "category",
           data: axisData,
@@ -208,8 +222,9 @@ export default function ChartPanel({
 
       return {
         backgroundColor: "transparent",
+        title: titleOption,
         tooltip: { ...darkTooltip, trigger: "axis" },
-        grid: { top: "10%", left: "10%", right: "10%", bottom: "15%", containLabel: true },
+        grid: { top: gridTop, left: "10%", right: "10%", bottom: "15%", containLabel: true },
         xAxis: {
           type: "category",
           data: binLabels,
@@ -245,12 +260,13 @@ export default function ChartPanel({
 
       return {
         backgroundColor: "transparent",
+        title: titleOption,
         tooltip: {
           ...darkTooltip,
           trigger: "item",
           formatter: (p) => `${xField}: ${p.value[0]}<br/>${yField}: ${p.value[1]}`,
         },
-        grid: { top: "10%", left: "3%", right: "4%", bottom: "8%", containLabel: true },
+        grid: { top: titleText ? "16%" : "10%", left: "3%", right: "4%", bottom: "8%", containLabel: true },
         xAxis: {
           type: "value",
           name: xField,
@@ -305,6 +321,7 @@ export default function ChartPanel({
       const valField = metrics[0]?.label || metrics[0]?.field || Object.keys(data[0]).find((k) => k !== catField);
       return {
         backgroundColor: "transparent",
+        title: titleOption,
         tooltip: { ...darkTooltip, trigger: "item" },
         legend: {
           show: showLegend,
@@ -391,6 +408,7 @@ export default function ChartPanel({
 
     return {
       backgroundColor: "transparent",
+      title: titleOption,
       tooltip: { ...darkTooltip, trigger: "axis" },
       legend: {
         show: showLegend,
@@ -399,7 +417,7 @@ export default function ChartPanel({
         type: "scroll",
       },
       grid: {
-        top: "8%",
+        top: titleText ? "16%" : "8%",
         left: "3%",
         right: "4%",
         bottom: metrics.length > 1 ? "14%" : "8%",
@@ -463,6 +481,7 @@ export default function ChartPanel({
               style={{ height: "100%", width: "100%" }}
               notMerge={true}
               lazyUpdate={true}
+              onChartReady={onChartReady}
             />
           </div>
         ) : (

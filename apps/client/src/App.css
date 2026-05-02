@@ -622,8 +622,8 @@
   box-shadow: none !important;
   border: none !important;
   width: 100%;
-  max-width: 1200px;
-  margin: 0 auto;
+  max-width: none;
+  margin: 0;
 }
 
 /* Hide all interactive/UI elements during export */

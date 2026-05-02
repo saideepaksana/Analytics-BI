@@ -1,15 +1,24 @@
 import React, { useMemo } from "react";
 import ReactECharts from "echarts-for-react";
 
-const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style = {}, annotations = [], isPreview = false, binSize = 10, stacking = false, onRenderComplete }) => {
+const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style = {}, annotations = [], isPreview = false, binSize = 10, stacking = false, onRenderComplete, onChartReady, title }) => {
   const option = useMemo(() => {
+    const rootStyle = typeof window !== "undefined" ? getComputedStyle(document.documentElement) : null;
+    const getThemeVar = (name, fallback) => (rootStyle?.getPropertyValue(name).trim() || fallback);
+    const textPrimary = getThemeVar("--text", "#e2e8f0");
+    const textSecondary = getThemeVar("--text-secondary", "#94a3b8");
+    const muted = getThemeVar("--muted", "#94a3b8");
+    const borderStrong = getThemeVar("--border-strong", "rgba(148, 163, 184, 0.4)");
+    const borderColor = getThemeVar("--border", "rgba(148, 163, 184, 0.2)");
+    const surface = getThemeVar("--surface", "#0f172a");
+
     if (!data || data.length === 0) {
       return {
         title: {
           text: "No data available for the current selection",
           left: "center",
           top: "center",
-          textStyle: { color: "#94a3b8" }
+          textStyle: { color: textSecondary }
         }
       };
     }
@@ -17,10 +26,22 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
     const colors = style.colorPalette || ["#6366f1", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6"];
     const getMeasureKey = (m = {}) => m.label || (m.field === "*" ? "COUNT(*)" : m.field);
     const darkTooltip = {
-      backgroundColor: "rgba(15, 23, 42, 0.9)",
-      borderColor: "#1e293b",
-      textStyle: { color: "#f8fafc" }
+      backgroundColor: surface,
+      borderColor: borderColor,
+      textStyle: { color: textPrimary }
     };
+    const hideXAxis = style.hideXAxis === true;
+    const showLegend = style.showLegend !== false && style.hideLegend !== true;
+    const titleText = String(title || "").trim();
+    const titleOption = titleText
+      ? {
+          text: titleText,
+          left: "center",
+          top: 6,
+          textStyle: { color: textPrimary, fontSize: 14, fontWeight: 600 },
+        }
+      : null;
+    const gridTop = titleText ? "16%" : "10%";
 
     // --- BOX PLOT ---
     if (type === "boxplot") {
@@ -69,20 +90,22 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
 
       return {
         backgroundColor: "transparent",
+        title: titleOption,
         tooltip: isPreview ? { show: false } : { ...darkTooltip, trigger: "item" },
-        grid: isPreview ? { top: '5%', left: '5%', right: '5%', bottom: '5%' } : { top: "10%", left: "10%", right: "10%", bottom: "15%", containLabel: true },
+        grid: isPreview ? { top: '5%', left: '5%', right: '5%', bottom: '5%' } : { top: gridTop, left: "10%", right: "10%", bottom: "15%", containLabel: true },
         xAxis: {
-          show: !isPreview,
+          show: !isPreview && !hideXAxis,
           type: "category",
           data: axisData,
-          axisLine: { lineStyle: { color: "#334155" } },
-          axisLabel: { color: "#94a3b8", rotate: axisData.length > 5 ? 30 : 0 }
+          axisLine: { show: !hideXAxis, lineStyle: { color: borderStrong } },
+          axisTick: { show: !hideXAxis },
+          axisLabel: { show: !hideXAxis, color: textSecondary, rotate: axisData.length > 5 ? 30 : 0 }
         },
         yAxis: {
           show: !isPreview,
           type: "value",
-          splitLine: { lineStyle: { color: "rgba(148, 163, 184, 0.1)" } },
-          axisLabel: { color: "#94a3b8" }
+          splitLine: { lineStyle: { color: borderColor } },
+          axisLabel: { color: textSecondary }
         },
         color: colors,
         legend: { show: false }, // Hide legend for box plot as per design
@@ -93,7 +116,7 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
           label: {
             show: style.showLabels === true,
             position: "top",
-            color: "#94a3b8",
+            color: textSecondary,
           },
         }]
       };
@@ -150,23 +173,25 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
 
       return {
         backgroundColor: "transparent",
+        title: titleOption,
         tooltip: isPreview ? { show: false } : { ...darkTooltip, trigger: "axis" },
-        grid: isPreview ? { top: '5%', left: '5%', right: '5%', bottom: '15%' } : { top: "10%", left: "10%", right: "10%", bottom: "15%", containLabel: true },
+        grid: isPreview ? { top: '5%', left: '5%', right: '5%', bottom: '15%' } : { top: gridTop, left: "10%", right: "10%", bottom: "15%", containLabel: true },
         xAxis: {
-          show: !isPreview,
+          show: !isPreview && !hideXAxis,
           type: "category",
           data: binLabels,
-          axisLine: { lineStyle: { color: "#334155" } },
-          axisLabel: { color: "#94a3b8", rotate: binLabels.length > 8 ? 35 : 0 }
+          axisLine: { show: !hideXAxis, lineStyle: { color: borderStrong } },
+          axisTick: { show: !hideXAxis },
+          axisLabel: { show: !hideXAxis, color: textSecondary, rotate: binLabels.length > 8 ? 35 : 0 }
         },
         yAxis: {
           show: !isPreview,
           type: "value",
-          splitLine: { lineStyle: { color: "rgba(148, 163, 184, 0.1)" } },
-          axisLabel: { color: "#94a3b8" }
+          splitLine: { lineStyle: { color: borderColor } },
+          axisLabel: { color: textSecondary }
         },
         color: colors,
-        legend: { show: isPreview ? false : (style.showLegend !== false), textStyle: { color: "#94a3b8" }, bottom: 0 },
+        legend: { show: isPreview ? false : (style.showLegend !== false), textStyle: { color: textSecondary }, bottom: 0 },
         series
       };
     }
@@ -177,7 +202,7 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
       const yField = measures[1]?.field;
       if (!xField || !yField) {
         return {
-          title: { text: "Scatter requires 2 measures", left: "center", top: "center", textStyle: { color: "#94a3b8" } }
+          title: { text: "Scatter requires 2 measures", left: "center", top: "center", textStyle: { color: textSecondary } }
         };
       }
       const scatterData = data
@@ -186,29 +211,31 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
 
       const baseScatter = {
         backgroundColor: "transparent",
+        title: titleOption,
         tooltip: isPreview ? { show: false } : {
           ...darkTooltip,
           trigger: "item",
           formatter: (p) => `${xField}: ${p.value[0]}<br/>${yField}: ${p.value[1]}`
         },
-        grid: isPreview ? { top: 0, left: 0, right: 0, bottom: 0 } : { top: "12%", left: "3%", right: "4%", bottom: "12%", containLabel: true },
+        grid: isPreview ? { top: 0, left: 0, right: 0, bottom: 0 } : { top: titleText ? "16%" : "12%", left: "3%", right: "4%", bottom: "12%", containLabel: true },
         xAxis: {
-          show: !isPreview,
+          show: !isPreview && !hideXAxis,
           type: "value",
           name: xField,
-          nameTextStyle: { color: "#94a3b8" },
-          axisLine: { lineStyle: { color: "#334155" } },
-          axisLabel: { color: "#94a3b8" },
-          splitLine: { lineStyle: { color: "rgba(148, 163, 184, 0.1)" } }
+          nameTextStyle: { color: textSecondary, show: !hideXAxis },
+          axisLine: { show: !hideXAxis, lineStyle: { color: borderStrong } },
+          axisTick: { show: !hideXAxis },
+          axisLabel: { show: !hideXAxis, color: textSecondary },
+          splitLine: { lineStyle: { color: borderColor } }
         },
         yAxis: {
           show: !isPreview,
           type: "value",
           name: yField,
-          nameTextStyle: { color: "#94a3b8" },
-          axisLine: { lineStyle: { color: "#334155" } },
-          axisLabel: { color: "#94a3b8" },
-          splitLine: { lineStyle: { color: "rgba(148, 163, 184, 0.1)" } }
+          nameTextStyle: { color: textSecondary },
+          axisLine: { lineStyle: { color: borderStrong } },
+          axisLabel: { color: textSecondary },
+          splitLine: { lineStyle: { color: borderColor } }
         },
         color: colors,
         series: [{
@@ -220,7 +247,7 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
           label: {
             show: style.showLabels === true,
             position: "top",
-            color: "#94a3b8",
+            color: textSecondary,
             formatter: (p) => p.value[1],
           },
         }]
@@ -245,8 +272,9 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
       const yAxisField = getMeasureKey(measures[0]) || Object.keys(data[0]).find(k => k !== xAxisField);
       const basePie = {
         backgroundColor: "transparent",
+        title: titleOption,
         tooltip: isPreview ? { show: false } : { ...darkTooltip, trigger: "item" },
-        legend: { show: isPreview ? false : style.showLegend !== false, textStyle: { color: "#94a3b8" }, bottom: 0 },
+        legend: { show: isPreview ? false : style.showLegend !== false, textStyle: { color: textSecondary }, bottom: 0 },
         color: colors,
         series: [{
           name: xAxisField,
@@ -257,7 +285,7 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
           label: { 
             show: style.showLabels === true,
             position: "outside",
-            color: "#94a3b8",
+            color: textSecondary,
             formatter: "{b}: {c}",
           },
           emphasis: { label: { show: true, fontSize: 20, fontWeight: "bold", color: "#fff" } },
@@ -332,29 +360,31 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
 
     const baseOption = {
       backgroundColor: "transparent",
+      title: titleOption,
       tooltip: isPreview ? { show: false } : { ...darkTooltip, trigger: "axis" },
-      legend: { show: isPreview ? false : style.showLegend !== false, textStyle: { color: "#94a3b8" }, bottom: 0 },
+      legend: { show: isPreview ? false : showLegend, textStyle: { color: textSecondary }, bottom: 0 },
       grid: isPreview ? { top: '5%', left: '5%', right: '5%', bottom: '5%' } : {
-        top: "10%", left: "3%", right: "4%", bottom: "15%",
+        top: gridTop, left: "3%", right: "4%", bottom: "15%",
         containLabel: true,
         show: style.showGrid !== false,
         borderColor: "rgba(148, 163, 184, 0.1)"
       },
-      xAxis: {
-        show: !isPreview,
+        xAxis: {
+        show: !isPreview && !hideXAxis,
         type: hasNumericXAxis ? "value" : "category",
         data: hasNumericXAxis ? undefined : xAxisData,
         name: hasNumericXAxis ? xAxisField : undefined,
-        nameTextStyle: hasNumericXAxis ? { color: "#94a3b8" } : undefined,
-        axisLine: { lineStyle: { color: "#334155" } },
-        axisLabel: { color: "#94a3b8" },
+        nameTextStyle: hasNumericXAxis ? { color: textSecondary, show: !hideXAxis } : undefined,
+        axisLine: { show: !hideXAxis, lineStyle: { color: borderStrong } },
+        axisTick: { show: !hideXAxis },
+        axisLabel: { show: !hideXAxis, color: textSecondary },
         splitLine: { show: false }
       },
       yAxis: {
         show: !isPreview,
         type: "value",
-        splitLine: { lineStyle: { color: "rgba(148, 163, 184, 0.1)" } },
-        axisLabel: { color: "#94a3b8" }
+        splitLine: { lineStyle: { color: borderColor } },
+        axisLabel: { color: textSecondary }
       },
       color: colors,
       series: seriesData
@@ -371,7 +401,7 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
       }));
     }
     return baseOption;
-  }, [type, data, dimensions, measures, style, annotations, stacking]);
+  }, [type, data, dimensions, measures, style, annotations, stacking, title]);
 
   return (
     <div className="chart-preview-wrapper" style={{ height: "100%", width: "100%", minHeight: isPreview ? "0px" : (style?.minHeight !== undefined ? style.minHeight : "400px") }}>
@@ -380,6 +410,7 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
         style={{ height: "100%", width: "100%" }}
         notMerge={true}
         lazyUpdate={true}
+        onChartReady={onChartReady}
         onEvents={{
           'finished': () => {
             if (onRenderComplete) onRenderComplete();

@@ -108,6 +108,7 @@ export default function ChartExplore({ chartId, onBack }) {
   const [showLegend, setShowLegend] = useState(true);
   const [showGrid, setShowGrid] = useState(true);
   const [showLabels, setShowLabels] = useState(false);
+  const [showTitle, setShowTitle] = useState(true);
   const [colorScheme, setColorScheme] = useState("vivid");
   const [stacking, setStacking] = useState(false);
 
@@ -123,6 +124,7 @@ export default function ChartExplore({ chartId, onBack }) {
   const [isChartOutdated, setIsChartOutdated] = useState(false);
   const [error, setError] = useState(null);
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const chartInstanceRef = useRef(null);
   const {
     status: exportStatus,
     progress: exportProgress,
@@ -231,6 +233,7 @@ export default function ChartExplore({ chartId, onBack }) {
             setShowLegend(chart.style?.showLegend !== false);
             setShowGrid(chart.style?.showGrid !== false);
             setShowLabels(chart.style?.showLabels === true);
+            setShowTitle(chart.style?.showTitle !== false);
             setColorScheme(getSchemeByPalette(chart.style?.colorPalette || []));
             setStacking(chart.visualization?.series?.stack || false);
             setLastSaved(chart.updatedAt);
@@ -347,7 +350,7 @@ export default function ChartExplore({ chartId, onBack }) {
     if (resultData.length > 0) {
       setIsDirty(true);
     }
-  }, [chartName, showLegend, showGrid, showLabels, colorScheme, stacking]);
+  }, [chartName, showLegend, showGrid, showLabels, showTitle, colorScheme, stacking]);
 
   // ── Execute query ──
   const handleUpdateChart = useCallback(async () => {
@@ -437,6 +440,7 @@ export default function ChartExplore({ chartId, onBack }) {
           showLegend,
           showGrid,
           showLabels,
+          showTitle,
         },
       };
 
@@ -450,7 +454,7 @@ export default function ChartExplore({ chartId, onBack }) {
     } finally {
       setIsSaving(false);
     }
-  }, [savedChartId, chartName, selectedDatasetId, chartType, xAxis, metrics, dimensionsList, filters, sortBy, showLegend, showGrid, showLabels, colorScheme, columns, binSize, stacking]);
+  }, [savedChartId, chartName, selectedDatasetId, chartType, xAxis, metrics, dimensionsList, filters, sortBy, showLegend, showGrid, showLabels, showTitle, colorScheme, columns, binSize, stacking]);
 
   const handleExport = useCallback((format) => {
     if (!selectedDatasetId) {
@@ -506,6 +510,35 @@ export default function ChartExplore({ chartId, onBack }) {
     xAxis,
     binSize,
   ]);
+
+  const handleExportPng = useCallback(() => {
+    const chartInstance = chartInstanceRef.current;
+    if (!chartInstance) return;
+
+    const themeBg = getComputedStyle(document.body)
+      .getPropertyValue("--bg-main")
+      .trim() || "#0b0f19";
+
+    const dataUrl = chartInstance.getDataURL({
+      type: "png",
+      pixelRatio: 2,
+      backgroundColor: themeBg,
+    });
+
+    const safeName = String(chartName || "chart")
+      .trim()
+      .replace(/[^a-zA-Z0-9_-]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 80) || "chart";
+
+    const link = document.createElement("a");
+    link.href = dataUrl;
+    link.download = `${safeName}.png`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setShowExportMenu(false);
+  }, [chartName]);
 
   // ── Handle column click from source panel ──
   const handleColumnClick = useCallback((col, role) => {
@@ -616,6 +649,9 @@ export default function ChartExplore({ chartId, onBack }) {
 
             {showExportMenu && (
               <div className="export-dropdown" style={{ top: "calc(100% + 8px)", bottom: "auto", left: "auto", right: 0 }}>
+                <button onClick={handleExportPng}>
+                  PNG
+                </button>
                 <button onClick={() => handleExport("csv")}>
                   <FileText size={14} /> CSV
                 </button>
@@ -637,7 +673,6 @@ export default function ChartExplore({ chartId, onBack }) {
           </div>
         )}
       />
-
       {error ? <div className="explore-error-banner">{error}</div> : null}
       {exportError ? <div className="explore-error-banner">{exportError}</div> : null}
       {isExportBusy ? (
@@ -698,6 +733,8 @@ export default function ChartExplore({ chartId, onBack }) {
             onToggleGrid={() => setShowGrid((v) => !v)}
             showLabels={showLabels}
             onToggleLabels={() => setShowLabels((v) => !v)}
+            showTitle={showTitle}
+            onToggleTitle={() => setShowTitle((v) => !v)}
             colorScheme={colorScheme}
             onColorSchemeChange={setColorScheme}
             colorSchemeOptions={Object.entries(COLOR_SCHEMES).map(([id, colors]) => ({
@@ -721,6 +758,8 @@ export default function ChartExplore({ chartId, onBack }) {
           showLegend={showLegend}
           showGrid={showGrid}
           showLabels={showLabels}
+          showTitle={showTitle}
+          chartTitle={chartName}
           colorPalette={COLOR_SCHEMES[colorScheme] || COLOR_SCHEMES.vivid}
           rowCount={rowCount}
           executionTimeMs={executionTimeMs}
@@ -729,6 +768,9 @@ export default function ChartExplore({ chartId, onBack }) {
           sampleData={sampleData}
           binSize={binSize}
           stacking={stacking}
+          onChartReady={(instance) => {
+            chartInstanceRef.current = instance;
+          }}
         />
       </div>
     </div>

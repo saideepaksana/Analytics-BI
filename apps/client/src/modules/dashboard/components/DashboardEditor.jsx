@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Grip, Loader2, MoveDiagonal2, Pencil, Plus, PlusCircle, Save, Trash2, X, MoreVertical, Star, User, Clock, MessageSquare, Download, Image as ImageIcon, FileSpreadsheet, FileText as PdfIcon, Send, FileEdit } from "lucide-react";
+import { ArrowLeft, Grip, Loader2, MoveDiagonal2, Pencil, Plus, PlusCircle, Save, Trash2, X, MoreVertical, Star, User, Clock, MessageSquare, Download, FileSpreadsheet, FileText as PdfIcon, Send, FileEdit } from "lucide-react";
 import html2canvas from "html2canvas";
 import { useExportStatus } from "../../../hooks/useExportStatus";
 import { buildChartQueryForExport, buildChartRawExportPayload, mergeNormalizedFilters } from "../../../services/export.service";
@@ -110,7 +110,7 @@ const getFrozenExportState = () => {
   }
 };
 
-function DashboardWidgetChart({ chart, dashboardFilters = [], onRenderComplete }) {
+function DashboardWidgetChart({ chart, dashboardFilters = [], onRenderComplete, title }) {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -186,6 +186,7 @@ function DashboardWidgetChart({ chart, dashboardFilters = [], onRenderComplete }
       measures={getMeasuresFromChart(chart)}
       style={{ ...chart.style, minHeight: "0px" }}
       stacking={chart.visualization?.series?.stack || false}
+      title={title}
       onRenderComplete={onRenderComplete}
     />
   );
@@ -234,7 +235,7 @@ function DashboardWidget({
   };
 
   const activeClass = isDragging ? "is-dragging" : isResizing ? "is-resizing" : "";
-  const showWidgetActions = !isEmbed;
+  const showWidgetActions = !isEmbed && !readOnly;
 
   const handleSaveAnnotation = async () => {
     if (!tempAnnotation.trim()) return;
@@ -285,37 +286,6 @@ function DashboardWidget({
       >
         <div className="dashboard-widget-title-wrap">
           {!readOnly && <Grip size={14} className="dashboard-widget-drag-handle" />}
-          {isEditingTitle ? (
-            <input
-              autoFocus
-              className="dashboard-name-input"
-              style={{
-                padding: "0 4px",
-                fontSize: "12px",
-                height: "auto",
-                minHeight: "20px",
-                margin: 0,
-                width: "100%",
-                border: "1px solid var(--border)",
-                borderRadius: "4px",
-              }}
-              value={tempTitle}
-              onChange={(e) => setTempTitle(e.target.value)}
-              onBlur={() => {
-                setIsEditingTitle(false);
-                onUpdateWidget(widget.id, { title: tempTitle.trim() });
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  setIsEditingTitle(false);
-                  onUpdateWidget(widget.id, { title: tempTitle.trim() });
-                }
-              }}
-              onMouseDown={(e) => e.stopPropagation()}
-            />
-          ) : (
-            <h5>{widget.title || chart?.name || "Missing chart"}</h5>
-          )}
         </div>
         {showWidgetActions ? (
           <div className="dashboard-widget-actions">
@@ -481,31 +451,36 @@ function DashboardWidget({
 
       <div className="dashboard-widget-body">
         {chart ? (
-          <DashboardWidgetChart chart={chart} dashboardFilters={dashboardFilters} onRenderComplete={onRenderComplete} />
+          <DashboardWidgetChart
+            chart={chart}
+            dashboardFilters={dashboardFilters}
+            onRenderComplete={onRenderComplete}
+            title={widget.title || chart?.name}
+          />
         ) : (
           <div className="dashboard-widget-error">Chart not found</div>
         )}
       </div>
 
-      <div className="dashboard-widget-annotations-area">
-        {annotations.length > 0 && (
-          <div
-            style={{
-              fontSize: "10px",
-              fontWeight: "700",
-              color: "rgba(255,255,255,0.3)",
-              letterSpacing: "0.1em",
-              marginBottom: "4px",
-              textTransform: "uppercase",
-            }}
-          >
-            Notes
-          </div>
-        )}
-        {annotations.map((ann) => (
-          <div key={ann._id} className="dashboard-widget-annotation">
-            <p>{ann.text}</p>
-            {!readOnly && (
+      {!readOnly ? (
+        <div className="dashboard-widget-annotations-area">
+          {annotations.length > 0 && (
+            <div
+              style={{
+                fontSize: "10px",
+                fontWeight: "700",
+                color: "rgba(255,255,255,0.3)",
+                letterSpacing: "0.1em",
+                marginBottom: "4px",
+                textTransform: "uppercase",
+              }}
+            >
+              Notes
+            </div>
+          )}
+          {annotations.map((ann) => (
+            <div key={ann._id} className="dashboard-widget-annotation">
+              <p>{ann.text}</p>
               <div className="annotation-actions">
                 <button
                   type="button"
@@ -521,54 +496,54 @@ function DashboardWidget({
                   Delete
                 </button>
               </div>
-            )}
-          </div>
-        ))}
-
-        {isEditingAnnotation && (
-          <div className="dashboard-widget-annotation-editor">
-            <textarea
-              autoFocus
-              value={tempAnnotation}
-              onChange={(e) => setTempAnnotation(e.target.value)}
-              placeholder="Enter annotation..."
-            />
-            <div className="editor-buttons">
-              <button type="button" className="save-btn" onClick={handleSaveAnnotation}>
-                Save
-              </button>
-              <button
-                type="button"
-                className="cancel-btn"
-                onClick={() => {
-                  setIsEditingAnnotation(false);
-                  setAnnotationToEdit(null);
-                }}
-              >
-                Cancel
-              </button>
             </div>
-          </div>
-        )}
+          ))}
 
-        {isExportBusy ? (
-          <div className="dashboard-widget-annotation" style={{ opacity: 0.86 }}>
-            <p>Preparing export... {Math.max(0, Math.round(exportProgress || 0))}%</p>
-          </div>
-        ) : null}
+          {isEditingAnnotation && (
+            <div className="dashboard-widget-annotation-editor">
+              <textarea
+                autoFocus
+                value={tempAnnotation}
+                onChange={(e) => setTempAnnotation(e.target.value)}
+                placeholder="Enter annotation..."
+              />
+              <div className="editor-buttons">
+                <button type="button" className="save-btn" onClick={handleSaveAnnotation}>
+                  Save
+                </button>
+                <button
+                  type="button"
+                  className="cancel-btn"
+                  onClick={() => {
+                    setIsEditingAnnotation(false);
+                    setAnnotationToEdit(null);
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
 
-        {isExportComplete ? (
-          <div className="dashboard-widget-annotation" style={{ cursor: "pointer" }} onClick={download}>
-            <p>Download ready</p>
-          </div>
-        ) : null}
+          {isExportBusy ? (
+            <div className="dashboard-widget-annotation" style={{ opacity: 0.86 }}>
+              <p>Preparing export... {Math.max(0, Math.round(exportProgress || 0))}%</p>
+            </div>
+          ) : null}
 
-        {exportError ? (
-          <div className="dashboard-widget-annotation">
-            <p>{exportError}</p>
-          </div>
-        ) : null}
-      </div>
+          {isExportComplete ? (
+            <div className="dashboard-widget-annotation" style={{ cursor: "pointer" }} onClick={download}>
+              <p>Download ready</p>
+            </div>
+          ) : null}
+
+          {exportError ? (
+            <div className="dashboard-widget-annotation">
+              <p>{exportError}</p>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {!readOnly ? (
         <button
@@ -1423,9 +1398,6 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, saveE
                     <div className="export-dropdown" style={{ top: "calc(100% + 8px)", bottom: "auto", left: "auto", right: 0 }}>
                       <button onClick={() => handleExport("pdf")}>
                         <PdfIcon size={14} /> PDF Document
-                      </button>
-                      <button onClick={() => handleExport("png")}>
-                        <ImageIcon size={14} /> PNG Image
                       </button>
                     </div>
                   )}

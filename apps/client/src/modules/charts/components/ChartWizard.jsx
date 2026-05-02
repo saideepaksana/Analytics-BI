@@ -277,6 +277,7 @@ export default function ChartWizard({ isOpen, onClose, onComplete }) {
                   data={previewData}
                   dimensions={dimensions}
                   measures={measures.map(m => ({ field: m }))}
+                     title={chartName}
                 />
               )
             )}
