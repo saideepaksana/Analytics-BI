@@ -16,49 +16,47 @@ export default function ChartCard({ chart, onDelete, onEdit, onView }) {
   const [showExportMenu, setShowExportMenu] = useState(false);
   const { status, progress, error: exportError, startExport, download, isBusy, isComplete } = useExportStatus();
 
+  const datasetId = chart.dataSource?.datasetId || chart.datasetId;
+  const chartType = chart.visualization?.type || chart.type;
+  const query = React.useMemo(() => {
+    if (chartType === "scatter" || chartType === "boxplot" || chartType === "histogram") {
+      return {
+        dimensions: chart.query?.dimensions || [],
+        measures: chart.query?.measures || [],
+        groupBy: [],
+        orderBy: [],
+        raw: true,
+      };
+    }
+
+    return chart.query || {};
+  }, [chart.query, chartType]);
+
+  const queryKey = `${chart.chartId || chart._id || chart.name || "chart"}:${datasetId || ""}:${JSON.stringify(query || {})}`;
+
   useEffect(() => {
     const fetchChartData = async () => {
       setLoading(true);
       try {
-        const datasetId = chart.dataSource?.datasetId || chart.datasetId;
         if (!datasetId) {
           setError("No data source found");
           return;
         }
 
-        const chartType = chart.visualization?.type || chart.type;
-        const isScatter = chartType === "scatter";
-        const isDistribution = chartType === "boxplot" || chartType === "histogram";
-        let query;
-        if (isScatter || isDistribution) {
-          // Scatter and Distribution charts need raw individual records, not aggregated data
-          query = {
-            dimensions: chart.query?.dimensions || [],
-            measures: chart.query?.measures || [],
-            groupBy: [],
-            orderBy: [],
-            raw: true
-          };
-        } else {
-          query = chart.query;
-        }
-
-        const cacheKey = `${chart.chartId || chart._id || chart.name || "chart"}:${JSON.stringify(query || {})}`;
-
-        if (cardDataCache.has(cacheKey)) {
-          setData(cardDataCache.get(cacheKey));
+        if (cardDataCache.has(queryKey)) {
+          setData(cardDataCache.get(queryKey));
           return;
         }
 
-        let request = cardRequestCache.get(cacheKey);
+        let request = cardRequestCache.get(queryKey);
         if (!request) {
           request = queryDataset(datasetId, query).then((results) => results.results || []);
-          cardRequestCache.set(cacheKey, request);
+          cardRequestCache.set(queryKey, request);
         }
 
         const previewData = await request;
-        cardRequestCache.delete(cacheKey);
-        cardDataCache.set(cacheKey, previewData);
+        cardRequestCache.delete(queryKey);
+        cardDataCache.set(queryKey, previewData);
         setData(previewData);
       } catch (err) {
         setError("Failed to load chart data");
@@ -69,7 +67,7 @@ export default function ChartCard({ chart, onDelete, onEdit, onView }) {
     };
 
     fetchChartData();
-  }, [chart]);
+  }, [datasetId, queryKey]);
 
   const handleExport = (format) => {
     const payload = buildChartRawExportPayload({

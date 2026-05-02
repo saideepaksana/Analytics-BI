@@ -110,7 +110,7 @@ const getFrozenExportState = () => {
   }
 };
 
-function DashboardWidgetChart({ chart, dashboardFilters = [] }) {
+function DashboardWidgetChart({ chart, dashboardFilters = [], onRenderComplete }) {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -164,7 +164,7 @@ function DashboardWidgetChart({ chart, dashboardFilters = [] }) {
     return () => {
       cancelled = true;
     };
-  }, [chart, dashboardFilters]);
+  }, [chart?.chartId, chart?._id, chart?.id, chart?.dataSource?.datasetId, chart?.datasetId, chart?.type, chart?.visualization?.type, chart?.query, dashboardFilters]);
 
   if (loading) {
     return (
@@ -186,7 +186,7 @@ function DashboardWidgetChart({ chart, dashboardFilters = [] }) {
       measures={getMeasuresFromChart(chart)}
       style={{ ...chart.style, minHeight: "0px" }}
       stacking={chart.visualization?.series?.stack || false}
-      onRenderComplete={chart.onRenderComplete}
+      onRenderComplete={onRenderComplete}
     />
   );
 }
@@ -481,7 +481,7 @@ function DashboardWidget({
 
       <div className="dashboard-widget-body">
         {chart ? (
-          <DashboardWidgetChart chart={{ ...chart, onRenderComplete }} dashboardFilters={dashboardFilters} />
+          <DashboardWidgetChart chart={chart} dashboardFilters={dashboardFilters} onRenderComplete={onRenderComplete} />
         ) : (
           <div className="dashboard-widget-error">Chart not found</div>
         )}
@@ -1265,9 +1265,22 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, saveE
 
   const handleExport = (format) => {
     // Capture full frozen state including all tabs
+    const exportedSection = activeTab
+      ? {
+          id: activeTab.id || null,
+          name: activeTab.name || "Untitled Section",
+          widgets: Array.isArray(activeTab.widgets) ? activeTab.widgets : [],
+        }
+      : {
+          id: null,
+          name: "Untitled Section",
+          widgets: [],
+        };
+
     const frozenState = {
       tabs,
       activeTab: activeTabId,
+      visibleSection: exportedSection,
       viewport: { width: window.innerWidth, height: window.innerHeight },
       dashboardName: name.trim(),
       description: description.trim(),

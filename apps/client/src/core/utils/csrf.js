@@ -15,6 +15,26 @@ import { API_BASE_URL } from '../config/env';
 let _csrfToken = null;
 let _csrfFetchedAt = null;
 const CSRF_TTL_MS = 55 * 60 * 1000; // 55 minutes
+const AUTH_STORAGE_KEY = "analytics-bi-auth";
+
+const getAuthHeaders = () => {
+  try {
+    const raw = localStorage.getItem(AUTH_STORAGE_KEY);
+    if (!raw) return {};
+
+    const user = JSON.parse(raw);
+    if (!user?.isAuthenticated || !user?.email || !user?.role) {
+      return {};
+    }
+
+    return {
+      "X-User-ID": user.email,
+      "X-User-Role": user.role,
+    };
+  } catch {
+    return {};
+  }
+};
 
 /**
  * Fetch a fresh CSRF token from the server.
@@ -24,6 +44,7 @@ const fetchCsrfToken = async () => {
   try {
     const response = await axios.get(`${API_BASE_URL}/csrf-token`, {
       withCredentials: true,
+      headers: getAuthHeaders(),
     });
     return response.data?.csrfToken || null;
   } catch {

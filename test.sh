@@ -30,7 +30,7 @@ echo "🔄 Generating embed token..."
 # Step 2: Generate embed token
 TOKEN_RESPONSE=$(curl -s -X POST "$EMBED_TOKEN_API" \
   -H "Content-Type: application/json" \
-  -H "x-user-id: role3@abi.com" \
+  -H "x-user-id: ai23@cv.com" \
   -H "x-user-role: editor" \
   -d "{
     \"dashboardId\": \"$DASHBOARD_ID\",
