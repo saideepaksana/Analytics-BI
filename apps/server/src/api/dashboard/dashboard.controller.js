@@ -14,7 +14,7 @@ exports.listDashboards = async (req, res) => {
     try {
         const user = req.user;
         let filter = {};
-        
+
         // Admins can see everything; editors see published + their own drafts
         if (user && user.role === 'admin') {
             filter = {};
@@ -33,7 +33,7 @@ exports.listDashboards = async (req, res) => {
             // Unauthenticated users see only published
             filter = { status: 'published' };
         }
-        
+
         const dashboards = await Dashboard.find(filter).sort({ updatedAt: -1 }).lean();
         return res.json({ dashboards: dashboards.map(dashboardMapper.fromDB) });
     } catch (error) {
@@ -45,7 +45,7 @@ exports.listDashboards = async (req, res) => {
 exports.createDashboard = async (req, res) => {
     try {
         const { title = 'New Dashboard', description = '', tags = [], layout = [], tabs = [], activeTabId = null, _rawFrontendState = null } = req.body;
-        
+
         // Use mapper to ensure all fields are properly validated and saved
         const mappedData = dashboardMapper.toDB({
             title,
@@ -56,7 +56,7 @@ exports.createDashboard = async (req, res) => {
             activeTabId,
             _rawFrontendState,
         });
-        
+
         const dashboard = await Dashboard.create({
             ...mappedData,
             createdBy: req.user?.id || 'anonymous',
@@ -338,9 +338,9 @@ exports.publishDashboard = async (req, res) => {
             { returnDocument: 'after', runValidators: true }
         ).lean();
 
-        return res.json({ 
-            message: 'Dashboard published successfully', 
-            dashboard: dashboardMapper.fromDB(updatedDashboard) 
+        return res.json({
+            message: 'Dashboard published successfully',
+            dashboard: dashboardMapper.fromDB(updatedDashboard)
         });
     } catch (error) {
         return res.status(500).json({ message: 'Internal server error', detail: error.message });
@@ -427,33 +427,6 @@ exports.saveDraft = async (req, res) => {
         }
 
         const { draftState } = req.body;
-<<<<<<< HEAD
-        if (draftState !== undefined && draftState !== null && typeof draftState !== 'object') {
-            return res.status(400).json({ message: 'draftState must be an object when provided' });
-        }
-
-        const normalizedDraft = draftState ? { ...draftState } : null;
-        if (normalizedDraft?.name && !normalizedDraft.title) {
-            normalizedDraft.title = normalizedDraft.name;
-        }
-        const mappedDraft = normalizedDraft ? dashboardMapper.toDB(normalizedDraft) : null;
-
-        const setObj = {
-            draftState: normalizedDraft || null,
-            updatedBy: req.user?.id || 'anonymous',
-        };
-
-        // If the dashboard is already a draft, keep the primary fields in sync.
-        if (dashboard.status === 'draft' && mappedDraft) {
-            Object.assign(setObj, mappedDraft, { _rawFrontendState: normalizedDraft });
-        }
-
-        const updatedDashboard = await Dashboard.findByIdAndUpdate(
-            dashboardId,
-            { 
-                $set: setObj, 
-                $inc: { __v: 1 } 
-=======
 
         // ── Draft state structural validation ────────────────────────────────
         if (draftState !== null && draftState !== undefined) {
@@ -502,16 +475,27 @@ exports.saveDraft = async (req, res) => {
         }
         // ─────────────────────────────────────────────────────────────────────
 
+        const normalizedDraft = draftState ? { ...draftState } : null;
+        if (normalizedDraft?.name && !normalizedDraft.title) {
+            normalizedDraft.title = normalizedDraft.name;
+        }
+        const mappedDraft = normalizedDraft ? dashboardMapper.toDB(normalizedDraft) : null;
+
+        const setObj = {
+            draftState: normalizedDraft || null,
+            updatedBy: req.user?.id || 'anonymous',
+        };
+
+        // If the dashboard is already a draft, keep the primary fields in sync.
+        if (dashboard.status === 'draft' && mappedDraft) {
+            Object.assign(setObj, mappedDraft, { _rawFrontendState: normalizedDraft });
+        }
+
         const updatedDashboard = await Dashboard.findByIdAndUpdate(
             dashboardId,
             {
-                $set: {
-                    draftState: draftState !== undefined ? draftState : null,
-                    status: 'draft',
-                    updatedBy: req.user?.id || 'anonymous'
-                },
+                $set: setObj,
                 $inc: { __v: 1 }
->>>>>>> 4f72dc9 (feat(security,rbac,drafts): enhance permissions, draft validation, and CSRF protection)
             },
             { returnDocument: 'after', runValidators: true }
         ).lean();
