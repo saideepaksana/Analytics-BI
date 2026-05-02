@@ -467,6 +467,8 @@ export default function ChartExplore({ chartId, onBack }) {
       chartId: savedChartId || chartId,
       chartName,
       query: {
+        chartType,
+        binSize: chartType === "histogram" ? binSize : undefined,
         dimensions: (isScatter || isDistribution) ? [] : (xAxis ? [{ field: xAxis }] : []),
         measures: metrics.map((metric) => ({
           field: metric.field,
@@ -502,6 +504,7 @@ export default function ChartExplore({ chartId, onBack }) {
     sortBy,
     startExport,
     xAxis,
+    binSize,
   ]);
 
   // ── Handle column click from source panel ──

@@ -155,6 +155,8 @@ const normalizeQueryConfig = (query = {}) => {
     rowLimit: query.rowLimit,
     seriesLimit: query.seriesLimit,
     contributionMode: query.contributionMode || "none",
+    chartType: query.chartType || query.type,
+    binSize: query.binSize,
   };
 };
 
@@ -187,7 +189,7 @@ const coerceValue = (value, columnType = "", operator = "=") => {
 };
 
 const buildMatchStage = (datasetId, filters, schemaMap) => {
-  const matchStage = { datasetId };
+  const matchClauses = [{ datasetId }];
 
   for (const filter of filters) {
     if (!filter?.field || !filter?.operator) {
@@ -197,46 +199,29 @@ const buildMatchStage = (datasetId, filters, schemaMap) => {
     const key = `data.${filter.field}`;
     const columnType = schemaMap[String(filter.field).toLowerCase()]?.type || "";
     const typedValue = coerceValue(filter.value, columnType, filter.operator);
+    let condition = null;
 
     if (filter.operator === "=" || filter.operator === "==") {
       if (typedValue !== filter.value) {
-        matchStage[key] = { $in: [typedValue, filter.value] };
+        condition = { [key]: { $in: [typedValue, filter.value] } };
       } else {
-        matchStage[key] = typedValue;
+        condition = { [key]: typedValue };
       }
-      continue;
-    }
-
-    if (filter.operator === "!=") {
+    } else if (filter.operator === "!=") {
       if (typedValue !== filter.value) {
-        matchStage[key] = { $nin: [typedValue, filter.value] };
+        condition = { [key]: { $nin: [typedValue, filter.value] } };
       } else {
-        matchStage[key] = { $ne: typedValue };
+        condition = { [key]: { $ne: typedValue } };
       }
-      continue;
-    }
-
-    if (filter.operator === ">") {
-      matchStage[key] = { $gt: typedValue };
-      continue;
-    }
-
-    if (filter.operator === ">=") {
-      matchStage[key] = { $gte: typedValue };
-      continue;
-    }
-
-    if (filter.operator === "<") {
-      matchStage[key] = { $lt: typedValue };
-      continue;
-    }
-
-    if (filter.operator === "<=") {
-      matchStage[key] = { $lte: typedValue };
-      continue;
-    }
-
-    if (filter.operator === "IN" || filter.operator === "NOT IN") {
+    } else if (filter.operator === ">") {
+      condition = { [key]: { $gt: typedValue } };
+    } else if (filter.operator === ">=") {
+      condition = { [key]: { $gte: typedValue } };
+    } else if (filter.operator === "<") {
+      condition = { [key]: { $lt: typedValue } };
+    } else if (filter.operator === "<=") {
+      condition = { [key]: { $lte: typedValue } };
+    } else if (filter.operator === "IN" || filter.operator === "NOT IN") {
       const values = Array.isArray(filter.value)
         ? filter.value
         : String(filter.value || "")
@@ -248,12 +233,16 @@ const buildMatchStage = (datasetId, filters, schemaMap) => {
       const merged = [...new Set([...values, ...typedValues])];
 
       if (merged.length > 0) {
-        matchStage[key] = filter.operator === "IN" ? { $in: merged } : { $nin: merged };
+        condition = { [key]: filter.operator === "IN" ? { $in: merged } : { $nin: merged } };
       }
+    }
+
+    if (condition) {
+      matchClauses.push(condition);
     }
   }
 
-  return matchStage;
+  return matchClauses.length === 1 ? matchClauses[0] : { $and: matchClauses };
 };
 
 const getExportColumnOrder = (query = {}, results = []) => {

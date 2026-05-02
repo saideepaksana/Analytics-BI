@@ -110,14 +110,22 @@ const runVisualExport = async (job) => {
             throw new Error("Access Denied: You do not own this dashboard.");
         }
 
-        await ExportLog.create({
-            datasetId: dashboardId,
-            jobId,
-            format,
-            status: "processing",
-            exportedBy: userId || "anonymous",
-            filename
-        });
+        await ExportLog.findOneAndUpdate(
+            { jobId },
+            {
+                $set: {
+                    datasetId: dashboardId,
+                    format,
+                    status: "processing",
+                    exportedBy: userId || "anonymous",
+                    filename,
+                    recordCount: 0,
+                    exportedAt: Date.now(),
+                },
+                $unset: { failureReason: "" },
+            },
+            { upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
+        );
 
         page = await puppeteerService.acquirePage();
         const { width = 1920, height = 1080 } = frozenState.viewport || {};

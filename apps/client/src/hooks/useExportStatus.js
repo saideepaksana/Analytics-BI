@@ -42,6 +42,8 @@ const triggerBrowserDownload = (url) => {
   anchor.remove();
 };
 
+const MAX_STATUS_POLL_FAILURES = 3;
+
 export const useExportStatus = () => {
   const [status, setStatus] = useState(null);
   const [progress, setProgress] = useState(0);
@@ -53,6 +55,7 @@ export const useExportStatus = () => {
 
   const pollingRef = useRef(null);
   const hasAutoDownloadedRef = useRef(false);
+  const pollFailureCountRef = useRef(0);
 
   const stopPolling = useCallback(() => {
     if (pollingRef.current) {
@@ -71,6 +74,7 @@ export const useExportStatus = () => {
     setShareUrl("");
     setFilename("");
     hasAutoDownloadedRef.current = false;
+    pollFailureCountRef.current = 0;
   }, [stopPolling]);
 
   const download = useCallback(() => {
@@ -104,6 +108,7 @@ export const useExportStatus = () => {
     pollingRef.current = setInterval(async () => {
       try {
         const response = await apiClient.get(`/export/status/${id}`);
+        pollFailureCountRef.current = 0;
         const nextStatus = normalizeJobState(response.data?.state);
         const nextProgress = Number(response.data?.progress);
 
@@ -127,8 +132,14 @@ export const useExportStatus = () => {
           setStatus(nextStatus);
         }
       } catch (pollError) {
-        // Keep polling on transient errors. We only surface errors once the job itself fails.
+        pollFailureCountRef.current += 1;
         console.error("Export status polling error", pollError);
+
+        if (pollFailureCountRef.current >= MAX_STATUS_POLL_FAILURES) {
+          setStatus("failed");
+          setError(getRequestErrorMessage(pollError, "Unable to check export status. Please try again."));
+          stopPolling();
+        }
       }
     }, 2000);
   }, [handleCompleted, stopPolling]);

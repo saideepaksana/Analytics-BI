@@ -7,7 +7,10 @@ const redisConfig = {
   lazyConnect: true,
   enableOfflineQueue: false,
   maxRetriesPerRequest: null, // Required by BullMQ
-  retryStrategy: () => null,
+  retryStrategy: (times) => {
+    // Exponential backoff with a cap of 3 seconds
+    return Math.min(times * 100, 3000);
+  },
 };
 
 // Create a singleton Redis connection

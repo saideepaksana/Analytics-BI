@@ -204,6 +204,8 @@ export const buildChartQueryForExport = ({ chart, query = null } = {}) => {
   );
 
   return {
+    chartType,
+    binSize: sourceQuery.binSize || chart?.visualization?.binSize,
     dimensions: isScatter || isDistribution ? [] : normalizedDimensions,
     measures: normalizedMeasures,
     filters: normalizeFilterList(sourceQuery.filters),

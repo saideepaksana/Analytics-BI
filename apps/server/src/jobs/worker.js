@@ -186,6 +186,8 @@ const startWorker = (queueName, processor, opts = {}) => {
     const worker = new Worker(queueName, processor, {
         connection: redisConfig,
         concurrency,
+        lockDuration: 60000, // 60s
+        lockRenewTime: 20000, // 20s
         ...opts,
     });
     worker.once("ready", () => {

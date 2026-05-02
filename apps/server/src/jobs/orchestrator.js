@@ -75,6 +75,7 @@ const getConcurrency = (queueName) =>
 // ---------------------------------------------------------------------------
 
 let _activeJobCount = 0;
+const _waitingResolvers = [];
 
 const globalSemaphore = {
     get count() {
@@ -85,22 +86,32 @@ const globalSemaphore = {
     },
 
     /**
-     * Attempt to acquire a slot. Returns false if at capacity.
+     * Asynchronously acquire a slot. Blocks until a slot is available.
      * Call this at the START of each job processor.
      */
-    acquire() {
-        if (_activeJobCount >= activeProfile.GLOBAL_MAX) {
-            return false;
+    async acquire() {
+        if (_activeJobCount < activeProfile.GLOBAL_MAX) {
+            _activeJobCount++;
+            return true;
         }
-        _activeJobCount++;
-        return true;
+
+        return new Promise((resolve) => {
+            _waitingResolvers.push(resolve);
+        });
     },
 
     /**
-     * Release a slot. Call this in finally{} at the END of each job processor.
+     * Release a slot and notify the next waiting job.
+     * Call this in finally{} at the END of each job processor.
      */
     release() {
-        if (_activeJobCount > 0) _activeJobCount--;
+        if (_waitingResolvers.length > 0) {
+            const resolve = _waitingResolvers.shift();
+            // Pass slot directly to the next in line
+            resolve(true);
+        } else if (_activeJobCount > 0) {
+            _activeJobCount--;
+        }
     },
 };
 
