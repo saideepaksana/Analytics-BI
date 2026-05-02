@@ -611,8 +611,29 @@
 
 .workspace-export-only {
   min-height: 100vh;
-  background: var(--bg);
-  padding: 0;
+  background: #ffffff !important;
+  color: #000000 !important;
+  padding: 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.workspace-export-only .dashboard-editor-page {
+  box-shadow: none !important;
+  border: none !important;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* Hide all interactive/UI elements during export */
+.export-mode .workspace-topbar,
+.export-mode .workspace-topnav,
+.export-mode .workspace-logout-btn,
+.export-mode .dashboard-actions-panel,
+.export-mode .widget-controls {
+  display: none !important;
 }
 
 /* Keep module helpers used elsewhere */

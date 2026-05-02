@@ -80,6 +80,11 @@ const EXPORT_USER = {
   email: "export@analytics.local",
   role: "admin",
   company: "",
+  preferences: {
+    theme: "light",
+    density: "comfortable",
+    accent: "teal",
+  }
 };
 
 function useAuthSnapshot() {
@@ -494,8 +499,8 @@ function App() {
   }, [location.search]);
 
   const effectiveTheme = useMemo(
-    () => getEffectiveTheme(preferences.theme),
-    [preferences.theme]
+    () => isExportMode ? "light" : getEffectiveTheme(preferences.theme),
+    [isExportMode, preferences.theme]
   );
 
   useEffect(() => {

@@ -89,8 +89,9 @@ const writePaginatedPdf = async (page, filePath, bounds, job) => {
 };
 
 const runVisualExport = async (job) => {
-    const { dashboardId, format, frozenState, userId } = job.data;
+    const { dashboardId, format, frozenState, userId, userRole } = job.data;
     const jobId = job.id;
+    const isAdmin = userRole === "admin";
     
     if (!fs.existsSync(EXPORT_DIR)) {
         fs.mkdirSync(EXPORT_DIR, { recursive: true });
@@ -106,7 +107,8 @@ const runVisualExport = async (job) => {
         const dashboard = await Dashboard.findById(dashboardId).lean();
         if (!dashboard) throw new Error("Dashboard not found.");
         
-        if (dashboard.createdBy && userId !== "anonymous" && dashboard.createdBy !== userId) {
+        const isOwner = dashboard.createdBy === userId || userId === "anonymous";
+        if (dashboard.createdBy && !isOwner && !isAdmin) {
             throw new Error("Access Denied: You do not own this dashboard.");
         }
 

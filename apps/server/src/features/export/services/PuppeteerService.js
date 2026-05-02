@@ -11,9 +11,11 @@ const logger = require("../../../core/logger");
 class PuppeteerService {
     constructor() {
         this.browser = null;
-        this.concurrencyLimit = 2; // Max simultaneous exports
+        this.concurrencyLimit = 2;
         this.activeCount = 0;
         this.queue = [];
+        this.jobsHandled = 0;
+        this.MAX_JOBS_PER_BROWSER = 50;
     }
 
     async getBrowser() {
@@ -21,7 +23,16 @@ class PuppeteerService {
             logger.info("Launching shared Puppeteer browser instance...", "PuppeteerService");
             this.browser = await puppeteer.launch({
                 headless: "new",
-                args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
+                args: [
+                    "--no-sandbox", 
+                    "--disable-setuid-sandbox", 
+                    "--disable-dev-shm-usage",
+                    "--disable-gpu",
+                    "--disable-software-rasterizer",
+                    "--disable-features=AudioServiceOutOfProcess",
+                    "--mute-audio",
+                    "--no-zygote"
+                ]
             });
             
             // Re-launch on disconnect
@@ -38,6 +49,13 @@ class PuppeteerService {
             const execute = async () => {
                 this.activeCount++;
                 try {
+                    this.jobsHandled++;
+                    if (this.jobsHandled > this.MAX_JOBS_PER_BROWSER) {
+                        logger.info("Browser reached job limit. Recycling instance...", "PuppeteerService");
+                        await this.close();
+                        this.jobsHandled = 1;
+                    }
+                    
                     const browser = await this.getBrowser();
                     const page = await browser.newPage();
                     resolve(page);

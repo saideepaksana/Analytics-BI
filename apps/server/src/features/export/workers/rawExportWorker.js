@@ -141,8 +141,9 @@ const buildHistogramExport = (results = [], query = {}) => {
 };
 
 const runRawExport = async (job) => {
-    const { datasetId, format, context, userId } = job.data;
+    const { datasetId, format, context, userId, userRole } = job.data;
     const jobId = job.id;
+    const isAdmin = userRole === "admin";
     const normalizedFormat = normalizeFormat(format);
     
     if (!fs.existsSync(EXPORT_DIR)) {
@@ -161,7 +162,8 @@ const runRawExport = async (job) => {
         const meta = await Metadata.findOne({ datasetId }).lean();
         if (!meta) throw new Error("Dataset not found.");
         
-        if (meta.uploadedBy && userId !== "anonymous" && meta.uploadedBy !== userId) {
+        const isOwner = meta.uploadedBy === userId || userId === "anonymous";
+        if (meta.uploadedBy && !isOwner && !isAdmin) {
             throw new Error("Access Denied: You do not own this dataset.");
         }
 
@@ -185,6 +187,11 @@ const runRawExport = async (job) => {
         await job.updateProgress(20);
 
         const exportQuery = buildQueryFromContext(context);
+        // Memory Guard: Enforce a reasonable limit for standard exports to prevent OOM
+        if (!exportQuery.limit || exportQuery.limit > 50000) {
+            exportQuery.limit = 50000;
+        }
+
         const { results, normalizedQuery } = await executeDatasetQuery(datasetId, exportQuery, {
             metadataDoc: meta,
         });

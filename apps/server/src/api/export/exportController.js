@@ -1,6 +1,7 @@
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
+const crypto = require("crypto");
 const { ExportLog } = require("../../models/exportLog");
 const { rawExportQueue, dashboardExportQueue } = require("../../jobs/queue");
 const { validateRawExport, validateVisualExport } = require("../../features/export/utils/exportPayloadValidator");
@@ -37,12 +38,14 @@ async function startRawExport(req, res) {
         validateRawExport(req.body);
         const { datasetId, format, context } = req.body;
 
+        const jobId = crypto.randomUUID();
         const job = await rawExportQueue.add("raw-export", {
             datasetId,
             format,
             context,
-            userId: req.user?.id || "anonymous"
-        });
+            userId: req.user?.id || "anonymous",
+            userRole: req.user?.role || "viewer"
+        }, { jobId });
 
         res.status(202).json({ 
             message: "Raw export job queued.", 
@@ -70,12 +73,14 @@ async function startVisualExport(req, res) {
 
         const { dashboardId, format, frozenState } = req.body;
 
+        const jobId = crypto.randomUUID();
         const job = await dashboardExportQueue.add("dashboard-export", {
             dashboardId,
             format,
             frozenState,
-            userId: req.user?.id || "anonymous"
-        });
+            userId: req.user?.id || "anonymous",
+            userRole: req.user?.role || "viewer"
+        }, { jobId });
 
         res.status(202).json({ 
             message: "Visual export job queued.", 
@@ -145,15 +150,8 @@ async function downloadExportFile(req, res) {
             return res.status(403).json({ error: "Forbidden." });
         }
 
-        // 1. Security Check: Verify Ownership via ExportLog
-        const log = await ExportLog.findOne({ filename }).lean();
-        if (!log) {
-            return res.status(404).json({ error: "Export record not found." });
-        }
-
-        // Note: We bypass the log.exportedBy check here because browser-triggered 
-        // downloads (anchor clicks) do not carry custom X-User-ID headers. 
-        // The filename (long hash + timestamp) acts as the secure token.
+        // Security Check: The filename is a long hash + timestamp, acting as a token.
+        // We rely on file existence in the namespaced directories.
 
         // 2. Locate File in namespaced directories
         const rawPath = path.join(EXPORT_DIR, "raw", filename);

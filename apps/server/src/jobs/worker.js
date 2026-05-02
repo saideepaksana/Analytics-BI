@@ -186,8 +186,10 @@ const startWorker = (queueName, processor, opts = {}) => {
     const worker = new Worker(queueName, processor, {
         connection: redisConfig,
         concurrency,
-        lockDuration: 60000, // 60s
-        lockRenewTime: 20000, // 20s
+        lockDuration: 120000, // 120s (heavy Puppeteer renders)
+        lockRenewTime: 30000, // 30s
+        maxStalledCount: 3,
+        stalledInterval: 60000, // 60s
         ...opts,
     });
     worker.once("ready", () => {
