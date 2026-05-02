@@ -59,6 +59,10 @@ exports.validateChart = async (frontendConfig) => {
     if (!col) return null;
     const t = (col.type || col.dataType || "string").toLowerCase();
     
+    // Use stored role first if available
+    if (col.role === "dimension") return "categorical";
+    if (col.role === "measure")   return "numeric";
+
     // Use shared logic to determine if it is numeric
     if (isNumeric(t)) return "numeric";
     return "categorical";

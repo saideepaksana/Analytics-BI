@@ -190,6 +190,9 @@ function classifyColumn(columnName, sampleValues, totalRows = 0) {
     const uniqueCount = new Set(nonNull.map((v) => String(v))).size;
 
     const rowBase = Math.max(nonNull.length, 1);
+    // Note: cardinalityRatio is relative to the sample size (nonNull.length), not totalRows.
+    // This prevents false dimensions on large datasets where a small sample might appear low-cardinality.
+    // If sampling size changes from 50, thresholds like 0.02/0.80 may need recalibration.
     const cardinalityRatio = uniqueCount / rowBase;
 
     // Heuristics
@@ -218,17 +221,35 @@ function classifyColumn(columnName, sampleValues, totalRows = 0) {
 
     // Numeric → depends on cardinality + name
     else if (dataType === "number") {
-        const lowCardinality = uniqueCount <= 12 && cardinalityRatio <= 0.2;
-
-        if (measHits > dimHits) {
+        /**
+         * Numeric Classification Priority:
+         * 1. Absolute low cardinality (e.g. 1-15 unique values) → Dimension
+         * 2. Relative low cardinality (e.g. < 2% unique) → Dimension
+         * 3. High cardinality/continuous (e.g. > 80% unique) → Measure
+         * 4. Name semantics (tie-breaker for medium cardinality)
+         * 5. Default fallback → Measure
+         */
+        if (uniqueCount <= 15) {
+            role = "dimension";
+            confidence = 0.85;
+        } else if (cardinalityRatio < 0.02) {
+            role = "dimension";
+            confidence = 0.80;
+        } else if (cardinalityRatio > 0.80) {
             role = "measure";
-            confidence = 0.9;
-        } else if (lowCardinality) {
-            role = "dimension"; // e.g., ratings
+            confidence = 0.85;
+        } else if (dimHits > 0 && measHits === 0) {
+            role = "dimension";
             confidence = 0.78;
-        } else {
+        } else if (measHits > dimHits) {
             role = "measure";
             confidence = 0.82;
+        } else if (dimHits > measHits) {
+            role = "dimension";
+            confidence = 0.75;
+        } else {
+            role = "measure";
+            confidence = 0.60;
         }
     }
 
@@ -268,7 +289,7 @@ function classifyAllColumns(documents, totalRows = documents.length) {
     // Collect all column names across documents (optimized for large batches)
     const columnNameSet = new Set();
     // Usually the first and last row are enough for standard CSVs, but we'll check first few for safety
-    const probeCount = Math.min(documents.length, 10);
+    const probeCount = Math.min(documents.length, 100);
     for (let i = 0; i < probeCount; i++) {
         const keys = Object.keys(documents[i] || {});
         for (const k of keys) {

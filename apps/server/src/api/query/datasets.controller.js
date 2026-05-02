@@ -180,7 +180,10 @@ exports.getDatasetSchema = async (req, res) => {
 
         const columns = (metadata.schema || []).map((col) => {
             const fieldType = col.type || col.dataType || "string";
-            const classification = isNumeric(fieldType) ? "measure" : "dimension";
+            const classification =
+                col.role === "dimension" ? "dimension" :
+                col.role === "measure"   ? "measure"   :
+                isNumeric(fieldType)     ? "measure"   : "dimension";
 
             return {
                 name: col.name,
