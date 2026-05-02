@@ -12,6 +12,7 @@ import {
 } from "../../services/dashboard.service";
 import { fetchCharts } from "../../services/charts.service";
 import { canCreateDashboard } from "../../core/utils/permissions";
+import { getRequestErrorMessage } from "../../core/http/apiClient";
 import "./styles/dashboard.css";
 
 const EMPTY_DRAFT = {
@@ -123,7 +124,10 @@ export default function DashboardPage({ onEditorMode }) {
         closeEditor();
       }
     } catch (err) {
+      const msg = getRequestErrorMessage(err, 'Failed to delete dashboard');
+      setError(msg);
       console.error("Failed to delete dashboard", err);
+      setTimeout(() => setError(null), 6000);
     }
   };
 
@@ -132,7 +136,10 @@ export default function DashboardPage({ onEditorMode }) {
       const published = await publishDashboard(dashboardId);
       setDashboards((previous) => previous.map((d) => (d.id === published.id ? published : d)));
     } catch (err) {
+      const msg = getRequestErrorMessage(err, 'Failed to publish dashboard');
+      setError(msg);
       console.error("Failed to publish dashboard", err);
+      setTimeout(() => setError(null), 6000);
     }
   };
 
@@ -141,7 +148,10 @@ export default function DashboardPage({ onEditorMode }) {
       const unpublished = await unpublishDashboard(dashboardId);
       setDashboards((previous) => previous.map((d) => (d.id === unpublished.id ? unpublished : d)));
     } catch (err) {
+      const msg = getRequestErrorMessage(err, 'Failed to unpublish dashboard');
+      setError(msg);
       console.error("Failed to unpublish dashboard", err);
+      setTimeout(() => setError(null), 6000);
     }
   };
 

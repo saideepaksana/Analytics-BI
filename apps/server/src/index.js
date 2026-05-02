@@ -21,7 +21,7 @@ const logger = require("./core/logger");
 const { idempotencyMiddleware } = require("./core/middleware/idempotencyMiddleware");
 const authMiddleware = require("./middleware/auth");
 const { requestLoggingMiddleware } = require("./core/middleware/requestLogger");
-const { securityHeaders, permissionsPolicy, sanitizeInput, rateLimitMiddleware, sqlInjectionProtection } = require("./middleware/security");
+const { securityHeaders, permissionsPolicy, sanitizeInput, rateLimitMiddleware, sqlInjectionProtection, generateCsrfToken, validateCsrfToken } = require("./middleware/security");
 
 const app = express();
 const server = http.createServer(app);
@@ -131,6 +131,30 @@ io.on("connection", (socket) => {
 });
 
 //Routes
+// ── CSRF Token endpoint (must be before mutating route middleware) ──────────
+app.get('/api/csrf-token', authMiddleware, (req, res) => {
+  if (!req.user) {
+    return res.status(401).json({ message: 'Authentication required to obtain a CSRF token' });
+  }
+  const token = generateCsrfToken(req.user.id);
+  return res.json({ csrfToken: token });
+});
+
+// ── CSRF validation middleware for mutating methods ─────────────────────
+// Only enforced in production so dev workflow (curl / Postman) remains smooth.
+const csrfProtect = (req, res, next) => {
+  if (process.env.NODE_ENV !== 'production') return next();
+  if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) return next();
+  const token = req.headers['x-csrf-token'];
+  if (!req.user) return next(); // auth middleware will handle unauthenticated
+  if (!validateCsrfToken(req.user.id, token)) {
+    return res.status(403).json({ message: 'Invalid or missing CSRF token' });
+  }
+  return next();
+};
+
+app.use('/api', csrfProtect);
+
 app.use("/api/upload", uploadRoutes);
 app.use("/api/datasets", datasetsRoutes);
 app.use("/api/charts", chartsRoutes);

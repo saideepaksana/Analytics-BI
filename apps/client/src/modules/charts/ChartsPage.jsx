@@ -5,6 +5,7 @@ import ChartExplore from "./components/ChartExplore";
 import ChartPreview from "./components/ChartPreview";
 import { fetchCharts, deleteChartData, queryDataset } from "../../services/charts.service";
 import { canCreateChart } from "../../core/utils/permissions";
+import { getRequestErrorMessage } from "../../core/http/apiClient";
 import "./styles/charts.css";
 
 export default function ChartsPage({ onExploreMode }) {
@@ -45,7 +46,10 @@ export default function ChartsPage({ onExploreMode }) {
       await deleteChartData(id);
       setCharts(charts.filter(c => c.chartId !== id && c._id !== id));
     } catch (err) {
+      const msg = getRequestErrorMessage(err, 'Failed to delete chart');
+      setError(msg);
       console.error("Delete failed", err);
+      setTimeout(() => setError(null), 6000);
     }
   };
 

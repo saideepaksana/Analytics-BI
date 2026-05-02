@@ -6,6 +6,7 @@
  *
  * Roles: admin | editor | viewer
  */
+import { clearCsrfToken } from './csrf';
 
 const AUTH_STORAGE_KEY = "analytics-bi-auth";
 const AUTH_CHANGED_EVENT = "analytics-auth-changed";
@@ -241,5 +242,6 @@ export const updateCurrentUserPreferences = (partialPreferences = {}) => {
  */
 export const logout = () => {
   localStorage.removeItem(AUTH_STORAGE_KEY);
+  clearCsrfToken(); // Invalidate any cached CSRF token
   emitAuthChanged();
 };

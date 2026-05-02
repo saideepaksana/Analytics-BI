@@ -348,7 +348,8 @@ exports.publishDashboard = async (req, res) => {
 };
 
 /** POST /api/dashboards/:dashboardId/unpublish
- * Unpublish a dashboard (revert to draft) */
+ * Unpublish a dashboard (revert to draft)
+ * Preserves the current live state as a draft snapshot so no edits are lost. */
 exports.unpublishDashboard = async (req, res) => {
     try {
         const { dashboardId } = req.params;
@@ -359,23 +360,35 @@ exports.unpublishDashboard = async (req, res) => {
             return res.status(403).json({ message: 'You do not have permission to unpublish this dashboard' });
         }
 
+        // Snapshot the live layout/tabs into draftState if there is no pending draft.
+        // This prevents data loss: the published content becomes the starting point for edits.
+        const snapshotDraft = dashboard.draftState || {
+            layout: dashboard.layout,
+            tabs: dashboard.tabs,
+            activeTabId: dashboard.activeTabId,
+            filters: dashboard.filters,
+            _liveSnapshot: true,
+            snapshotAt: new Date().toISOString(),
+        };
+
         const updatedDashboard = await Dashboard.findByIdAndUpdate(
             dashboardId,
-            { 
-                $set: { 
+            {
+                $set: {
                     status: 'draft',
                     publishedAt: null,
                     publishedBy: null,
+                    draftState: snapshotDraft,
                     updatedBy: req.user?.id || 'anonymous'
-                }, 
-                $inc: { __v: 1 } 
+                },
+                $inc: { __v: 1 }
             },
             { returnDocument: 'after', runValidators: true }
         ).lean();
 
-        return res.json({ 
-            message: 'Dashboard unpublished', 
-            dashboard: dashboardMapper.fromDB(updatedDashboard) 
+        return res.json({
+            message: 'Dashboard unpublished',
+            dashboard: dashboardMapper.fromDB(updatedDashboard)
         });
     } catch (error) {
         return res.status(500).json({ message: 'Internal server error', detail: error.message });
@@ -414,6 +427,7 @@ exports.saveDraft = async (req, res) => {
         }
 
         const { draftState } = req.body;
+<<<<<<< HEAD
         if (draftState !== undefined && draftState !== null && typeof draftState !== 'object') {
             return res.status(400).json({ message: 'draftState must be an object when provided' });
         }
@@ -439,13 +453,72 @@ exports.saveDraft = async (req, res) => {
             { 
                 $set: setObj, 
                 $inc: { __v: 1 } 
+=======
+
+        // ── Draft state structural validation ────────────────────────────────
+        if (draftState !== null && draftState !== undefined) {
+            if (typeof draftState !== 'object' || Array.isArray(draftState)) {
+                return res.status(400).json({ message: 'draftState must be an object' });
+            }
+
+            // Validate tabs structure if provided
+            if (draftState.tabs !== undefined) {
+                if (!Array.isArray(draftState.tabs)) {
+                    return res.status(400).json({ message: 'draftState.tabs must be an array' });
+                }
+                for (let i = 0; i < draftState.tabs.length; i++) {
+                    const tab = draftState.tabs[i];
+                    if (typeof tab !== 'object' || !tab.id || !tab.name) {
+                        return res.status(400).json({
+                            message: `draftState.tabs[${i}] must have id and name fields`,
+                        });
+                    }
+                    if (tab.widgets !== undefined) {
+                        if (!Array.isArray(tab.widgets)) {
+                            return res.status(400).json({ message: `draftState.tabs[${i}].widgets must be an array` });
+                        }
+                        const layoutError = validateLayout(tab.widgets);
+                        if (layoutError) {
+                            return res.status(400).json({
+                                message: `Invalid widget layout in draftState.tabs[${i}]: ${layoutError}`,
+                            });
+                        }
+                    }
+                }
+            }
+
+            // Validate flat layout if provided
+            if (draftState.layout !== undefined) {
+                if (!Array.isArray(draftState.layout)) {
+                    return res.status(400).json({ message: 'draftState.layout must be an array' });
+                }
+                const layoutError = validateLayout(draftState.layout);
+                if (layoutError) {
+                    return res.status(400).json({
+                        message: `Invalid layout in draftState: ${layoutError}`,
+                    });
+                }
+            }
+        }
+        // ─────────────────────────────────────────────────────────────────────
+
+        const updatedDashboard = await Dashboard.findByIdAndUpdate(
+            dashboardId,
+            {
+                $set: {
+                    draftState: draftState !== undefined ? draftState : null,
+                    status: 'draft',
+                    updatedBy: req.user?.id || 'anonymous'
+                },
+                $inc: { __v: 1 }
+>>>>>>> 4f72dc9 (feat(security,rbac,drafts): enhance permissions, draft validation, and CSRF protection)
             },
             { returnDocument: 'after', runValidators: true }
         ).lean();
 
-        return res.json({ 
-            message: 'Draft saved', 
-            dashboard: dashboardMapper.fromDB(updatedDashboard) 
+        return res.json({
+            message: 'Draft saved',
+            dashboard: dashboardMapper.fromDB(updatedDashboard)
         });
     } catch (error) {
         return res.status(500).json({ message: 'Internal server error', detail: error.message });
