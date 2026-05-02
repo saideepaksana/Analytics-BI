@@ -4,7 +4,7 @@
   display: flex;
   flex-direction: column;
   overflow-y: auto;
-  background: var(--bg-main, #0b0f19);
+  background: var(--bg);
 }
 
 .dashboards-grid {
@@ -14,8 +14,8 @@
 }
 
 .dashboard-card {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 20px;
   padding: 24px;
   display: flex;
@@ -38,7 +38,7 @@
   margin: 0 0 8px;
   font-size: 1.25rem;
   font-weight: 600;
-  color: #fff;
+  color: var(--text);
 }
 
 .dashboard-card-meta {
@@ -139,7 +139,7 @@
   min-height: calc(100vh - 32px);
   display: flex;
   flex-direction: column;
-  background: #0f1117;
+  background: var(--bg);
 }
 
 .dashboard-editor-topbar {
@@ -148,8 +148,8 @@
   justify-content: space-between;
   gap: 12px;
   padding: 12px 18px;
-  border-bottom: 1px solid #2b313d;
-  background: #1a1a24;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
 }
 
 .dashboard-topbar-back-btn {
@@ -176,7 +176,7 @@
   margin: 0;
   font-size: 1.15rem;
   font-weight: 500;
-  color: #fff;
+  color: var(--text);
   line-height: 1.2;
 }
 
@@ -217,10 +217,10 @@
 }
 
 .dashboard-name-input {
-  border: 1px solid #2f3848;
+  border: 1px solid var(--border-strong);
   border-radius: 8px;
-  background: #0f131c;
-  color: #f8fafc;
+  background: var(--bg);
+  color: var(--text);
   padding: 9px 12px;
   width: min(460px, 100%);
   font-size: 0.92rem;
@@ -284,10 +284,10 @@
   align-items: center;
   gap: 6px;
   border-radius: 4px;
-  border: 1px solid rgba(148, 163, 184, 0.32);
+  border: 1px solid var(--border-strong);
   padding: 8px 14px;
-  background: rgba(15, 23, 42, 0.7);
-  color: #cbd5e1;
+  background: var(--surface-raised);
+  color: var(--text-secondary);
   cursor: pointer;
   font-weight: 500;
   font-size: 0.85rem;
@@ -355,8 +355,8 @@
   align-items: center;
   gap: 8px;
   padding: 10px 16px 0;
-  background: #141821;
-  border-bottom: 1px solid #2b313d;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
   overflow-x: auto;
 }
 
@@ -612,9 +612,9 @@
 
 .dashboard-canvas-toolbar {
   padding: 8px 14px;
-  border-bottom: 1px solid #2b313d;
-  background: #111622;
-  color: #7f8aa3;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-soft);
+  color: var(--muted);
   font-size: 0.82rem;
   display: flex;
   align-items: center;
@@ -626,17 +626,22 @@
   min-height: 0;
   overflow: auto;
   padding: 16px;
-  background: #181b1f;
+  background: var(--bg);
 }
 
 .dashboard-canvas-grid {
   position: relative;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
   border-radius: 0;
-  background-image: linear-gradient(to right, rgba(71, 85, 105, 0.12) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(71, 85, 105, 0.12) 1px, transparent 1px);
+  background-image: linear-gradient(to right, var(--border) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--border) 1px, transparent 1px);
   background-color: transparent;
   overflow: hidden;
+}
+
+.export-mode .dashboard-canvas-grid {
+  background-image: none !important;
+  border: none !important;
 }
 
 .dashboard-canvas-grid.view-mode {
@@ -646,13 +651,19 @@
 
 .dashboard-widget {
   position: absolute;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 4px;
-  background: #20232a;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
   display: flex;
   flex-direction: column;
-  transition: left 0.2s cubic-bezier(0.2, 0, 0.2, 1), top 0.2s cubic-bezier(0.2, 0, 0.2, 1), width 0.2s cubic-bezier(0.2, 0, 0.2, 1), height 0.2s cubic-bezier(0.2, 0, 0.2, 1);
+  overflow: hidden;
+  transition: all 0.2s cubic-bezier(0.2, 0, 0.2, 1);
+}
+
+.export-mode .dashboard-widget {
+  box-shadow: none !important;
+  border-color: var(--border-strong) !important;
 }
 
 .dashboard-widget.is-dragging,
@@ -692,7 +703,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  color: #e5e5e5;
+  color: var(--text);
   min-width: 0;
 }
 

@@ -124,9 +124,20 @@ function DashboardWidgetChart({ chart, dashboardFilters = [] }) {
           throw new Error("No dataset found");
         }
 
-        const query = buildChartQuery(chart, dashboardFilters);
-        const cacheKey = `${chart.chartId || chart._id || chart.name || "chart"}:${JSON.stringify(query)}`;
+        // Bug 1 Fix: If in export mode, use pre-fetched data from window.__EXPORT_STATE__
+        if (window.IS_EXPORT_MODE && window.__EXPORT_STATE__?.chartDataCache) {
+          const chartId = chart.chartId || chart._id;
+          const cachedData = window.__EXPORT_STATE__.chartDataCache[chartId];
+          if (cachedData) {
+            if (!cancelled) {
+              setData(cachedData);
+              setLoading(false);
+            }
+            return;
+          }
+        }
 
+        const query = buildChartQuery(chart, dashboardFilters);
         const results = await queryDataset(datasetId, query).then((response) => response.results || []);
 
         if (!cancelled) {
@@ -688,6 +699,14 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, saveE
     }
   }, [frozenExportState.error]);
 
+  useEffect(() => {
+    if (window.IS_EXPORT_MODE) {
+      setRenderedCount(0);
+      window.RENDER_COMPLETE = false;
+      console.log("[Export] Tab changed, waiting for new charts...");
+    }
+  }, [activeTabId]);
+
   const handleChartRendered = useCallback(() => {
     if (!window.IS_EXPORT_MODE) return;
     
@@ -1235,14 +1254,10 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, saveE
   };
 
   const handleExport = (format) => {
-    // Pipeline B: Capture frozen state
+    // Capture full frozen state including all tabs
     const frozenState = {
-      activeTab: visibleSection?.id || null,
-      visibleSection: {
-        id: visibleSection?.id || null,
-        name: visibleSection?.name || "Untitled Section",
-        widgets,
-      },
+      tabs,
+      activeTab: activeTabId,
       viewport: { width: window.innerWidth, height: window.innerHeight },
       dashboardName: name.trim(),
       description: description.trim(),
