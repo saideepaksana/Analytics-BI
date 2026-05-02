@@ -583,6 +583,11 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, saveE
       ? frozenState.dashboardName
       : dashboard?.name || "Untitled Dashboard"
   ));
+  const [description, setDescription] = useState(() => (
+    typeof frozenState?.description === "string" 
+      ? frozenState.description 
+      : dashboard?.description || ""
+  ));
   const [savingLocal, setSavingLocal] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const {
@@ -744,6 +749,7 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, saveE
   // Track the last known saved state to avoid redundant saves
   const lastStateRef = useRef({
     name: dashboard?.name || "",
+    description: dashboard?.description || "",
     tabs: JSON.stringify(tabs || []),
     activeTabId: activeTabId || "",
   });
@@ -753,10 +759,11 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, saveE
     const currentTabsJson = JSON.stringify(tabs || []);
     return (
       name !== lastStateRef.current.name ||
+      description !== lastStateRef.current.description ||
       currentTabsJson !== lastStateRef.current.tabs ||
       activeTabId !== lastStateRef.current.activeTabId
     );
-  }, [name, tabs, activeTabId]);
+  }, [name, description, tabs, activeTabId]);
 
   // Validate layout for collisions and dimension constraints
   const validateLayout = useCallback(() => {
@@ -784,14 +791,16 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, saveE
     if (validateLayout()) return undefined;
 
     const timer = setTimeout(() => {
-      onAutoSave?.({
+        onAutoSave?.({
         id: dashboard.id,
         name: name.trim(),
+        description: description.trim(),
         tabs,
         activeTabId,
       });
       lastStateRef.current = {
         name: name.trim(),
+        description: description.trim(),
         tabs: JSON.stringify(tabs),
         activeTabId,
       };
@@ -1192,6 +1201,7 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, saveE
       await onSave({
         id: dashboard?.id,
         name: name.trim(),
+        description: description.trim(),
         tabs,
         activeTabId,
         thumbnail
@@ -1199,6 +1209,7 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, saveE
 
       lastStateRef.current = {
         name: name.trim(),
+        description: description.trim(),
         tabs: JSON.stringify(tabs),
         activeTabId,
       };
@@ -1220,6 +1231,7 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, saveE
       },
       viewport: { width: window.innerWidth, height: window.innerHeight },
       dashboardName: name.trim(),
+      description: description.trim(),
       annotations,
       filters,
     };
@@ -1241,6 +1253,7 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, saveE
     try {
       const draftContent = {
         name: name.trim(),
+        description: description.trim(),
         tabs,
         activeTabId,
       };
@@ -1260,7 +1273,7 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, saveE
     // First save the current state as draft then publish
     setPublishingLocal(true);
     try {
-      await saveDraftService(dashboard.id, { name: name.trim(), tabs, activeTabId });
+      await saveDraftService(dashboard.id, { name: name.trim(), description: description.trim(), tabs, activeTabId });
       const published = await publishDashboardService(dashboard.id);
       onPublish?.(published);
       setDraftSavedMsg('Published!');
@@ -1281,16 +1294,32 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, saveE
           </button>
 
           {isEditMode ? (
-            <input
-              type="text"
-              className="dashboard-name-input"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              placeholder="Dashboard name"
-            />
+            <div style={{ display: "flex", flexDirection: "column", flex: 1, gap: "4px" }}>
+              <input
+                type="text"
+                className="dashboard-name-input"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                placeholder="Dashboard name"
+                style={{ fontSize: "18px", fontWeight: "600" }}
+              />
+              <input
+                type="text"
+                className="dashboard-name-input"
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+                placeholder="Add a description or summary..."
+                style={{ fontSize: "13px", opacity: 0.7, fontWeight: "400" }}
+              />
+            </div>
           ) : (
             <div className="dashboard-superset-title-group">
               <h1 className="dashboard-superset-title">{name}</h1>
+              {description && (
+                <p style={{ fontSize: "13px", opacity: 0.6, marginTop: "4px", maxWidth: "600px" }}>
+                  {description}
+                </p>
+              )}
             </div>
           )}
         </div>

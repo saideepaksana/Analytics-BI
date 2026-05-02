@@ -128,8 +128,12 @@ const runVisualExport = async (job) => {
         );
 
         page = await puppeteerService.acquirePage();
-        const { width = 1920, height = 1080 } = frozenState.viewport || {};
-        await page.setViewport({ width, height });
+        const { width = 1280, height = 800 } = frozenState.viewport || {};
+        // Ensure a minimum width for presentation-ready exports
+        const exportWidth = Math.max(1280, width);
+        const exportHeight = Math.max(800, height);
+        
+        await page.setViewport({ width: exportWidth, height: exportHeight });
         await page.emulateMediaType("screen");
 
         const exportUrl = `${CLIENT_URL}?view=dashboards&id=${dashboardId}&export=true`;

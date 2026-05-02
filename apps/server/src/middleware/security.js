@@ -180,7 +180,7 @@ const validateCsrfToken = (userId, token) => {
 // ── NoSQL / SQL Injection Detection ──────────────────────────────────────────
 
 const SQL_PATTERNS = [
-  /(\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC|EXECUTE)\b)/i,
+  /(\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC|EXECUTE)\b.*?\b(FROM|INTO|TABLE|SET|WHERE|JOIN)\b)/i,
   /(--|;|\/\*|\*\/|@@|@@version)/,
   /(union.*select|union.*all)/i,
   /(\bor\b\s+\d+\s*=\s*\d+)/i,
