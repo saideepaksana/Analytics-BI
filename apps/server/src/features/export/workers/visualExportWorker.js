@@ -130,36 +130,54 @@ const writeDashboardPdf = async (page, filePath, job) => {
     
     if (tabSelectors.length > 0) {
         for (let i = 0; i < tabSelectors.length; i++) {
+            // Bug 7: Tab click on hidden element works in JS but add comment for fragility
             // Click the tab and get its name
             const tabData = await page.evaluate((idx) => {
                 const tabs = document.querySelectorAll(".dashboard-tab-item");
                 if (tabs[idx]) {
                     window.RENDER_COMPLETE = false;
                     tabs[idx].click();
-                    
-                    // Check if tab has widgets to know if we should wait for RENDER_COMPLETE
-                    const grid = document.querySelector(".dashboard-canvas-grid");
-                    const widgetCount = grid ? grid.querySelectorAll(".dashboard-widget").length : 0;
-                    
-                    return {
-                        name: tabs[idx].innerText.trim(),
-                        hasWidgets: widgetCount > 0
-                    };
+                    return { name: tabs[idx].innerText.trim() };
                 }
-                return { name: `Tab ${idx + 1}`, hasWidgets: false };
+                return { name: `Tab ${idx + 1}` };
             }, i);
 
             // Give React a moment to switch tabs and start loading
             await new Promise(r => setTimeout(r, 500));
 
+            // Bug 2 Fix: Check widget count AFTER the timeout to ensure React has swapped components
+            const hasWidgets = await page.evaluate(() => {
+                const grid = document.querySelector(".dashboard-canvas-grid");
+                return grid ? grid.querySelectorAll(".dashboard-widget").length > 0 : false;
+            });
+
             // Wait for render if there are widgets
-            if (tabData.hasWidgets) {
+            if (hasWidgets) {
                 try {
                     await page.waitForFunction(() => window.RENDER_COMPLETE === true, { timeout: 30000 });
                 } catch (e) {
                     logger.warn(`Render timeout for tab ${i}. Proceeding.`);
                 }
             }
+
+            // Bug 1 Fix: Calculate and inject tight content height PER-TAB to avoid black void on different layouts
+            const contentHeight = await page.evaluate(() => {
+                const grid = document.querySelector(".dashboard-canvas-grid");
+                const widgets = grid ? grid.querySelectorAll(".dashboard-widget") : [];
+                if (!grid || widgets.length === 0) return 800;
+                
+                let maxBottom = 0;
+                widgets.forEach(w => {
+                    const r = w.getBoundingClientRect();
+                    const relativeBottom = r.bottom - grid.getBoundingClientRect().top;
+                    maxBottom = Math.max(maxBottom, relativeBottom);
+                });
+                return Math.ceil(maxBottom) + 24; // 24px padding
+            });
+
+            await page.addStyleTag({
+                content: `.dashboard-canvas-grid { height: ${contentHeight}px !important; min-height: ${contentHeight}px !important; }`
+            });
 
             await appendTabToPdf(page, pdfDoc, job, i, tabSelectors.length, tabData.name);
         }
@@ -219,20 +237,25 @@ const runVisualExport = async (job) => {
 
         page = await puppeteerService.acquirePage();
 
-        // Bug 1 Fix: Pre-fetch chart data server-side to bypass headless auth issues
+        // Bug 11 Fix: Avoid direct mutation of job.data.frozenState
+        const enrichedState = { ...frozenState };
         const chartDataCache = {};
-        const allTabs = frozenState.tabs || [];
+        const allTabs = enrichedState.tabs || [];
         for (const tab of allTabs) {
             const widgets = tab.widgets || [];
             for (const widget of widgets) {
-                if (widget.type === "chart" && widget.chartId) {
+                if (widget.chartId) {
                     try {
-                        const chart = await Chart.findOne({ chartId: widget.chartId }).lean();
+                        // Bug 3 Fix: Handle charts that only have _id and no chartId field
+                        const chart = await Chart.findOne({ 
+                            $or: [{ chartId: widget.chartId }, { _id: widget.chartId }] 
+                        }).lean();
+
                         if (chart) {
                             const datasetId = chart.dataSource?.datasetId;
                             if (datasetId) {
                                 // Replicate client-side query building: merge chart + dashboard filters
-                                const dashboardFilters = frozenState.filters || [];
+                                const dashboardFilters = enrichedState.filters || [];
                                 const chartQuery = {
                                     ...chart.query,
                                     filters: mergeFilters(chart.query.filters || [], dashboardFilters)
@@ -247,21 +270,42 @@ const runVisualExport = async (job) => {
                 }
             }
         }
-        frozenState.chartDataCache = chartDataCache;
+        enrichedState.chartDataCache = chartDataCache;
 
-        const { width = 1280, height = 800 } = frozenState.viewport || {};
+        const { width = 1280, height = 800 } = enrichedState.viewport || {};
         // Ensure a minimum width for presentation-ready exports
         const exportWidth = Math.max(1280, width);
         const exportHeight = Math.max(800, height);
         
         await page.setViewport({ width: exportWidth, height: exportHeight });
+        await page.emulateMediaType("print");
+
+        const exportUrl = `${CLIENT_URL}?view=dashboards&id=${dashboardId}&export=true`;
+        await page.evaluateOnNewDocument((state) => {
+            window.RENDER_COMPLETE = false;
+            window.IS_EXPORT_MODE = true;
+            window.__EXPORT_STATE__ = state;
+            localStorage.setItem("export_frozen_state", JSON.stringify(state));
+        }, enrichedState);
+
+        await page.goto(exportUrl, { waitUntil: "networkidle2", timeout: 60000 });
         
-        // Bug 2 Fix: Force light theme and white backgrounds
+        await job.updateProgress(50);
+
+        try {
+            // The client hydrates deterministic export state when
+            // window.IS_EXPORT_MODE is enabled, so capture waits for the
+            // explicit render-complete signal instead of live page timing.
+            await page.waitForFunction(() => window.RENDER_COMPLETE === true, { timeout: 45000 });
+        } catch (e) {
+            logger.warn(`Render signal timeout for ${filename}. Proceeding with partial render.`, "VisualExportWorker");
+        }
+
+        // Apply styles and theme AFTER navigation and render complete
         await page.evaluate(() => {
             document.documentElement.setAttribute("data-theme", "light");
         });
-        await page.emulateMediaType("print");
-        
+
         // Inject styles to fix dark theme bleeding and hide UI elements
         await page.addStyleTag({
             content: `
@@ -284,51 +328,9 @@ const runVisualExport = async (job) => {
             `
         });
 
-        const exportUrl = `${CLIENT_URL}?view=dashboards&id=${dashboardId}&export=true`;
-        await page.evaluateOnNewDocument((state) => {
-            window.RENDER_COMPLETE = false;
-            window.IS_EXPORT_MODE = true;
-            window.__EXPORT_STATE__ = state;
-            localStorage.setItem("export_frozen_state", JSON.stringify(state));
-        }, frozenState);
-
-        await page.goto(exportUrl, { waitUntil: "networkidle2", timeout: 60000 });
-        
-        // Bug 2 Fix: Calculate tight content height and force grid height to eliminate black void
-        const contentHeight = await page.evaluate(() => {
-            const grid = document.querySelector(".dashboard-canvas-grid");
-            const widgets = grid ? grid.querySelectorAll(".dashboard-widget") : [];
-            if (!grid || widgets.length === 0) return 800;
-            
-            let maxBottom = 0;
-            widgets.forEach(w => {
-                const r = w.getBoundingClientRect();
-                const relativeBottom = r.bottom - grid.getBoundingClientRect().top;
-                maxBottom = Math.max(maxBottom, relativeBottom);
-            });
-            return Math.ceil(maxBottom) + 24; // 24px padding
-        });
-
-        await page.addStyleTag({
-            content: `.dashboard-canvas-grid { height: ${contentHeight}px !important; min-height: ${contentHeight}px !important; }`
-        });
-
-        await job.updateProgress(50);
-
-        try {
-            // The client hydrates deterministic export state when
-            // window.IS_EXPORT_MODE is enabled, so capture waits for the
-            // explicit render-complete signal instead of live page timing.
-            await page.waitForFunction(() => window.RENDER_COMPLETE === true, { timeout: 45000 });
-        } catch (e) {
-            logger.warn(`Render signal timeout for ${filename}. Proceeding with partial render.`, "VisualExportWorker");
-        }
-
         if (format === "png") {
-            // For PNG, we capture the entire dashboard including all tabs stacked
-            // To do this, we'll iterate through tabs and take screenshots, then the user gets a composite?
-            // Actually, usually PNG is just the first tab or active tab.
-            // Requirement says "one tab in one page" for PDF. For PNG, let's just ensure high quality.
+            // Bug 5: PNG export ignores all tabs, only exports active tab. 
+            // In the future, we should iterate and composite or export as a zip of images.
             const bounds = await getExportBounds(page);
             await page.screenshot({
                 path: filePath,

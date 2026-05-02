@@ -187,9 +187,9 @@ const runRawExport = async (job) => {
         await job.updateProgress(20);
 
         const exportQuery = buildQueryFromContext(context);
-        // Memory Guard: Enforce a reasonable limit for standard exports to prevent OOM
-        if (!exportQuery.limit || exportQuery.limit > 50000) {
-            exportQuery.limit = 50000;
+        // Bug 6 Fix: Memory Guard uses rowLimit (consistent with executeDatasetQuery)
+        if (!exportQuery.rowLimit || exportQuery.rowLimit > 50000) {
+            exportQuery.rowLimit = 50000;
         }
 
         const { results, normalizedQuery } = await executeDatasetQuery(datasetId, exportQuery, {

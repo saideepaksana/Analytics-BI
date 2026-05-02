@@ -96,6 +96,10 @@ const getFrozenExportState = () => {
   }
 
   try {
+    // Bug 4 Fix: Prefer window.__EXPORT_STATE__ (no size limit) over localStorage
+    if (window.__EXPORT_STATE__) {
+      return { state: window.__EXPORT_STATE__, error: null };
+    }
     const stored = localStorage.getItem("export_frozen_state");
     return {
       state: stored ? JSON.parse(stored) : null,
@@ -707,18 +711,24 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, saveE
     }
   }, [activeTabId]);
 
+  const widgetsCountRef = useRef(widgets.length);
+  useEffect(() => {
+    widgetsCountRef.current = widgets.length;
+  }, [widgets.length]);
+
   const handleChartRendered = useCallback(() => {
     if (!window.IS_EXPORT_MODE) return;
     
     setRenderedCount(prev => {
         const next = prev + 1;
-        if (next >= widgets.length) {
+        // Bug 9 Fix: Use ref to avoid stale closure capture of widgets.length
+        if (next >= widgetsCountRef.current) {
             window.RENDER_COMPLETE = true;
             console.log("[Export] All charts rendered. Signal sent.");
         }
         return next;
     });
-  }, [widgets.length]);
+  }, []); // Remove widgets.length dependency as we use ref now
 
   useEffect(() => {
     if (!dashboard?.id || isEmbed) {

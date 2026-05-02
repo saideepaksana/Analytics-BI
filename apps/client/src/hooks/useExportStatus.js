@@ -102,12 +102,26 @@ export const useExportStatus = () => {
     }
   }, [stopPolling]);
 
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      stopPolling();
+    };
+  }, [stopPolling]);
+
   const pollStatus = useCallback((id) => {
     stopPolling();
 
     pollingRef.current = setInterval(async () => {
       try {
         const response = await apiClient.get(`/export/status/${id}`);
+        
+        // Bug 10 Fix: Guard against state updates after unmount
+        if (!mountedRef.current) return;
+
         pollFailureCountRef.current = 0;
         const nextStatus = normalizeJobState(response.data?.state);
         const nextProgress = Number(response.data?.progress);
@@ -132,6 +146,8 @@ export const useExportStatus = () => {
           setStatus(nextStatus);
         }
       } catch (pollError) {
+        if (!mountedRef.current) return;
+        
         pollFailureCountRef.current += 1;
         console.error("Export status polling error", pollError);
 
@@ -152,6 +168,8 @@ export const useExportStatus = () => {
       const response = await apiClient.post(`/export/${type}`, payload);
       const nextJobId = response.data?.jobId || null;
 
+      if (!mountedRef.current) return null;
+
       if (nextJobId) {
         setJobId(nextJobId);
         setStatus("queued");
@@ -163,13 +181,12 @@ export const useExportStatus = () => {
 
       return nextJobId;
     } catch (exportError) {
+      if (!mountedRef.current) return null;
       setStatus("failed");
       setError(getRequestErrorMessage(exportError, "Failed to start export."));
       return null;
     }
   }, [pollStatus, reset]);
-
-  useEffect(() => () => stopPolling(), [stopPolling]);
 
   return {
     status,
