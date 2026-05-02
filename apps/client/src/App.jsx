@@ -33,6 +33,7 @@ import DataReviewModal from "./modules/data-review/DataReviewModal";
 import { DatasetsPage } from "./modules/datasets";
 import ChartsPage from "./modules/charts/ChartsPage";
 import { DashboardPage } from "./modules/dashboard";
+import EmbedDashboard from "./modules/dashboard/EmbedDashboard";
 import SettingsPage from "./modules/settings/SettingsPage";
 import { SOCKET_URL, API_BASE_URL } from "./core/config/env";
 import {
@@ -564,6 +565,8 @@ function App() {
         path="/auth/signup"
         element={user && !isExportMode ? <Navigate to="/app/home" replace /> : <SignUpPage />}
       />
+
+      <Route path="/embed/:dashboardId" element={<EmbedDashboard />} />
 
       <Route element={<RequireAuth user={user} isExportMode={isExportMode} />}>
         <Route

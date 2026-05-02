@@ -181,6 +181,7 @@ function DashboardWidget({
   chart,
   layout,
   readOnly,
+  isEmbed = false,
   dashboardFilters = [],
   annotations = [],
   onRemove,
@@ -218,6 +219,7 @@ function DashboardWidget({
   };
 
   const activeClass = isDragging ? "is-dragging" : isResizing ? "is-resizing" : "";
+  const showWidgetActions = !isEmbed;
 
   const handleSaveAnnotation = async () => {
     if (!tempAnnotation.trim()) return;
@@ -300,164 +302,166 @@ function DashboardWidget({
             <h5>{widget.title || chart?.name || "Missing chart"}</h5>
           )}
         </div>
-        <div className="dashboard-widget-actions">
-          <div style={{ position: "relative", display: "inline-block" }}>
-            <button
-              type="button"
-              className="dashboard-widget-icon-btn action"
-              onMouseDown={(event) => event.stopPropagation()}
-              onClick={(event) => {
-                event.stopPropagation();
-                setShowMenu(!showMenu);
-              }}
-              title={readOnly ? "Export chart data" : "Menu"}
-              disabled={isExportBusy}
-            >
-              {isExportBusy ? <Loader2 size={13} className="spinner" /> : <MoreVertical size={13} />}
-            </button>
-            {showMenu && (
-              <div
-                className="dashboard-widget-menu"
-                style={{
-                  position: "absolute",
-                  right: 0,
-                  top: "100%",
-                  background: "var(--bg-3, #1e2126)",
-                  border: "1px solid var(--border, #333)",
-                  borderRadius: "4px",
-                  padding: "4px 0",
-                  zIndex: 100,
-                  minWidth: "148px",
-                  boxShadow: "0 4px 6px rgba(0,0,0,0.3)",
+        {showWidgetActions ? (
+          <div className="dashboard-widget-actions">
+            <div style={{ position: "relative", display: "inline-block" }}>
+              <button
+                type="button"
+                className="dashboard-widget-icon-btn action"
+                onMouseDown={(event) => event.stopPropagation()}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setShowMenu(!showMenu);
                 }}
+                title={readOnly ? "Export chart data" : "Menu"}
+                disabled={isExportBusy}
               >
-                {chart ? (
-                  <>
-                    <button
-                      type="button"
-                      style={{
-                        width: "100%",
-                        padding: "6px 12px",
-                        textAlign: "left",
-                        background: "none",
-                        border: "none",
-                        color: "var(--fg-1, #e0e0e0)",
-                        cursor: "pointer",
-                        fontSize: "12px",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "6px",
-                      }}
-                      onMouseDown={(event) => event.stopPropagation()}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        handleExport("csv");
-                      }}
-                    >
-                      <Download size={12} />
-                      Export CSV
-                    </button>
-                    <button
-                      type="button"
-                      style={{
-                        width: "100%",
-                        padding: "6px 12px",
-                        textAlign: "left",
-                        background: "none",
-                        border: "none",
-                        color: "var(--fg-1, #e0e0e0)",
-                        cursor: "pointer",
-                        fontSize: "12px",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "6px",
-                      }}
-                      onMouseDown={(event) => event.stopPropagation()}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        handleExport("xlsx");
-                      }}
-                    >
-                      <FileSpreadsheet size={12} />
-                      Export Excel
-                    </button>
-                  </>
-                ) : null}
-                {!readOnly ? (
-                  <>
-                    <button
-                      type="button"
-                      style={{
-                        width: "100%",
-                        padding: "6px 12px",
-                        textAlign: "left",
-                        background: "none",
-                        border: "none",
-                        color: "var(--fg-1, #e0e0e0)",
-                        cursor: "pointer",
-                        fontSize: "12px",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "6px",
-                      }}
-                      onMouseDown={(event) => event.stopPropagation()}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setShowMenu(false);
-                        setTempTitle(widget.title || chart?.name || "");
-                        setIsEditingTitle(true);
-                      }}
-                    >
-                      <Pencil size={12} />
-                      Rename
-                    </button>
-                    <button
-                      type="button"
-                      style={{
-                        width: "100%",
-                        padding: "6px 12px",
-                        textAlign: "left",
-                        background: "none",
-                        border: "none",
-                        color: "var(--fg-1, #e0e0e0)",
-                        cursor: "pointer",
-                        fontSize: "12px",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "6px",
-                      }}
-                      onMouseDown={(event) => event.stopPropagation()}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setShowMenu(false);
-                        setTempAnnotation("");
-                        setAnnotationToEdit(null);
-                        setIsEditingAnnotation(true);
-                      }}
-                    >
-                      <MessageSquare size={12} />
-                      Add Annotation
-                    </button>
-                  </>
-                ) : null}
-              </div>
-            )}
+                {isExportBusy ? <Loader2 size={13} className="spinner" /> : <MoreVertical size={13} />}
+              </button>
+              {showMenu && (
+                <div
+                  className="dashboard-widget-menu"
+                  style={{
+                    position: "absolute",
+                    right: 0,
+                    top: "100%",
+                    background: "var(--bg-3, #1e2126)",
+                    border: "1px solid var(--border, #333)",
+                    borderRadius: "4px",
+                    padding: "4px 0",
+                    zIndex: 100,
+                    minWidth: "148px",
+                    boxShadow: "0 4px 6px rgba(0,0,0,0.3)",
+                  }}
+                >
+                  {chart ? (
+                    <>
+                      <button
+                        type="button"
+                        style={{
+                          width: "100%",
+                          padding: "6px 12px",
+                          textAlign: "left",
+                          background: "none",
+                          border: "none",
+                          color: "var(--fg-1, #e0e0e0)",
+                          cursor: "pointer",
+                          fontSize: "12px",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "6px",
+                        }}
+                        onMouseDown={(event) => event.stopPropagation()}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleExport("csv");
+                        }}
+                      >
+                        <Download size={12} />
+                        Export CSV
+                      </button>
+                      <button
+                        type="button"
+                        style={{
+                          width: "100%",
+                          padding: "6px 12px",
+                          textAlign: "left",
+                          background: "none",
+                          border: "none",
+                          color: "var(--fg-1, #e0e0e0)",
+                          cursor: "pointer",
+                          fontSize: "12px",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "6px",
+                        }}
+                        onMouseDown={(event) => event.stopPropagation()}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleExport("xlsx");
+                        }}
+                      >
+                        <FileSpreadsheet size={12} />
+                        Export Excel
+                      </button>
+                    </>
+                  ) : null}
+                  {!readOnly ? (
+                    <>
+                      <button
+                        type="button"
+                        style={{
+                          width: "100%",
+                          padding: "6px 12px",
+                          textAlign: "left",
+                          background: "none",
+                          border: "none",
+                          color: "var(--fg-1, #e0e0e0)",
+                          cursor: "pointer",
+                          fontSize: "12px",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "6px",
+                        }}
+                        onMouseDown={(event) => event.stopPropagation()}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setShowMenu(false);
+                          setTempTitle(widget.title || chart?.name || "");
+                          setIsEditingTitle(true);
+                        }}
+                      >
+                        <Pencil size={12} />
+                        Rename
+                      </button>
+                      <button
+                        type="button"
+                        style={{
+                          width: "100%",
+                          padding: "6px 12px",
+                          textAlign: "left",
+                          background: "none",
+                          border: "none",
+                          color: "var(--fg-1, #e0e0e0)",
+                          cursor: "pointer",
+                          fontSize: "12px",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "6px",
+                        }}
+                        onMouseDown={(event) => event.stopPropagation()}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setShowMenu(false);
+                          setTempAnnotation("");
+                          setAnnotationToEdit(null);
+                          setIsEditingAnnotation(true);
+                        }}
+                      >
+                        <MessageSquare size={12} />
+                        Add Annotation
+                      </button>
+                    </>
+                  ) : null}
+                </div>
+              )}
+            </div>
+            {!readOnly ? (
+              <button
+                type="button"
+                className="dashboard-widget-icon-btn danger"
+                onMouseDown={(event) => event.stopPropagation()}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onRemove(widget.id);
+                }}
+                title="Remove chart"
+              >
+                <Trash2 size={13} />
+              </button>
+            ) : null}
           </div>
-          {!readOnly ? (
-            <button
-              type="button"
-              className="dashboard-widget-icon-btn danger"
-              onMouseDown={(event) => event.stopPropagation()}
-              onClick={(event) => {
-                event.stopPropagation();
-                onRemove(widget.id);
-              }}
-              title="Remove chart"
-            >
-              <Trash2 size={13} />
-            </button>
-          ) : null}
-        </div>
+        ) : null}
       </header>
 
       <div className="dashboard-widget-body">
@@ -569,11 +573,11 @@ function DashboardWidget({
   );
 }
 
-export default function DashboardEditor({ mode, dashboard, charts, saving, saveError, onClearSaveError, onBack, onSave, onAutoSave, onPublish, onUnpublish }) {
+export default function DashboardEditor({ mode, dashboard, charts, saving, saveError, onClearSaveError, onBack, onSave, onAutoSave, onPublish, onUnpublish, isEmbed = false }) {
   const frozenExportState = useMemo(() => getFrozenExportState(), []);
   const frozenState = frozenExportState.state;
   const isNewOrEmpty = !dashboard?.id || (Array.isArray(dashboard?.widgets) && dashboard.widgets.length === 0);
-  const [isEditMode, setIsEditMode] = useState(mode === "edit" || isNewOrEmpty);
+  const [isEditMode, setIsEditMode] = useState(() => (isEmbed ? false : mode === "edit" || isNewOrEmpty));
   const readOnly = !isEditMode;
   const [publishingLocal, setPublishingLocal] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
@@ -655,6 +659,12 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, saveE
   const [popupWidgetId, setPopupWidgetId] = useState(null);
 
   useEffect(() => {
+    if (isEmbed && isEditMode) {
+      setIsEditMode(false);
+    }
+  }, [isEmbed, isEditMode]);
+
+  useEffect(() => {
     if (!window.IS_EXPORT_MODE && dashboard?.filters) {
       setFilters(dashboard.filters);
     }
@@ -692,13 +702,14 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, saveE
   }, [widgets.length]);
 
   useEffect(() => {
-    if (dashboard?.id) {
-      if (window.IS_EXPORT_MODE && hasFrozenAnnotationsRef.current) {
-        return;
-      }
-      annotationsService.getAnnotationsByDashboard(dashboard.id).then(setAnnotations);
+    if (!dashboard?.id || isEmbed) {
+      return;
     }
-  }, [dashboard?.id]);
+    if (window.IS_EXPORT_MODE && hasFrozenAnnotationsRef.current) {
+      return;
+    }
+    annotationsService.getAnnotationsByDashboard(dashboard.id).then(setAnnotations);
+  }, [dashboard?.id, isEmbed]);
 
   useEffect(() => {
     if (window.IS_EXPORT_MODE && widgets.length === 0) {
@@ -707,6 +718,7 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, saveE
   }, [widgets.length]);
 
   const handleAddAnnotation = async (chartId, text) => {
+    if (isEmbed) return;
     try {
       const newAnn = await annotationsService.createAnnotation({
         chartId,
@@ -721,6 +733,7 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, saveE
   };
 
   const handleUpdateAnnotation = async (annId, text) => {
+    if (isEmbed) return;
     try {
       const updatedAnn = await annotationsService.updateAnnotation(annId, { text });
       setAnnotations((prev) =>
@@ -732,6 +745,7 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, saveE
   };
 
   const handleDeleteAnnotation = async (annId) => {
+    if (isEmbed) return;
     try {
       await annotationsService.deleteAnnotation(annId);
       setAnnotations((prev) => prev.filter((ann) => ann._id !== annId));
@@ -1289,9 +1303,11 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, saveE
     <div className="dashboard-editor-page">
       <div className="dashboard-editor-topbar">
         <div className="dashboard-editor-title-row">
-          <button type="button" className="dashboard-topbar-back-btn" onClick={onBack} title="Back">
-            <ArrowLeft size={18} />
-          </button>
+          {!isEmbed ? (
+            <button type="button" className="dashboard-topbar-back-btn" onClick={onBack} title="Back">
+              <ArrowLeft size={18} />
+            </button>
+          ) : null}
 
           {isEditMode ? (
             <div style={{ display: "flex", flexDirection: "column", flex: 1, gap: "4px" }}>
@@ -1324,117 +1340,119 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, saveE
           )}
         </div>
 
-        <div className="dashboard-editor-actions">
-          {!isEditMode ? (
-            <>
-              {/* Draft indicator badge in view mode */}
-              {dashboard?.status === 'draft' && (
-                <span style={{
-                  fontSize: '11px',
-                  padding: '3px 10px',
-                  borderRadius: '4px',
-                  background: 'rgba(245,158,11,0.18)',
-                  color: '#f59e0b',
-                  fontWeight: 600,
-                  border: '1px solid rgba(245,158,11,0.3)',
-                  letterSpacing: '0.05em',
-                  textTransform: 'uppercase',
-                }}>DRAFT</span>
-              )}
-              {canEditDashboard(dashboard) && (
-                <button type="button" className="dashboard-primary-btn" onClick={() => setIsEditMode(true)}>
-                  Edit dashboard
-                </button>
-              )}
-              
-              <div className="dashboard-export-wrapper" style={{ position: "relative" }}>
-                <button 
-                  type="button" 
-                  className={`dashboard-secondary-btn ${status ? "active" : ""}`} 
-                  onClick={() => setShowExportMenu(!showExportMenu)}
-                  disabled={isVisualExportBusy}
-                >
-                  {isVisualExportBusy ? (
-                    <Loader2 size={14} className="spinner" />
-                  ) : (
-                    <>
-                      <Download size={14} />
-                      Export
-                    </>
+        {!isEmbed ? (
+          <div className="dashboard-editor-actions">
+            {!isEditMode ? (
+              <>
+                {/* Draft indicator badge in view mode */}
+                {dashboard?.status === 'draft' && (
+                  <span style={{
+                    fontSize: '11px',
+                    padding: '3px 10px',
+                    borderRadius: '4px',
+                    background: 'rgba(245,158,11,0.18)',
+                    color: '#f59e0b',
+                    fontWeight: 600,
+                    border: '1px solid rgba(245,158,11,0.3)',
+                    letterSpacing: '0.05em',
+                    textTransform: 'uppercase',
+                  }}>DRAFT</span>
+                )}
+                {canEditDashboard(dashboard) && (
+                  <button type="button" className="dashboard-primary-btn" onClick={() => setIsEditMode(true)}>
+                    Edit dashboard
+                  </button>
+                )}
+                
+                <div className="dashboard-export-wrapper" style={{ position: "relative" }}>
+                  <button 
+                    type="button" 
+                    className={`dashboard-secondary-btn ${status ? "active" : ""}`} 
+                    onClick={() => setShowExportMenu(!showExportMenu)}
+                    disabled={isVisualExportBusy}
+                  >
+                    {isVisualExportBusy ? (
+                      <Loader2 size={14} className="spinner" />
+                    ) : (
+                      <>
+                        <Download size={14} />
+                        Export
+                      </>
+                    )}
+                  </button>
+
+                  {showExportMenu && (
+                    <div className="export-dropdown" style={{ top: "calc(100% + 8px)", bottom: "auto", left: "auto", right: 0 }}>
+                      <button onClick={() => handleExport("pdf")}>
+                        <PdfIcon size={14} /> PDF Document
+                      </button>
+                      <button onClick={() => handleExport("png")}>
+                        <ImageIcon size={14} /> PNG Image
+                      </button>
+                    </div>
                   )}
-                </button>
 
-                {showExportMenu && (
-                  <div className="export-dropdown" style={{ top: "calc(100% + 8px)", bottom: "auto", left: "auto", right: 0 }}>
-                    <button onClick={() => handleExport("pdf")}>
-                      <PdfIcon size={14} /> PDF Document
-                    </button>
-                    <button onClick={() => handleExport("png")}>
-                      <ImageIcon size={14} /> PNG Image
-                    </button>
-                  </div>
+                  {isVisualExportComplete && (
+                    <div className="export-success-toast" style={{ top: "calc(100% + 8px)", bottom: "auto", left: "auto", right: 0 }} onClick={download}>
+                      Download ready
+                    </div>
+                  )}
+                </div>
+
+                <button type="button" className="dashboard-icon-only-btn">
+                  <MoreVertical size={16} />
+                </button>
+              </>
+            ) : (
+              <>
+                <button type="button" className="dashboard-secondary-btn" onClick={() => setShowChartLibrary((prev) => !prev)}>
+                  <Plus size={14} />
+                  Add chart
+                </button>
+                {/* Save Draft button – available for existing dashboards */}
+                {dashboard?.id && (
+                  <button
+                    type="button"
+                    className="dashboard-secondary-btn"
+                    onClick={handleSaveDraft}
+                    disabled={savingDraft}
+                    title="Save current state as draft (not published)"
+                  >
+                    {savingDraft ? <Loader2 size={14} className="spinner" /> : <FileEdit size={14} />}
+                    {savingDraft ? 'Saving...' : 'Save Draft'}
+                  </button>
                 )}
-
-                {isVisualExportComplete && (
-                  <div className="export-success-toast" style={{ top: "calc(100% + 8px)", bottom: "auto", left: "auto", right: 0 }} onClick={download}>
-                    Download ready
-                  </div>
+                <div className="dashboard-save-action">
+                  <button type="button" className="dashboard-primary-btn" onClick={submitSave} disabled={isSaving}>
+                    {isSaving ? <Loader2 size={14} className="spinner" /> : 'Save'}
+                  </button>
+                  {saveError ? (
+                    <div className="dashboard-save-error" role="status">
+                      {saveError}
+                    </div>
+                  ) : null}
+                </div>
+                {/* Publish button – available for editors/owners with a saved dashboard */}
+                {dashboard?.id && canPublishDashboard(dashboard) && dashboard?.status !== 'published' && (
+                  <button
+                    type="button"
+                    className="dashboard-primary-btn"
+                    style={{ background: 'linear-gradient(135deg, #10b981, #059669)' }}
+                    onClick={handlePublish}
+                    disabled={publishingLocal}
+                    title="Publish this dashboard to make it visible to all users"
+                  >
+                    {publishingLocal ? <Loader2 size={14} className="spinner" /> : <Send size={14} />}
+                    {publishingLocal ? 'Publishing...' : 'Publish'}
+                  </button>
                 )}
-              </div>
-
-              <button type="button" className="dashboard-icon-only-btn">
-                <MoreVertical size={16} />
-              </button>
-            </>
-          ) : (
-            <>
-              <button type="button" className="dashboard-secondary-btn" onClick={() => setShowChartLibrary((prev) => !prev)}>
-                <Plus size={14} />
-                Add chart
-              </button>
-              {/* Save Draft button – available for existing dashboards */}
-              {dashboard?.id && (
-                <button
-                  type="button"
-                  className="dashboard-secondary-btn"
-                  onClick={handleSaveDraft}
-                  disabled={savingDraft}
-                  title="Save current state as draft (not published)"
-                >
-                  {savingDraft ? <Loader2 size={14} className="spinner" /> : <FileEdit size={14} />}
-                  {savingDraft ? 'Saving...' : 'Save Draft'}
+                <button type="button" className="dashboard-secondary-btn discard" onClick={() => setIsEditMode(false)}>
+                  Discard
                 </button>
-              )}
-              <div className="dashboard-save-action">
-                <button type="button" className="dashboard-primary-btn" onClick={submitSave} disabled={isSaving}>
-                  {isSaving ? <Loader2 size={14} className="spinner" /> : 'Save'}
-                </button>
-                {saveError ? (
-                  <div className="dashboard-save-error" role="status">
-                    {saveError}
-                  </div>
-                ) : null}
-              </div>
-              {/* Publish button – available for editors/owners with a saved dashboard */}
-              {dashboard?.id && canPublishDashboard(dashboard) && dashboard?.status !== 'published' && (
-                <button
-                  type="button"
-                  className="dashboard-primary-btn"
-                  style={{ background: 'linear-gradient(135deg, #10b981, #059669)' }}
-                  onClick={handlePublish}
-                  disabled={publishingLocal}
-                  title="Publish this dashboard to make it visible to all users"
-                >
-                  {publishingLocal ? <Loader2 size={14} className="spinner" /> : <Send size={14} />}
-                  {publishingLocal ? 'Publishing...' : 'Publish'}
-                </button>
-              )}
-              <button type="button" className="dashboard-secondary-btn discard" onClick={() => setIsEditMode(false)}>
-                Discard
-              </button>
-            </>
-          )}
-        </div>
+              </>
+            )}
+          </div>
+        ) : null}
       </div>
 
       <div className="dashboard-tabs-bar">
@@ -1533,6 +1551,7 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, saveE
                   chart={chartMap.get(widget.chartId)}
                   layout={widgetLayout[index]}
                   readOnly={!isEditMode}
+                  isEmbed={isEmbed}
                   dashboardFilters={filters}
                   annotations={annotations.filter((ann) => ann.chartId === widget.chartId)}
                   onRemove={removeWidget}

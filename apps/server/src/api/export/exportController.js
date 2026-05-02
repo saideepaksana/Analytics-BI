@@ -226,13 +226,17 @@ async function generateEmbedToken(req, res) {
         const normalizedOrigins = embedTokenService.normalizeAllowedOrigins(
             allowedOrigins ?? process.env.EMBED_ALLOWED_ORIGINS
         );
+        const resolvedOrigins =
+            normalizedOrigins.length === 0 && process.env.NODE_ENV !== "production"
+                ? ["http://localhost:5173", "http://localhost:3000"]
+                : normalizedOrigins;
         const expiresInHours = parseExpirationHours(expirationHours);
         const { token, expiresAt } = embedTokenService.generateToken({
             dashboardId: String(dashboard._id),
             userId: req.user.id,
             scope: "view",
             expiresInHours,
-            allowedOrigins: normalizedOrigins,
+            allowedOrigins: resolvedOrigins,
         });
 
         const clientUrl = (process.env.CLIENT_URL || "http://localhost:5173").replace(/\/+$/, "");
