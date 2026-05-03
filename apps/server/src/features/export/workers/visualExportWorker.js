@@ -148,16 +148,23 @@ const writeDashboardPdf = async (page, filePath, job) => {
             // Click the tab and get its name
             const tabData = await page.evaluate((idx) => {
                 const tabs = document.querySelectorAll(".dashboard-tab-item");
-                if (tabs[idx]) {
-                    window.RENDER_COMPLETE = false;
-                    tabs[idx].click();
-                    return { name: tabs[idx].innerText.trim() };
+                const tab = tabs[idx];
+                if (tab) {
+                    const isActive = tab.classList.contains("active");
+                    // Only click if it's not already active to avoid no-op that stalls RENDER_COMPLETE
+                    if (!isActive) {
+                        window.RENDER_COMPLETE = false;
+                        tab.click();
+                    }
+                    return { name: tab.innerText.trim(), wasAlreadyActive: isActive };
                 }
-                return { name: `Tab ${idx + 1}` };
+                return { name: `Tab ${idx + 1}`, wasAlreadyActive: false };
             }, i);
 
-            // Give React a moment to switch tabs and start loading
-            await new Promise(r => setTimeout(r, 500));
+            // Give React a moment to switch tabs and start loading (skip if already active)
+            if (!tabData.wasAlreadyActive) {
+                await new Promise(r => setTimeout(r, 100));
+            }
 
             // Bug 2 Fix: Check widget count AFTER the timeout to ensure React has swapped components
             const hasWidgets = await page.evaluate(() => {
@@ -165,12 +172,15 @@ const writeDashboardPdf = async (page, filePath, job) => {
                 return grid ? grid.querySelectorAll(".dashboard-widget").length > 0 : false;
             });
 
-            // Wait for render if there are widgets
+            // Wait for render if there are widgets (skip if already rendered/active)
             if (hasWidgets) {
-                try {
-                    await page.waitForFunction(() => window.RENDER_COMPLETE === true, { timeout: 30000 });
-                } catch (e) {
-                    logger.warn(`Render timeout for tab ${i}. Proceeding.`);
+                const alreadyRendered = await page.evaluate(() => window.RENDER_COMPLETE === true);
+                if (!alreadyRendered) {
+                    try {
+                        await page.waitForFunction(() => window.RENDER_COMPLETE === true, { timeout: 15000 });
+                    } catch (e) {
+                        logger.warn(`Render timeout for tab ${i}. Proceeding.`);
+                    }
                 }
             }
 
@@ -256,39 +266,58 @@ const runVisualExport = async (job) => {
         const enrichedState = { ...frozenState };
         const chartDataCache = {};
         const allTabs = enrichedState.tabs || [];
+
+        // Collect all unique chart IDs across all tabs for parallel fetching
+        const chartIdSet = new Set();
         for (const tab of allTabs) {
-            const widgets = tab.widgets || [];
-            for (const widget of widgets) {
-                if (widget.chartId) {
-                    try {
-                        // Bug 3 Fix: Handle charts that only have _id and no chartId field. 
-                        // Only check _id if it's a valid ObjectId to avoid cast errors with UUIDs.
-                        const chartQuery = { chartId: widget.chartId };
-                        if (mongoose.Types.ObjectId.isValid(widget.chartId)) {
-                            chartQuery._id = widget.chartId;
-                        }
+            for (const widget of (tab.widgets || [])) {
+                if (widget.chartId) chartIdSet.add(widget.chartId);
+            }
+        }
+        const uniqueChartIds = Array.from(chartIdSet);
 
-                        const chart = await Chart.findOne(
-                            chartQuery._id ? { $or: [{ chartId: widget.chartId }, { _id: widget.chartId }] } : { chartId: widget.chartId }
-                        ).lean();
+        // Parallel pre-fetch: fetch all chart configs and data concurrently
+        if (uniqueChartIds.length > 0) {
+            const BATCH_SIZE = 5;
+            for (let i = 0; i < uniqueChartIds.length; i += BATCH_SIZE) {
+                const batch = uniqueChartIds.slice(i, i + BATCH_SIZE);
+                const results = await Promise.allSettled(batch.map(async (chartId) => {
+                    // Bug 3 Fix: Handle charts that only have _id and no chartId field.
+                    const queryFilter = mongoose.Types.ObjectId.isValid(chartId)
+                        ? { $or: [{ chartId }, { _id: chartId }] }
+                        : { chartId };
 
-                        if (chart) {
-                            const datasetId = chart.dataSource?.datasetId;
-                            if (datasetId) {
-                                // Replicate client-side query building: merge chart + dashboard filters
-                                const dashboardFilters = enrichedState.filters || [];
-                                const chartQuery = {
-                                    ...chart.query,
-                                    filters: mergeFilters(chart.query.filters || [], dashboardFilters)
-                                };
-                                const { results } = await executeDatasetQuery(datasetId, chartQuery);
-                                chartDataCache[widget.chartId] = results;
-                            }
-                        }
-                    } catch (err) {
-                        logger.warn(`Pre-fetch failed for chart ${widget.chartId}: ${err.message}`, "VisualExportWorker");
+                    const chart = await Chart.findOne(queryFilter).lean();
+                    if (!chart) return;
+
+                    const datasetId = chart.dataSource?.datasetId;
+                    if (!datasetId) return;
+
+                    const chartType = chart.visualization?.type || chart.type;
+                    const isScatter = chartType === "scatter";
+                    const isDistribution = chartType === "boxplot" || chartType === "histogram";
+                    const isLineOrArea = chartType === "line" || chartType === "area";
+                    const hasRawMeasure = (chart.query?.measures || []).some(
+                        (m) => String(m.aggregation || "").toUpperCase() === "RAW"
+                    );
+
+                    const dashboardFilters = enrichedState.filters || [];
+                    const cq = {
+                        ...chart.query,
+                        raw: chart.query?.raw || isScatter || isDistribution || (isLineOrArea && hasRawMeasure),
+                        filters: mergeFilters(chart.query?.filters || [], dashboardFilters)
+                    };
+
+                    const { results } = await executeDatasetQuery(datasetId, cq);
+                    chartDataCache[chartId] = results;
+                }));
+
+                // Log any failures
+                results.forEach((r, idx) => {
+                    if (r.status === "rejected") {
+                        logger.warn(`Pre-fetch failed for chart ${batch[idx]}: ${r.reason?.message}`, "VisualExportWorker");
                     }
-                }
+                });
             }
         }
         enrichedState.chartDataCache = chartDataCache;
@@ -300,6 +329,18 @@ const runVisualExport = async (job) => {
 
         await page.setViewport({ width: exportWidth, height: exportHeight });
         await page.emulateMediaType("print");
+
+        // Block unnecessary resources to speed up page load
+        await page.setRequestInterception(true);
+        page.on("request", (req) => {
+            const resourceType = req.resourceType();
+            // Block fonts, media, and external images to speed up rendering
+            if (["font", "media"].includes(resourceType)) {
+                req.abort();
+            } else {
+                req.continue();
+            }
+        });
 
         // Pass auth headers to Puppeteer so it can authenticate with the API
         if (userId) {
@@ -318,7 +359,20 @@ const runVisualExport = async (job) => {
             localStorage.setItem("export_frozen_state", JSON.stringify(state));
         }, enrichedState);
 
-        await page.goto(exportUrl, { waitUntil: "networkidle2", timeout: 60000 });
+        // Forward console messages from the export page for debugging
+        page.on("console", (msg) => {
+            const text = msg.text();
+            if (text.includes("[Export]") || text.includes("RENDER_COMPLETE")) {
+                logger.debug(`[Puppeteer Console] ${text}`, "VisualExportWorker");
+            }
+        });
+
+        await page.goto(exportUrl, { waitUntil: "load", timeout: 30000 });
+
+        // After 'load', wait briefly for React to mount and hydrate the export state
+        await page.waitForSelector(".dashboard-canvas-grid", { timeout: 10000 }).catch(() => {
+            logger.warn("Dashboard grid selector not found within 10s", "VisualExportWorker");
+        });
 
         await job.updateProgress(50);
 
@@ -326,7 +380,8 @@ const runVisualExport = async (job) => {
             // The client hydrates deterministic export state when
             // window.IS_EXPORT_MODE is enabled, so capture waits for the
             // explicit render-complete signal instead of live page timing.
-            await page.waitForFunction(() => window.RENDER_COMPLETE === true, { timeout: 45000 });
+            // With the ChartPreview onChartReady fix, this should fire in <3s.
+            await page.waitForFunction(() => window.RENDER_COMPLETE === true, { timeout: 15000 });
         } catch (e) {
             logger.warn(`Render signal timeout for ${filename}. Proceeding with partial render.`, "VisualExportWorker");
         }
@@ -379,19 +434,27 @@ const runVisualExport = async (job) => {
                     if (!selectedTabs.includes(tabId)) continue;
 
                     // Switch tab
-                    await page.evaluate((idx) => {
+                    const wasAlreadyActive = await page.evaluate((idx) => {
                         const tabs = document.querySelectorAll(".dashboard-tab-item");
-                        if (tabs[idx]) {
-                            window.RENDER_COMPLETE = false;
-                            tabs[idx].click();
+                        const tab = tabs[idx];
+                        if (tab) {
+                            const isActive = tab.classList.contains("active");
+                            if (!isActive) {
+                                window.RENDER_COMPLETE = false;
+                                tab.click();
+                            }
+                            return isActive;
                         }
+                        return false;
                     }, i);
 
                     // Wait for render
-                    await new Promise(r => setTimeout(r, 500));
-                    try {
-                        await page.waitForFunction(() => window.RENDER_COMPLETE === true, { timeout: 30000 });
-                    } catch (e) { }
+                    if (!wasAlreadyActive) {
+                        await new Promise(r => setTimeout(r, 100));
+                        try {
+                            await page.waitForFunction(() => window.RENDER_COMPLETE === true, { timeout: 15000 });
+                        } catch (e) { }
+                    }
 
                     const tabFilename = `dashboard_${dashboardId}_tab_${i}_${Date.now()}.png`;
                     const tabPath = path.join(EXPORT_DIR, tabFilename);

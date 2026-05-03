@@ -128,9 +128,19 @@ function DashboardWidgetChart({ chart, dashboardFilters = [], onRenderComplete, 
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const renderCompleteCalledRef = useRef(false);
+
+  // Wrap onRenderComplete so we can track whether it's been called
+  const handleRenderComplete = useCallback(() => {
+    if (!renderCompleteCalledRef.current) {
+      renderCompleteCalledRef.current = true;
+      if (onRenderComplete) onRenderComplete();
+    }
+  }, [onRenderComplete]);
 
   useEffect(() => {
     let cancelled = false;
+    renderCompleteCalledRef.current = false;
 
     const fetchData = async () => {
       setLoading(true);
@@ -181,10 +191,25 @@ function DashboardWidgetChart({ chart, dashboardFilters = [], onRenderComplete, 
   }, [chart?.chartId, chart?._id, chart?.id, chart?.dataSource?.datasetId, chart?.datasetId, chart?.type, chart?.visualization?.type, chart?.query, dashboardFilters]);
 
   useEffect(() => {
-    if (error && window.IS_EXPORT_MODE && onRenderComplete) {
-      onRenderComplete();
+    if (error && window.IS_EXPORT_MODE && handleRenderComplete) {
+      handleRenderComplete();
     }
-  }, [error, onRenderComplete]);
+  }, [error, handleRenderComplete]);
+
+  // Safety-net: if in export mode and data is loaded but ChartPreview hasn't
+  // signaled render complete within 3 seconds, fire it as a fallback.
+  useEffect(() => {
+    if (!window.IS_EXPORT_MODE || loading || error) return undefined;
+
+    const fallbackTimer = setTimeout(() => {
+      if (!renderCompleteCalledRef.current) {
+        console.warn("[Export] Fallback render complete fired for chart", chart?.chartId || chart?._id);
+        handleRenderComplete();
+      }
+    }, 3000);
+
+    return () => clearTimeout(fallbackTimer);
+  }, [loading, error, handleRenderComplete, chart?.chartId, chart?._id]);
 
   if (loading) {
     return (
@@ -207,7 +232,7 @@ function DashboardWidgetChart({ chart, dashboardFilters = [], onRenderComplete, 
       style={{ ...chart.style, minHeight: "0px" }}
       stacking={chart.visualization?.series?.stack || false}
       title={title}
-      onRenderComplete={onRenderComplete}
+      onRenderComplete={handleRenderComplete}
     />
   );
 }

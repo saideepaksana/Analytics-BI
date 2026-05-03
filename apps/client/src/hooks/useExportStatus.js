@@ -157,7 +157,7 @@ export const useExportStatus = () => {
           stopPolling();
         }
       }
-    }, 2000);
+    }, 1000);
   }, [handleCompleted, stopPolling]);
 
   const startExport = useCallback(async (type, payload) => {

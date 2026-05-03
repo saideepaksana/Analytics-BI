@@ -31,7 +31,14 @@ class PuppeteerService {
                     "--disable-software-rasterizer",
                     "--disable-features=AudioServiceOutOfProcess",
                     "--mute-audio",
-                    "--no-zygote"
+                    "--no-zygote",
+                    "--disable-extensions",
+                    "--disable-background-networking",
+                    "--disable-default-apps",
+                    "--disable-translate",
+                    "--font-render-hinting=none",
+                    "--disable-sync",
+                    "--disable-backgrounding-occluded-windows",
                 ]
             });
             

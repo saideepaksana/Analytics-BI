@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useRef, useCallback, useEffect } from "react";
 import ReactECharts from "echarts-for-react";
 
 const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style = {}, annotations = [], isPreview = false, binSize = 10, stacking = false, onRenderComplete, onChartReady, title }) => {
@@ -50,11 +50,11 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
       const axisData = [];
 
       measures.forEach((m, idx) => {
-        const field = m.field;
-        if (!field) return;
-
+        const fieldKey = getMeasureKey(m);
+        if (!fieldKey) return;
+ 
         const rawValues = data
-          .map((item) => Number(item[field]))
+          .map((item) => Number(item[fieldKey]))
           .filter((v) => !isNaN(v))
           .sort((a, b) => a - b);
 
@@ -84,7 +84,7 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
             borderWidth: 2,
           },
         });
-        axisData.push(m.label || field);
+        axisData.push(m.label || m.field);
       });
 
       if (boxDataList.length === 0) return null;
@@ -133,7 +133,8 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
       const metricsData = [];
 
       validMetrics.forEach((m) => {
-        const vals = data.map((item) => Number(item[m.field])).filter((v) => !isNaN(v));
+        const fieldKey = getMeasureKey(m);
+        const vals = data.map((item) => Number(item[fieldKey])).filter((v) => !isNaN(v));
         if (vals.length > 0) {
           globalMin = Math.min(globalMin, ...vals);
           globalMax = Math.max(globalMax, ...vals);
@@ -199,15 +200,18 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
 
     // --- SCATTER PLOT ---
     if (type === "scatter") {
-      const xField = measures[0]?.field;
-      const yField = measures[1]?.field;
-      if (!xField || !yField) {
+      const xMeasure = measures[0];
+      const yMeasure = measures[1];
+      const xFieldKey = getMeasureKey(xMeasure);
+      const yFieldKey = getMeasureKey(yMeasure);
+      
+      if (!xFieldKey || !yFieldKey) {
         return {
           title: { text: "Scatter requires 2 measures", left: "center", top: "center", textStyle: { color: textSecondary } }
         };
       }
       const scatterData = data
-        .map(item => [Number(item[xField]), Number(item[yField])])
+        .map(item => [Number(item[xFieldKey]), Number(item[yFieldKey])])
         .filter(pair => !isNaN(pair[0]) && !isNaN(pair[1]));
 
       const baseScatter = {
@@ -216,13 +220,13 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
         tooltip: isPreview ? { show: false } : {
           ...darkTooltip,
           trigger: "item",
-          formatter: (p) => `${xField}: ${p.value[0]}<br/>${yField}: ${p.value[1]}`
+          formatter: (p) => `${xFieldKey}: ${p.value[0]}<br/>${yFieldKey}: ${p.value[1]}`
         },
         grid: isPreview ? { top: 0, left: 0, right: 0, bottom: 0 } : { top: titleText ? "16%" : "12%", left: "3%", right: "4%", bottom: "12%", containLabel: true },
         xAxis: {
           show: !isPreview && !hideXAxis,
           type: "value",
-          name: xField,
+          name: xFieldKey,
           nameTextStyle: { color: textSecondary, show: !hideXAxis },
           axisLine: { show: !hideXAxis, lineStyle: { color: borderStrong } },
           axisTick: { show: !hideXAxis },
@@ -232,7 +236,7 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
         yAxis: {
           show: !isPreview,
           type: "value",
-          name: yField,
+          name: yFieldKey,
           nameTextStyle: { color: textSecondary },
           axisLine: { lineStyle: { color: borderStrong } },
           axisLabel: { color: textSecondary },
@@ -472,17 +476,47 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
     );
   }
 
+  // Guard ref to prevent double-firing onRenderComplete
+  const hasSignaledRef = useRef(false);
+
+  // Reset the guard when data or type changes
+  useEffect(() => {
+    hasSignaledRef.current = false;
+  }, [data, type]);
+
+  const signalRenderComplete = useCallback(() => {
+    if (onRenderComplete && !hasSignaledRef.current) {
+      hasSignaledRef.current = true;
+      onRenderComplete();
+    }
+  }, [onRenderComplete]);
+
+  // When animations are disabled, ECharts fires 'finished' synchronously during
+  // mount — before ReactECharts has attached the onEvents handler. Use
+  // onChartReady as a reliable fallback in that case.
+  const animationsDisabled = !!window.DISABLE_CHART_ANIMATIONS;
+
+  const handleChartReady = useCallback((instance) => {
+    if (onChartReady) onChartReady(instance);
+    if (animationsDisabled) {
+      // Give ECharts one frame to finish its synchronous render
+      requestAnimationFrame(() => {
+        signalRenderComplete();
+      });
+    }
+  }, [onChartReady, animationsDisabled, signalRenderComplete]);
+
   return (
     <div className="chart-preview-wrapper" style={{ height: "100%", width: "100%", minHeight: isPreview ? "0px" : (style?.minHeight !== undefined ? style.minHeight : "400px") }}>
       <ReactECharts
-        option={{ ...option, animation: !window.DISABLE_CHART_ANIMATIONS }}
+        option={{ ...option, animation: !animationsDisabled }}
         style={{ height: "100%", width: "100%" }}
         notMerge={true}
         lazyUpdate={true}
-        onChartReady={onChartReady}
+        onChartReady={handleChartReady}
         onEvents={{
           'finished': () => {
-            if (onRenderComplete) onRenderComplete();
+            signalRenderComplete();
           }
         }}
       />
