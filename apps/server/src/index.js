@@ -35,6 +35,10 @@ const server = http.createServer(app);
 logger.info("Logger initialized", "Logger", logger.config);
 
 connectDB();
+const { cleanupStaleExportLogs } = require("./features/export/utils/exportLogCleanup");
+mongoose.connection.once("open", () => {
+  cleanupStaleExportLogs();
+});
 
 const startWorkersIfAvailable = async () => {
   const probe = new Redis({

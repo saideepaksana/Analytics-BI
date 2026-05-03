@@ -83,7 +83,7 @@ const appendTabToPdf = async (page, pdfDoc, job, tabIndex, totalTabs, tabName) =
     for (let sliceIndex = 0; sliceIndex < totalSlices; sliceIndex += 1) {
         const yOffset = sliceIndex * sliceHeight;
         const clipHeight = Math.min(sliceHeight, bounds.height - yOffset);
-        
+
         const imageBuffer = await page.screenshot({
             type: "png",
             captureBeyondViewport: true,
@@ -126,17 +126,17 @@ const writeDashboardPdf = async (page, filePath, job) => {
     pdfDoc.pipe(output);
 
     const { selectedTabs = [] } = job.data;
-    
+
     // Detect tabs
     const tabSelectors = await page.$$(".dashboard-tab-item");
-    
+
     if (tabSelectors.length > 0) {
         for (let i = 0; i < tabSelectors.length; i++) {
             const tabId = await page.evaluate((idx) => {
                 const tabs = document.querySelectorAll(".dashboard-tab-item");
                 // In our app, the tab ID might be stored in a data attribute or we can just use index if matched with selectedTabs
                 // But safer to check the tab's ID or index.
-                return tabs[idx].getAttribute("data-tab-id") || String(idx); 
+                return tabs[idx].getAttribute("data-tab-id") || String(idx);
             }, i);
 
             // If selectedTabs is provided, only export those. Otherwise export all.
@@ -178,7 +178,7 @@ const writeDashboardPdf = async (page, filePath, job) => {
                 const grid = document.querySelector(".dashboard-canvas-grid");
                 const widgets = grid ? grid.querySelectorAll(".dashboard-widget") : [];
                 if (!grid || widgets.length === 0) return 800;
-                
+
                 let maxBottom = 0;
                 widgets.forEach(w => {
                     const r = w.getBoundingClientRect();
@@ -211,7 +211,7 @@ const runVisualExport = async (job) => {
     const { dashboardId, format, frozenState, userId, userRole, exportTheme } = job.data;
     const jobId = job.id;
     const isAdmin = userRole === "admin";
-    
+
     if (!fs.existsSync(EXPORT_DIR)) {
         fs.mkdirSync(EXPORT_DIR, { recursive: true });
     }
@@ -222,10 +222,10 @@ const runVisualExport = async (job) => {
     let page;
     try {
         await job.updateProgress(5);
-        
+
         const dashboard = await Dashboard.findById(dashboardId).lean();
         if (!dashboard) throw new Error("Dashboard not found.");
-        
+
         const isOwner = dashboard.createdBy === userId || userId === "anonymous";
         if (dashboard.createdBy && !isOwner && !isAdmin) {
             throw new Error("Access Denied: You do not own this dashboard.");
@@ -261,8 +261,8 @@ const runVisualExport = async (job) => {
                 if (widget.chartId) {
                     try {
                         // Bug 3 Fix: Handle charts that only have _id and no chartId field
-                        const chart = await Chart.findOne({ 
-                            $or: [{ chartId: widget.chartId }, { _id: widget.chartId }] 
+                        const chart = await Chart.findOne({
+                            $or: [{ chartId: widget.chartId }, { _id: widget.chartId }]
                         }).lean();
 
                         if (chart) {
@@ -290,20 +290,29 @@ const runVisualExport = async (job) => {
         // Ensure a minimum width for presentation-ready exports
         const exportWidth = Math.max(1280, width);
         const exportHeight = Math.max(800, height);
-        
+
         await page.setViewport({ width: exportWidth, height: exportHeight });
         await page.emulateMediaType("print");
+
+        // Pass auth headers to Puppeteer so it can authenticate with the API
+        if (userId) {
+            await page.setExtraHTTPHeaders({
+                "x-user-id": String(userId),
+                "x-user-role": String(userRole || "admin")
+            });
+        }
 
         const exportUrl = `${CLIENT_URL}?view=dashboards&id=${dashboardId}&export=true`;
         await page.evaluateOnNewDocument((state) => {
             window.RENDER_COMPLETE = false;
             window.IS_EXPORT_MODE = true;
+            window.DISABLE_CHART_ANIMATIONS = true;
             window.__EXPORT_STATE__ = state;
             localStorage.setItem("export_frozen_state", JSON.stringify(state));
         }, enrichedState);
 
         await page.goto(exportUrl, { waitUntil: "networkidle2", timeout: 60000 });
-        
+
         await job.updateProgress(50);
 
         try {
@@ -352,7 +361,7 @@ const runVisualExport = async (job) => {
             if (selectedTabs.length > 1) {
                 const filenames = [];
                 const tabSelectors = await page.$$(".dashboard-tab-item");
-                
+
                 for (let i = 0; i < tabSelectors.length; i++) {
                     const tabId = await page.evaluate((idx) => {
                         const tabs = document.querySelectorAll(".dashboard-tab-item");
@@ -375,12 +384,12 @@ const runVisualExport = async (job) => {
                     await new Promise(r => setTimeout(r, 500));
                     try {
                         await page.waitForFunction(() => window.RENDER_COMPLETE === true, { timeout: 30000 });
-                    } catch (e) {}
+                    } catch (e) { }
 
                     const tabFilename = `dashboard_${dashboardId}_tab_${i}_${Date.now()}.png`;
                     const tabPath = path.join(EXPORT_DIR, tabFilename);
                     const bounds = await getExportBounds(page);
-                    
+
                     await page.screenshot({
                         path: tabPath,
                         type: "png",
@@ -389,11 +398,17 @@ const runVisualExport = async (job) => {
                     });
                     filenames.push(tabFilename);
                 }
-                
+
                 // Hide tabs bar AFTER capturing all screenshots
                 await page.evaluate(() => {
                     const bar = document.querySelector(".dashboard-tabs-bar");
                     if (bar) bar.style.display = "none";
+                });
+
+                await ExportLog.findOneAndUpdate({ jobId }, {
+                    status: "completed",
+                    filename: filenames[0], // Schema only supports one filename for now
+                    exportedAt: Date.now()
                 });
 
                 return { status: "completed", filenames };
@@ -406,23 +421,34 @@ const runVisualExport = async (job) => {
                     captureBeyondViewport: true,
                     clip: bounds,
                 });
+                await ExportLog.findOneAndUpdate({ jobId }, {
+                    status: "completed",
+                    filename,
+                    exportedAt: Date.now()
+                });
+
                 return { status: "completed", filename };
             }
         } else {
             await writeDashboardPdf(page, filePath, job);
+            await ExportLog.findOneAndUpdate({ jobId }, {
+                status: "completed",
+                filename,
+                exportedAt: Date.now()
+            });
             return { status: "completed", filename };
         }
 
     } catch (err) {
         logger.error(`Visual export failed: ${err.message}`, "VisualExportWorker");
-        await ExportLog.findOneAndUpdate({ jobId }, { 
+        await ExportLog.findOneAndUpdate({ jobId }, {
             status: "failed",
             failureReason: err.message,
             filename: null
-        }).catch(() => {});
+        }).catch(() => { });
 
         if (fs.existsSync(filePath)) {
-            try { fs.unlinkSync(filePath); } catch (e) {}
+            try { fs.unlinkSync(filePath); } catch (e) { }
         }
         throw err;
     } finally {

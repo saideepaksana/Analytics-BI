@@ -168,6 +168,12 @@ function DashboardWidgetChart({ chart, dashboardFilters = [], onRenderComplete, 
     };
   }, [chart?.chartId, chart?._id, chart?.id, chart?.dataSource?.datasetId, chart?.datasetId, chart?.type, chart?.visualization?.type, chart?.query, dashboardFilters]);
 
+  useEffect(() => {
+    if (error && window.IS_EXPORT_MODE && onRenderComplete) {
+      onRenderComplete();
+    }
+  }, [error, onRenderComplete]);
+
   if (loading) {
     return (
       <div className="dashboard-widget-skeleton">
@@ -238,6 +244,12 @@ function DashboardWidget({
 
   const activeClass = isDragging ? "is-dragging" : isResizing ? "is-resizing" : "";
   const showWidgetActions = !isEmbed && !readOnly;
+
+  useEffect(() => {
+    if (!chart && window.IS_EXPORT_MODE && onRenderComplete) {
+      onRenderComplete();
+    }
+  }, [chart, onRenderComplete]);
 
   const handleSaveAnnotation = async () => {
     if (!tempAnnotation.trim()) return;
