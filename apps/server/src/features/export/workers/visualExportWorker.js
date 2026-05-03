@@ -235,12 +235,13 @@ const runVisualExport = async (job) => {
             { jobId },
             {
                 $set: {
-                    datasetId: dashboardId,
+                    dashboardId: dashboardId,
                     format,
                     status: "processing",
                     exportedBy: userId || "anonymous",
                     filename,
                     recordCount: 0,
+                    exportState: frozenState,
                     exportedAt: Date.now(),
                 },
                 $unset: { failureReason: "" },

@@ -206,6 +206,26 @@ async function getExportLog(req, res) {
     }
 }
 
+async function getDashboardExportLog(req, res) {
+    try {
+        const logs = await ExportLog.find({ dashboardId: req.params.dashboardId })
+            .sort({ exportedAt: -1 })
+            .limit(50)
+            .lean();
+        
+        // Enhance logs with absolute download URL
+        const enhancedLogs = logs.map(log => ({
+            ...log,
+            downloadUrl: log.filename ? buildExportUrl(req, log.filename) : ""
+        }));
+
+        res.json({ logs: enhancedLogs });
+    } catch (err) {
+        logger.error(`Failed to fetch dashboard export log: ${err.message}`, "exportController");
+        res.status(500).json({ error: "Failed to fetch dashboard export log." });
+    }
+}
+
 async function generateEmbedToken(req, res) {
     try {
         const { dashboardId, expirationHours, allowedOrigins } = req.body || {};
@@ -374,6 +394,7 @@ module.exports = {
     getExportStatus,
     downloadExportFile,
     getExportLog,
+    getDashboardExportLog,
     generateEmbedToken,
     getEmbeddedDashboard,
     createSchedule,

@@ -6,6 +6,7 @@ const {
     getExportStatus, 
     downloadExportFile,
     getExportLog, 
+    getDashboardExportLog,
     generateEmbedToken,
     getEmbeddedDashboard,
     createSchedule,
@@ -28,6 +29,7 @@ router.get("/download/:filename", downloadExportFile);
 
 // Legacy/Other
 router.get("/:datasetId/log", getExportLog);
+router.get("/dashboards/:dashboardId/log", getDashboardExportLog);
 router.post("/embed/token", generateEmbedToken);
 router.get("/embed/:dashboardId", embedTokenAuth, embedRateLimiter, embedCors, getEmbeddedDashboard);
 

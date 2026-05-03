@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Grip, Loader2, MoveDiagonal2, Pencil, Plus, PlusCircle, Save, Trash2, X, MoreVertical, Star, User, Clock, MessageSquare, Download, FileSpreadsheet, FileText as PdfIcon, Send, FileEdit } from "lucide-react";
+import { ArrowLeft, Grip, Loader2, MoveDiagonal2, Pencil, Plus, PlusCircle, Save, Trash2, X, MoreVertical, Star, User, Clock, MessageSquare, Download, FileSpreadsheet, FileText as PdfIcon, Send, FileEdit, History } from "lucide-react";
 import html2canvas from "html2canvas";
 import { useExportStatus } from "../../../hooks/useExportStatus";
 import { buildChartQueryForExport, buildChartRawExportPayload, mergeNormalizedFilters } from "../../../services/export.service";
@@ -9,6 +9,7 @@ import * as annotationsService from "../../../services/annotations.service";
 import { canEditDashboard, canPublishDashboard } from "../../../core/utils/permissions";
 import { saveDraft as saveDraftService, publishDashboard as publishDashboardService } from "../../../services/dashboard.service";
 import ScheduleExportModal from "./ScheduleExportModal";
+import ExportHistoryModal from "./ExportHistoryModal";
 
 const ROW_HEIGHT = 42;
 const MIN_WIDGET_W = 4;
@@ -586,6 +587,7 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, saveE
   const [savingLocal, setSavingLocal] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [showExportHistoryModal, setShowExportHistoryModal] = useState(false);
   const {
     status,
     progress: exportProgress,
@@ -1407,6 +1409,12 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, saveE
                       }}>
                         <Clock size={14} /> Schedule Delivery
                       </button>
+                      <button onClick={() => {
+                        setShowExportMenu(false);
+                        setShowExportHistoryModal(true);
+                      }}>
+                        <History size={14} /> Export History
+                      </button>
                     </div>
                   )}
 
@@ -1690,6 +1698,17 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, saveE
           dashboardName={name}
           tabs={dashboard.tabs || []}
           onClose={() => setShowScheduleModal(false)} 
+        />
+      )}
+      {showExportHistoryModal && (
+        <ExportHistoryModal 
+          dashboardId={dashboard.id} 
+          onClose={() => setShowExportHistoryModal(false)}
+          onRestoreState={(restoredState) => {
+            if (restoredState.tabs) setTabs(restoredState.tabs);
+            if (restoredState.activeTab) setActiveTabId(restoredState.activeTab);
+            if (restoredState.filters) setFilters(restoredState.filters);
+          }}
         />
       )}
     </div>
