@@ -283,7 +283,7 @@ async function getEmbeddedDashboard(req, res) {
 
 async function createSchedule(req, res) {
     try {
-        const { dashboardId, name, frequency, format, recipients } = req.body;
+        const { dashboardId, name, frequency, format, selectedTabs, recipients } = req.body;
         const userId = req.user?.id || "anonymous";
 
         if (!dashboardId || !name || !frequency) {
@@ -306,6 +306,7 @@ async function createSchedule(req, res) {
             name,
             frequency,
             format: format || "pdf",
+            selectedTabs: selectedTabs || [],
             recipients: recipients || [],
             status: "active"
         });

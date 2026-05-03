@@ -61,7 +61,9 @@ Watch the server terminal for the following sequence:
 1.  **Check Filesystem**:  
     Run `ls /tmp/analytics-bi/exports/visual` to see the generated PDF/PNG files.
 2.  **Check Email**:  
-    Login to [ethereal.email/messages](https://ethereal.email/messages) using your test credentials. You should see the email with the dashboard file attached.
+    Login to [ethereal.email/messages](https://ethereal.email/messages) using your test credentials. 
+    *   **PDF Exports**: Will appear as a standard attachment.
+    *   **PNG Exports**: Will be **embedded directly in the email body** (and also attached) so you can see the dashboard immediately.
 
 ---
 

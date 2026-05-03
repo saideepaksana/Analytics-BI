@@ -47,6 +47,7 @@ const runScheduledExport = async (job) => {
             data: {
                 dashboardId: String(schedule.dashboardId),
                 format: schedule.format,
+                selectedTabs: schedule.selectedTabs,
                 frozenState,
                 userId: schedule.userId,
                 userRole: "admin", // Background jobs run with elevated permissions
@@ -66,33 +67,47 @@ const runScheduledExport = async (job) => {
         schedule.lastRunAt = new Date();
         await schedule.save();
 
-        logger.success(`Scheduled export completed: ${result.filename}`, "ScheduledExportWorker");
+        logger.success(`Scheduled export completed: ${result.filename || result.filenames?.join(", ")}`, "ScheduledExportWorker");
         
         // Send email if recipients exist
         if (schedule.recipients && schedule.recipients.length > 0) {
             try {
-                const filePath = path.join(EXPORT_DIR, result.filename);
+                const isPng = schedule.format === "png";
+                const filenames = result.filenames || [result.filename];
                 
+                const attachments = filenames.map((fname, idx) => ({
+                    filename: fname,
+                    path: path.join(EXPORT_DIR, fname),
+                    cid: isPng ? `dashboard-image-${idx}` : undefined
+                }));
+
+                const htmlContent = isPng ? `
+                    <div style="font-family: sans-serif; color: #333;">
+                        <p>Hello,</p>
+                        <p>Here is your scheduled snapshot of the <b>${schedule.name}</b> dashboard:</p>
+                        ${filenames.map((_, idx) => `
+                            <div style="margin: 20px 0; border: 1px solid #ddd; border-radius: 8px; overflow: hidden; max-width: 1000px;">
+                                <img src="cid:dashboard-image-${idx}" alt="Dashboard Tab Snapshot" style="width: 100%; display: block;" />
+                            </div>
+                        `).join("")}
+                        <p>Best regards,<br/>Analytics BI Team</p>
+                    </div>
+                ` : undefined;
+
                 await emailService.sendMail({
                     to: schedule.recipients,
                     subject: `Scheduled Dashboard Export: ${schedule.name}`,
                     text: `Hello,\n\nPlease find the scheduled export for your dashboard "${schedule.name}" attached.\n\nBest regards,\nAnalytics BI Team`,
-                    attachments: [
-                        {
-                            filename: result.filename,
-                            path: filePath
-                        }
-                    ]
+                    html: htmlContent,
+                    attachments
                 });
                 logger.info(`Email sent to recipients for schedule ${scheduleId}`, "ScheduledExportWorker");
             } catch (emailErr) {
                 logger.error(`Failed to email schedule ${scheduleId}: ${emailErr.message}`, "ScheduledExportWorker");
-                // We don't fail the job if email fails after successful generation, 
-                // but we logged the error.
             }
         }
 
-        return { status: "completed", filename: result.filename };
+        return { status: "completed", filenames: result.filenames || [result.filename] };
 
     } catch (err) {
         logger.error(`Scheduled export failed for schedule ${scheduleId}: ${err.message}`, "ScheduledExportWorker");

@@ -125,12 +125,25 @@ const writeDashboardPdf = async (page, filePath, job) => {
 
     pdfDoc.pipe(output);
 
+    const { selectedTabs = [] } = job.data;
+    
     // Detect tabs
     const tabSelectors = await page.$$(".dashboard-tab-item");
     
     if (tabSelectors.length > 0) {
         for (let i = 0; i < tabSelectors.length; i++) {
-            // Bug 7: Tab click on hidden element works in JS but add comment for fragility
+            const tabId = await page.evaluate((idx) => {
+                const tabs = document.querySelectorAll(".dashboard-tab-item");
+                // In our app, the tab ID might be stored in a data attribute or we can just use index if matched with selectedTabs
+                // But safer to check the tab's ID or index.
+                return tabs[idx].getAttribute("data-tab-id") || String(idx); 
+            }, i);
+
+            // If selectedTabs is provided, only export those. Otherwise export all.
+            if (selectedTabs.length > 0 && !selectedTabs.includes(tabId)) {
+                continue;
+            }
+
             // Click the tab and get its name
             const tabData = await page.evaluate((idx) => {
                 const tabs = document.querySelectorAll(".dashboard-tab-item");
@@ -321,8 +334,7 @@ const runVisualExport = async (job) => {
                 .dashboard-canvas-wrapper {
                     padding: 0 !important;
                 }
-                .dashboard-editor-topbar,
-                .dashboard-tabs-bar {
+                .dashboard-editor-topbar {
                     display: none !important;
                 }
                 .dashboard-canvas-grid,
@@ -333,27 +345,72 @@ const runVisualExport = async (job) => {
             `
         });
 
+        const { selectedTabs = [] } = job.data;
+
         if (format === "png") {
-            // Bug 5: PNG export ignores all tabs, only exports active tab. 
-            // In the future, we should iterate and composite or export as a zip of images.
-            const bounds = await getExportBounds(page);
-            await page.screenshot({
-                path: filePath,
-                type: "png",
-                captureBeyondViewport: true,
-                clip: bounds,
-            });
+            if (selectedTabs.length > 1) {
+                const filenames = [];
+                const tabSelectors = await page.$$(".dashboard-tab-item");
+                
+                for (let i = 0; i < tabSelectors.length; i++) {
+                    const tabId = await page.evaluate((idx) => {
+                        const tabs = document.querySelectorAll(".dashboard-tab-item");
+                        return tabs[idx].getAttribute("data-tab-id") || String(idx);
+                    }, i);
+
+                    logger.info(`Checking tab ${i}: id=${tabId}, selected=${selectedTabs.includes(tabId)}`, "VisualExportWorker");
+                    if (!selectedTabs.includes(tabId)) continue;
+
+                    // Switch tab
+                    await page.evaluate((idx) => {
+                        const tabs = document.querySelectorAll(".dashboard-tab-item");
+                        if (tabs[idx]) {
+                            window.RENDER_COMPLETE = false;
+                            tabs[idx].click();
+                        }
+                    }, i);
+
+                    // Wait for render
+                    await new Promise(r => setTimeout(r, 500));
+                    try {
+                        await page.waitForFunction(() => window.RENDER_COMPLETE === true, { timeout: 30000 });
+                    } catch (e) {}
+
+                    const tabFilename = `dashboard_${dashboardId}_tab_${i}_${Date.now()}.png`;
+                    const tabPath = path.join(EXPORT_DIR, tabFilename);
+                    const bounds = await getExportBounds(page);
+                    
+                    await page.screenshot({
+                        path: tabPath,
+                        type: "png",
+                        captureBeyondViewport: true,
+                        clip: bounds,
+                    });
+                    filenames.push(tabFilename);
+                }
+                
+                // Hide tabs bar AFTER capturing all screenshots
+                await page.evaluate(() => {
+                    const bar = document.querySelector(".dashboard-tabs-bar");
+                    if (bar) bar.style.display = "none";
+                });
+
+                return { status: "completed", filenames };
+            } else {
+                // Single PNG (either one tab selected or default behavior)
+                const bounds = await getExportBounds(page);
+                await page.screenshot({
+                    path: filePath,
+                    type: "png",
+                    captureBeyondViewport: true,
+                    clip: bounds,
+                });
+                return { status: "completed", filename };
+            }
         } else {
             await writeDashboardPdf(page, filePath, job);
+            return { status: "completed", filename };
         }
-
-        await ExportLog.findOneAndUpdate({ jobId }, {
-            status: "completed",
-            exportedAt: Date.now()
-        });
-
-        await job.updateProgress(100);
-        return { status: "completed", filename };
 
     } catch (err) {
         logger.error(`Visual export failed: ${err.message}`, "VisualExportWorker");

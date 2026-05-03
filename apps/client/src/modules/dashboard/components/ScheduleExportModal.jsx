@@ -2,20 +2,25 @@ import React, { useState, useEffect } from "react";
 import { X, Clock, Loader2, Calendar, Mail, Trash2, CheckCircle } from "lucide-react";
 import { createExportSchedule, listExportSchedules, deleteExportSchedule } from "../../../services/export.service";
 
-export default function ScheduleExportModal({ dashboardId, dashboardName, onClose }) {
+export default function ScheduleExportModal({ dashboardId, dashboardName, tabs, onClose }) {
   const [schedules, setSchedules] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [name, setName] = useState(`${dashboardName} Schedule`);
   const [frequency, setFrequency] = useState("daily");
   const [format, setFormat] = useState("pdf");
+  const [selectedTabs, setSelectedTabs] = useState([]);
   const [recipients, setRecipients] = useState("");
   const [error, setError] = useState(null);
   const [successMsg, setSuccessMsg] = useState(null);
 
   useEffect(() => {
     fetchSchedules();
-  }, [dashboardId]);
+    // Default to all tabs selected
+    if (tabs && tabs.length > 0) {
+      setSelectedTabs(tabs.map(t => t.id || t._id));
+    }
+  }, [dashboardId, tabs]);
 
   const fetchSchedules = async () => {
     try {
@@ -46,6 +51,7 @@ export default function ScheduleExportModal({ dashboardId, dashboardName, onClos
         name,
         frequency,
         format,
+        selectedTabs,
         recipients: recipientList,
       });
 
@@ -122,6 +128,30 @@ export default function ScheduleExportModal({ dashboardId, dashboardName, onClos
                   <option value="pdf">PDF Document</option>
                   <option value="png">PNG Image</option>
                 </select>
+              </div>
+            </div>
+            
+            <div style={{ marginBottom: "16px" }}>
+              <label style={{ display: "block", fontSize: "12px", marginBottom: "8px", color: "var(--fg-2, #a0a0a0)" }}>Select Tabs to Export</label>
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px", maxHeight: "120px", overflowY: "auto", padding: "8px", background: "var(--bg-1, #0b0f19)", border: "1px solid var(--border, #333)", borderRadius: "4px" }}>
+                {(tabs || []).map((tab) => (
+                  <label key={tab.id || tab._id} style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", color: "var(--fg-1, #e0e0e0)", cursor: "pointer" }}>
+                    <input 
+                      type="checkbox" 
+                      checked={selectedTabs.includes(tab.id || tab._id)}
+                      onChange={(e) => {
+                        const id = tab.id || tab._id;
+                        if (e.target.checked) {
+                          setSelectedTabs([...selectedTabs, id]);
+                        } else {
+                          setSelectedTabs(selectedTabs.filter(tid => tid !== id));
+                        }
+                      }}
+                    />
+                    {tab.title || "Untitled Tab"}
+                  </label>
+                ))}
+                {(tabs || []).length === 0 && <span style={{ fontSize: "11px", color: "#666" }}>No tabs found.</span>}
               </div>
             </div>
 

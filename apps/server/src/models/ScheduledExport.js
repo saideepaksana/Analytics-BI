@@ -12,6 +12,7 @@ const ScheduledExportSchema = new Schema(
             required: true 
         },
         format: { type: String, enum: ["pdf", "png"], default: "pdf" },
+        selectedTabs: { type: [String], default: [] },
         recipients: { type: [String], default: [] },
         timezone: { type: String, default: "UTC" },
         status: { type: String, enum: ["active", "paused"], default: "active" },

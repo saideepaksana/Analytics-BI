@@ -1477,6 +1477,7 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, saveE
         {tabs.map((tab) => (
           <div
             key={tab.id}
+            data-tab-id={tab.id}
             className={`dashboard-tab-item ${tab.id === activeTabId ? "active" : ""}`}
             onClick={() => setActiveTabId(tab.id)}
             onDoubleClick={() => {
@@ -1687,6 +1688,7 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, saveE
         <ScheduleExportModal 
           dashboardId={dashboard.id} 
           dashboardName={name}
+          tabs={dashboard.tabs || []}
           onClose={() => setShowScheduleModal(false)} 
         />
       )}
