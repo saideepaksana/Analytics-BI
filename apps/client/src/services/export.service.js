@@ -264,3 +264,8 @@ export const deleteExportSchedule = async (scheduleId) => {
   const response = await apiClient.delete(`/export/schedules/${scheduleId}`);
   return response.data;
 };
+
+export const getDashboardExportHistory = async (dashboardId) => {
+  const response = await apiClient.get(`/export/dashboards/${dashboardId}/log`);
+  return response.data;
+};
