@@ -1,7 +1,12 @@
 const ScheduledExport = require("../../../models/ScheduledExport");
 const Dashboard = require("../../../models/Dashboard");
 const { runVisualExport } = require("./visualExportWorker");
+const emailService = require("../../../services/emailService");
 const logger = require("../../../core/logger");
+const path = require("path");
+const os = require("os");
+
+const EXPORT_DIR = path.join(os.tmpdir(), "analytics-bi", "exports", "visual");
 
 /**
  * Worker handler for scheduled exports.
@@ -63,8 +68,29 @@ const runScheduledExport = async (job) => {
 
         logger.success(`Scheduled export completed: ${result.filename}`, "ScheduledExportWorker");
         
-        // TODO: Email the file to schedule.recipients if needed.
-        // For now, it stays in the exports directory.
+        // Send email if recipients exist
+        if (schedule.recipients && schedule.recipients.length > 0) {
+            try {
+                const filePath = path.join(EXPORT_DIR, result.filename);
+                
+                await emailService.sendMail({
+                    to: schedule.recipients,
+                    subject: `Scheduled Dashboard Export: ${schedule.name}`,
+                    text: `Hello,\n\nPlease find the scheduled export for your dashboard "${schedule.name}" attached.\n\nBest regards,\nAnalytics BI Team`,
+                    attachments: [
+                        {
+                            filename: result.filename,
+                            path: filePath
+                        }
+                    ]
+                });
+                logger.info(`Email sent to recipients for schedule ${scheduleId}`, "ScheduledExportWorker");
+            } catch (emailErr) {
+                logger.error(`Failed to email schedule ${scheduleId}: ${emailErr.message}`, "ScheduledExportWorker");
+                // We don't fail the job if email fails after successful generation, 
+                // but we logged the error.
+            }
+        }
 
         return { status: "completed", filename: result.filename };
 
