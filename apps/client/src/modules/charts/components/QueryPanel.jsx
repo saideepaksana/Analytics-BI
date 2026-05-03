@@ -12,12 +12,16 @@ import {
   Box,
   BarChart,
   AlertTriangle,
+  Hash,
+  Table,
 } from "lucide-react";
 
 const AGGREGATIONS = ["COUNT", "SUM", "AVG", "MIN", "MAX", "RAW"];
 const FILTER_OPERATORS = ["=", "!=", ">", ">=", "<", "<=", "IN", "NOT IN"];
 const NUMERIC_TYPE_REGEX = /(int|float|number|decimal|double|long|short|numeric|real)/;
 const CHART_TYPES = [
+  { id: "kpi", icon: Hash, label: "KPI" },
+  { id: "table", icon: Table, label: "Table" },
   { id: "bar", icon: BarChart3, label: "Bar Chart" },
   { id: "line", icon: LineChart, label: "Line Chart" },
   { id: "scatter", icon: ScatterChart, label: "Scatter Plot" },
@@ -162,10 +166,10 @@ export default function QueryPanel({
             {queryOpen && (
               <div className="query-stack">
                 {/* X-Axis: Standard dimension selection for non-scatter and non-distribution charts */}
-                {!isScatter && !isDistribution && (
+                {!isScatter && !isDistribution && chartType !== "kpi" && (
                   <div className="query-section">
                     <label className="query-section-label">
-                      {chartType === "pie" ? "Dimension" : "X-axis"}
+                      {chartType === "pie" || chartType === "table" ? "Dimensions" : "X-axis"}
                     </label>
                     <select
                       className="query-select"
@@ -185,7 +189,7 @@ export default function QueryPanel({
                 {/* Metrics: The core data configuration section */}
                 <div className="query-section">
                   <label className="query-section-label">
-                    {isScatter ? "Axis Configuration" : (isDistribution ? "Numeric Column" : (chartType === "pie" ? "Metric" : "Metrics"))}
+                    {isScatter ? "Axis Configuration" : (isDistribution ? "Numeric Column" : (chartType === "pie" || chartType === "kpi" ? "Metric" : "Metrics"))}
                   </label>
                   
                   {isScatter ? (

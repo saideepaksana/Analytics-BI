@@ -464,7 +464,32 @@ function DashboardWidget({
       </header>
 
       <div className="dashboard-widget-body">
-        {chart ? (
+        {widget.widgetType === "text" ? (
+          <div className="dashboard-widget-text" style={{ padding: "16px", height: "100%", overflowY: "auto", display: "flex", flexDirection: "column" }}>
+            {readOnly ? (
+              <div style={{ whiteSpace: "pre-wrap", color: "var(--text, #e2e8f0)", flex: 1, fontSize: "14px", lineHeight: "1.6" }}>
+                {widget.text || "No description provided."}
+              </div>
+            ) : (
+              <textarea
+                value={widget.text || ""}
+                onChange={(e) => onUpdateWidget(widget.id, { text: e.target.value })}
+                placeholder="Enter explanatory text, context, or summary here..."
+                style={{
+                  flex: 1,
+                  background: "transparent",
+                  border: "none",
+                  color: "var(--text, #e2e8f0)",
+                  fontSize: "14px",
+                  lineHeight: "1.6",
+                  resize: "none",
+                  outline: "none",
+                  fontFamily: "inherit"
+                }}
+              />
+            )}
+          </div>
+        ) : chart ? (
           <DashboardWidgetChart
             chart={chart}
             dashboardFilters={dashboardFilters}
@@ -992,6 +1017,24 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, saveE
     setShowChartLibrary(false);
   }, [baseColumns, setWidgets]);
 
+  const addTextWidget = useCallback(() => {
+    const defaultW = baseColumns >= 20 ? 8 : 6;
+    const defaultH = 6;
+    setWidgets((previous) => {
+      const nextPosition = findFirstFit(previous, defaultW, defaultH, baseColumns);
+      const nextWidget = {
+        id: `widget-text-${Date.now()}-${Math.round(Math.random() * 10000)}`,
+        widgetType: "text",
+        text: "",
+        x: nextPosition.x,
+        y: nextPosition.y,
+        w: nextPosition.w,
+        h: nextPosition.h,
+      };
+      return [...previous, nextWidget];
+    });
+  }, [baseColumns, setWidgets]);
+
   const removeWidget = useCallback((widgetId) => {
     setWidgets((previous) => previous.filter((widget) => widget.id !== widgetId));
   }, [setWidgets]);
@@ -1446,6 +1489,10 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, saveE
                 <button type="button" className="dashboard-secondary-btn" onClick={() => setShowChartLibrary((prev) => !prev)}>
                   <Plus size={14} />
                   Add chart
+                </button>
+                <button type="button" className="dashboard-secondary-btn" onClick={addTextWidget}>
+                  <Plus size={14} />
+                  Add Text
                 </button>
                 {/* Save Draft button – available for existing dashboards */}
                 {dashboard?.id && (

@@ -163,12 +163,16 @@ export default function ChartWizard({ isOpen, onClose, onComplete }) {
     area:    { minDim: 1, maxDim: null, minMeas: 1, maxMeas: null, label: "Area Chart" },
     pie:     { minDim: 1, maxDim: 1,    minMeas: 1, maxMeas: 1,    label: "Pie Chart" },
     scatter: { minDim: 0, maxDim: null, minMeas: 2, maxMeas: 2,    label: "Scatter Plot" },
+    kpi:     { minDim: 0, maxDim: 1,    minMeas: 1, maxMeas: 1,    label: "KPI Summary Card" },
+    table:   { minDim: 0, maxDim: null, minMeas: 0, maxMeas: null, label: "Data Table" },
   };
 
   const c = CHART_CONSTRAINTS[selectedChartType];
   let validationError = null;
   if (step === 3 && c) {
-    if (c.maxDim !== null && dimensions.length > c.maxDim) {
+    if (selectedChartType === "table" && dimensions.length === 0 && measures.length === 0) {
+      validationError = "Add at least one dimension or measure for the Data Table.";
+    } else if (c.maxDim !== null && dimensions.length > c.maxDim) {
       validationError = `${c.label} supports at most ${c.maxDim} dimension — remove ${dimensions.length - c.maxDim}.`;
     } else if (c.maxMeas !== null && measures.length > c.maxMeas) {
       validationError = `${c.label} supports at most ${c.maxMeas} measure(s) — remove ${measures.length - c.maxMeas}.`;

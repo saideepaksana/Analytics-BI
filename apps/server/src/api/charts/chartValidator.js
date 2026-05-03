@@ -41,7 +41,8 @@ exports.validateChart = async (frontendConfig) => {
   ).toUpperCase();
   const isCountStarMeasure = yField === "*" && yAggregation === "COUNT";
 
-  if (!xField || !yField) {
+  const requiresBothXAndY = !["kpi", "table"].includes(type);
+  if (requiresBothXAndY && (!xField || !yField)) {
     throw new ChartValidationError(`Chart of type "${type}" requires both X and Y fields.`);
   }
 
@@ -68,11 +69,13 @@ exports.validateChart = async (frontendConfig) => {
     return "categorical";
   };
 
-  const xType = getColType(xField);
-  const yType = isCountStarMeasure ? "numeric" : getColType(yField);
+  const xType = xField ? getColType(xField) : null;
+  const yType = isCountStarMeasure ? "numeric" : (yField ? getColType(yField) : null);
 
-  if (!xType) throw new ChartValidationError(`Field "${xField}" does not exist in dataset schema.`);
-  if (!yType) throw new ChartValidationError(`Field "${yField}" does not exist in dataset schema.`);
+  if (requiresBothXAndY) {
+    if (!xType) throw new ChartValidationError(`Field "${xField}" does not exist in dataset schema.`);
+    if (!yType) throw new ChartValidationError(`Field "${yField}" does not exist in dataset schema.`);
+  }
 
   // Validation Rules
   const RULES = {
@@ -110,6 +113,16 @@ exports.validateChart = async (frontendConfig) => {
       x: ["categorical", "numeric"],
       y: ["numeric"],
       error: "Histograms require a numeric measure."
+    },
+    kpi: {
+      x: ["categorical", "numeric", null],
+      y: ["numeric"],
+      error: "KPI summary cards require a numeric measure."
+    },
+    table: {
+      x: ["categorical", "numeric", null],
+      y: ["categorical", "numeric", null],
+      error: "Tables support any type of field."
     }
   };
 

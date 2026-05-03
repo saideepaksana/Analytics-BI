@@ -403,6 +403,74 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
     return baseOption;
   }, [type, data, dimensions, measures, style, annotations, stacking, title]);
 
+  const isKpiOrTable = type === "kpi" || type === "table";
+
+  React.useEffect(() => {
+    if (isKpiOrTable && onRenderComplete) {
+      const timer = setTimeout(onRenderComplete, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [data, isKpiOrTable, onRenderComplete]);
+
+  if (type === "kpi") {
+    const measure = measures[0];
+    const valueField = measure?.label || (measure?.field === "*" ? "COUNT(*)" : measure?.field);
+    let kpiValue = 0;
+    if (data && data.length > 0) {
+      kpiValue = data[0][valueField];
+    }
+    
+    return (
+      <div className="chart-preview-wrapper kpi-card" style={{ height: "100%", width: "100%", minHeight: isPreview ? "0px" : (style?.minHeight !== undefined ? style.minHeight : "200px"), display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", background: "transparent", borderRadius: "8px", padding: "16px" }}>
+        {title && <h3 style={{ margin: "0 0 8px 0", color: "var(--text-secondary, #94a3b8)", fontSize: "14px", fontWeight: "normal", textAlign: "center" }}>{title}</h3>}
+        <div style={{ fontSize: "42px", fontWeight: "bold", color: "var(--text, #e2e8f0)", lineHeight: 1 }}>
+          {kpiValue != null ? kpiValue : "-"}
+        </div>
+      </div>
+    );
+  }
+
+  if (type === "table") {
+    const cols = [];
+    dimensions.forEach(d => cols.push(typeof d === 'string' ? d : d.field));
+    measures.forEach(m => cols.push(m.label || (m.field === "*" ? "COUNT(*)" : m.field)));
+
+    return (
+      <div className="chart-preview-wrapper table-card" style={{ height: "100%", width: "100%", minHeight: isPreview ? "0px" : (style?.minHeight !== undefined ? style.minHeight : "400px"), overflow: "auto", background: "transparent", borderRadius: "8px" }}>
+        {title && <h3 style={{ margin: "16px", color: "var(--text, #e2e8f0)", fontSize: "14px", fontWeight: "600" }}>{title}</h3>}
+        <table style={{ width: "100%", borderCollapse: "collapse", color: "var(--text, #e2e8f0)", fontSize: "13px" }}>
+          <thead>
+            <tr>
+              {cols.map((col, idx) => (
+                <th key={idx} style={{ textAlign: "left", padding: "10px 16px", borderBottom: "1px solid var(--border, #333)", color: "var(--text-secondary, #94a3b8)", fontWeight: "600", position: "sticky", top: 0, background: "rgba(15, 23, 42, 0.9)" }}>
+                  {col}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {data.map((row, rowIdx) => (
+              <tr key={rowIdx} style={{ borderBottom: "1px solid var(--border, #333)" }}>
+                {cols.map((col, colIdx) => (
+                  <td key={colIdx} style={{ padding: "10px 16px" }}>
+                    {row[col] != null ? String(row[col]) : "-"}
+                  </td>
+                ))}
+              </tr>
+            ))}
+            {data.length === 0 && (
+              <tr>
+                <td colSpan={cols.length || 1} style={{ padding: "16px", textAlign: "center", color: "var(--text-secondary, #94a3b8)" }}>
+                  No data available
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
   return (
     <div className="chart-preview-wrapper" style={{ height: "100%", width: "100%", minHeight: isPreview ? "0px" : (style?.minHeight !== undefined ? style.minHeight : "400px") }}>
       <ReactECharts
