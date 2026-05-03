@@ -11,6 +11,7 @@ import {
   unpublishDashboard,
 } from "../../services/dashboard.service";
 import { fetchCharts } from "../../services/charts.service";
+import { listDatasets } from "../../services/datasets.service";
 import { canCreateDashboard } from "../../core/utils/permissions";
 import { getRequestErrorMessage } from "../../core/http/apiClient";
 import "./styles/dashboard.css";
@@ -32,12 +33,24 @@ export default function DashboardPage({ onEditorMode }) {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [loadedDashboards, loadedCharts] = await Promise.all([
+      const [loadedDashboards, loadedCharts, loadedDatasets] = await Promise.all([
         listDashboards(),
         fetchCharts().then((response) => response.charts || []),
+        listDatasets(),
       ]);
+
+      const datasetMap = {};
+      loadedDatasets.forEach(ds => {
+        datasetMap[ds.datasetId] = ds.fileName || ds.datasetId;
+      });
+
+      const enrichedCharts = loadedCharts.map(chart => ({
+        ...chart,
+        datasetName: datasetMap[chart.datasetId] || datasetMap[chart.dataSource?.datasetId] || "Unknown Dataset"
+      }));
+
       setDashboards(loadedDashboards);
-      setCharts(loadedCharts);
+      setCharts(enrichedCharts);
       setLoadError(null);
     } catch (err) {
       setLoadError("Failed to load dashboards. Please refresh.");

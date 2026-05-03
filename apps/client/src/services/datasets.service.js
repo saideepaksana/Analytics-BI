@@ -15,11 +15,28 @@ export const bulkDeleteDatasets = async (datasetIds) => {
   return response.data;
 };
 
+const metadataCache = new Map();
+
 export const getDatasetMetadata = async (datasetId, { limit = 200, offset = 0, qLimit, qOffset } = {}) => {
-  const response = await apiClient.get(`/datasets/${datasetId}/metadata`, {
+  // If we're just fetching basic metadata (limit=1 or similar) we can cache it
+  const cacheKey = `${datasetId}-${limit}-${offset}-${qLimit}-${qOffset}`;
+  
+  if (metadataCache.has(cacheKey)) {
+    return metadataCache.get(cacheKey);
+  }
+
+  const request = apiClient.get(`/datasets/${datasetId}/metadata`, {
     params: { limit, offset, qLimit, qOffset },
-  });
-  return response.data;
+  }).then(response => response.data);
+
+  metadataCache.set(cacheKey, request);
+  
+  try {
+    return await request;
+  } catch (error) {
+    metadataCache.delete(cacheKey);
+    throw error;
+  }
 };
 
 export const getDatasetSchema = async (datasetId) => {

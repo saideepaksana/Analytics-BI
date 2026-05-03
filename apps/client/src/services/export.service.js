@@ -153,7 +153,8 @@ export const normalizeFilterList = (filters) => {
     }
 
     if (value && typeof value === "object" && "operator" in value) {
-      return [normalizeFilter({ field, operator: value.operator, value: value.value })].filter(Boolean);
+      const resolvedField = value.field || field;
+      return [normalizeFilter({ field: resolvedField, operator: value.operator, value: value.value })].filter(Boolean);
     }
 
     return [{ field, operator: "=", value }];

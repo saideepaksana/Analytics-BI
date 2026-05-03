@@ -219,7 +219,7 @@ function WorkspaceLayout({
       return undefined;
     }
 
-    const socket = io(SOCKET_URL, { transports: ["websocket"] });
+    const socket = io(SOCKET_URL);
 
     axios
       .get(`${API_BASE_URL}/upload/active-jobs`)

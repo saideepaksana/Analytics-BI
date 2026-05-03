@@ -1,13 +1,15 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Grip, Loader2, MoveDiagonal2, Pencil, Plus, PlusCircle, Save, Trash2, X, MoreVertical, Star, User, Clock, MessageSquare, Download, FileSpreadsheet, FileText as PdfIcon, Send, FileEdit, History } from "lucide-react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { ArrowLeft, Grip, Loader2, MoveDiagonal2, Pencil, Plus, PlusCircle, Save, Trash2, X, MoreVertical, Star, User, Clock, MessageSquare, Download, FileSpreadsheet, FileText as PdfIcon, Send, FileEdit, History, Info } from "lucide-react";
 import html2canvas from "html2canvas";
 import { useExportStatus } from "../../../hooks/useExportStatus";
 import { buildChartQueryForExport, buildChartRawExportPayload, mergeNormalizedFilters } from "../../../services/export.service";
 import ChartPreview from "../../charts/components/ChartPreview";
 import { queryDataset } from "../../../services/charts.service";
+import * as datasetsService from "../../../services/datasets.service";
 import * as annotationsService from "../../../services/annotations.service";
 import { canEditDashboard, canPublishDashboard } from "../../../core/utils/permissions";
 import { saveDraft as saveDraftService, publishDashboard as publishDashboardService } from "../../../services/dashboard.service";
+import GlobalFilterPanel from "./GlobalFilterPanel";
 import ScheduleExportModal from "./ScheduleExportModal";
 import ExportHistoryModal from "./ExportHistoryModal";
 
@@ -74,7 +76,17 @@ const getDimensionsFromChart = (chart) => {
   return [];
 };
 
-const buildChartQuery = (chart, dashboardFilters = []) => {
+const buildChartQuery = (chart, dashboardFilters = {}) => {
+  const chartDatasetId = chart.dataSource?.datasetId || chart.datasetId;
+  
+  // Only apply filters that match this chart's datasetId
+  const relevantFilters = Object.entries(dashboardFilters).reduce((acc, [id, f]) => {
+    if (f.datasetId === chartDatasetId) {
+      acc[id] = f;
+    }
+    return acc;
+  }, {});
+
   const baseQuery = buildChartQueryForExport({ chart });
 
   if (baseQuery.dimensions.length === 0 && baseQuery.measures.length === 0) {
@@ -82,13 +94,13 @@ const buildChartQuery = (chart, dashboardFilters = []) => {
       ...baseQuery,
       dimensions: getDimensionsFromChart(chart),
       measures: getMeasuresFromChart(chart),
-      filters: mergeNormalizedFilters(chart?.query?.filters, dashboardFilters),
+      filters: mergeNormalizedFilters(chart?.query?.filters, relevantFilters),
     };
   }
 
   return {
     ...baseQuery,
-    filters: mergeNormalizedFilters(baseQuery.filters, dashboardFilters),
+    filters: mergeNormalizedFilters(baseQuery.filters, relevantFilters),
   };
 };
 
@@ -226,6 +238,8 @@ function DashboardWidget({
   const [isEditingAnnotation, setIsEditingAnnotation] = useState(false);
   const [annotationToEdit, setAnnotationToEdit] = useState(null);
   const [tempAnnotation, setTempAnnotation] = useState("");
+  const [datasetDesc, setDatasetDesc] = useState(null);
+  const [showDatasetInfo, setShowDatasetInfo] = useState(false);
   const {
     progress: exportProgress,
     error: exportError,
@@ -234,6 +248,20 @@ function DashboardWidget({
     isBusy: isExportBusy,
     isComplete: isExportComplete,
   } = useExportStatus();
+
+  useEffect(() => {
+    const fetchDatasetInfo = async () => {
+      const datasetId = chart?.dataSource?.datasetId || chart?.datasetId;
+      if (!datasetId) return;
+      try {
+        const data = await datasetsService.getDatasetMetadata(datasetId, { limit: 1 });
+        setDatasetDesc(data.metadata?.description || data.metadata?.fileName || "No description available.");
+      } catch (err) {
+        console.warn("Failed to fetch dataset info", err);
+      }
+    };
+    if (!isEmbed) fetchDatasetInfo();
+  }, [chart, isEmbed]);
 
   const style = {
     left: `${layout.left}px`,
@@ -246,10 +274,13 @@ function DashboardWidget({
   const showWidgetActions = !isEmbed && !readOnly;
 
   useEffect(() => {
-    if (!chart && window.IS_EXPORT_MODE && onRenderComplete) {
+    // If it's a text widget OR there is no chart data, signal completion immediately in export mode.
+    // DashboardWidgetChart will handle its own signaling if it exists.
+    const isText = widget.widgetType === "text";
+    if ((!chart || isText) && window.IS_EXPORT_MODE && onRenderComplete) {
       onRenderComplete();
     }
-  }, [chart, onRenderComplete]);
+  }, [chart, widget.widgetType, onRenderComplete]);
 
   const handleSaveAnnotation = async () => {
     if (!tempAnnotation.trim()) return;
@@ -300,6 +331,36 @@ function DashboardWidget({
       >
         <div className="dashboard-widget-title-wrap">
           {!readOnly && <Grip size={14} className="dashboard-widget-drag-handle" />}
+          {datasetDesc && (
+            <div 
+              style={{ position: "absolute", left: readOnly ? "12px" : "36px", display: "flex", alignItems: "center" }}
+              onMouseEnter={() => setShowDatasetInfo(true)}
+              onMouseLeave={() => setShowDatasetInfo(false)}
+            >
+              <Info size={12} style={{ color: "var(--muted, #94a3b8)", cursor: "help" }} />
+              {showDatasetInfo && (
+                <div style={{
+                  position: "absolute",
+                  top: "100%",
+                  left: 0,
+                  background: "#1e293b",
+                  color: "#f1f5f9",
+                  padding: "8px 12px",
+                  borderRadius: "6px",
+                  fontSize: "11px",
+                  width: "200px",
+                  zIndex: 1000,
+                  boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.4)",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  pointerEvents: "none",
+                  lineHeight: "1.4"
+                }}>
+                  <strong>Source Metadata:</strong><br/>
+                  {datasetDesc}
+                </div>
+              )}
+            </div>
+          )}
         </div>
         {showWidgetActions ? (
           <div className="dashboard-widget-actions">
@@ -719,32 +780,43 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, saveE
     }
   }, [frozenExportState.error]);
 
-  useEffect(() => {
+  // Track finished widgets by ID to ensure idempotent signaling per tab
+  const finishedWidgetsRef = useRef(new Set());
+  const widgetsCountRef = useRef(widgets.length);
+  // Update count synchronously during render to avoid race conditions in effects
+  widgetsCountRef.current = widgets.length;
+
+  useLayoutEffect(() => {
     if (window.IS_EXPORT_MODE) {
       setRenderedCount(0);
+      finishedWidgetsRef.current = new Set(); // Reset tracking for new tab
       window.RENDER_COMPLETE = false;
-      console.log("[Export] Tab changed, waiting for new charts...");
+      console.log(`[Export] Tab changed to ${activeTabId}, waiting for ${widgets.length} widgets...`);
+      // If there are no widgets, we are already done
+      if (widgets.length === 0) {
+        window.RENDER_COMPLETE = true;
+      }
     }
   }, [activeTabId]);
 
-  const widgetsCountRef = useRef(widgets.length);
-  useEffect(() => {
-    widgetsCountRef.current = widgets.length;
-  }, [widgets.length]);
-
-  const handleChartRendered = useCallback(() => {
-    if (!window.IS_EXPORT_MODE) return;
+  const handleChartRendered = useCallback((widgetId) => {
+    if (!window.IS_EXPORT_MODE || !widgetId) return;
     
+    // Only count each widget once per tab to avoid premature signaling (e.g. from data updates)
+    if (finishedWidgetsRef.current.has(widgetId)) {
+        return;
+    }
+    finishedWidgetsRef.current.add(widgetId);
+
     setRenderedCount(prev => {
         const next = prev + 1;
-        // Bug 9 Fix: Use ref to avoid stale closure capture of widgets.length
         if (next >= widgetsCountRef.current) {
             window.RENDER_COMPLETE = true;
-            console.log("[Export] All charts rendered. Signal sent.");
+            console.log(`[Export] All ${next} widgets rendered. Signal sent.`);
         }
         return next;
     });
-  }, []); // Remove widgets.length dependency as we use ref now
+  }, []); // ID-based tracking makes this callback stable across renders
 
   useEffect(() => {
     if (!dashboard?.id || isEmbed) {
@@ -1281,6 +1353,7 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, saveE
         description: description.trim(),
         tabs,
         activeTabId,
+        filters,
         thumbnail
       });
 
@@ -1289,6 +1362,7 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, saveE
         description: description.trim(),
         tabs: JSON.stringify(tabs),
         activeTabId,
+        filters: JSON.stringify(filters),
       };
     } catch (err) {
       console.error("Error saving dashboard:", err);
@@ -1342,6 +1416,7 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, saveE
         description: description.trim(),
         tabs,
         activeTabId,
+        filters,
       };
       await saveDraftService(dashboard.id, draftContent);
       setDraftSavedMsg('Draft saved!');
@@ -1608,6 +1683,13 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, saveE
         )}
       </div>
 
+      <GlobalFilterPanel 
+        filters={filters} 
+        setFilters={setFilters} 
+        charts={charts} 
+        isEditMode={isEditMode} 
+      />
+
       <div className="dashboard-editor-content">
         <section className="dashboard-canvas-pane">
           <div className="dashboard-canvas-wrapper" ref={canvasRef}>
@@ -1649,7 +1731,7 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, saveE
                   onAddAnnotation={handleAddAnnotation}
                   onUpdateAnnotation={handleUpdateAnnotation}
                   onDeleteAnnotation={handleDeleteAnnotation}
-                  onRenderComplete={handleChartRendered}
+                  onRenderComplete={() => handleChartRendered(widget.id)}
                   onViewPopup={!isEditMode ? setPopupWidgetId : undefined}
                 />
               ))}
@@ -1728,7 +1810,7 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, saveE
                   >
                     <span>
                       <strong>{chart.name}</strong>
-                      <small>{chart.visualization?.type || "chart"}</small>
+                      <small>{chart.visualization?.type || "chart"} • {chart.datasetName}</small>
                     </span>
                     <PlusCircle size={15} />
                   </button>

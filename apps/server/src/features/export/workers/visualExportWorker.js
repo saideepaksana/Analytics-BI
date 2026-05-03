@@ -2,6 +2,7 @@
  * visualExportWorker.js
  */
 
+const mongoose = require("mongoose");
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
@@ -260,10 +261,16 @@ const runVisualExport = async (job) => {
             for (const widget of widgets) {
                 if (widget.chartId) {
                     try {
-                        // Bug 3 Fix: Handle charts that only have _id and no chartId field
-                        const chart = await Chart.findOne({
-                            $or: [{ chartId: widget.chartId }, { _id: widget.chartId }]
-                        }).lean();
+                        // Bug 3 Fix: Handle charts that only have _id and no chartId field. 
+                        // Only check _id if it's a valid ObjectId to avoid cast errors with UUIDs.
+                        const chartQuery = { chartId: widget.chartId };
+                        if (mongoose.Types.ObjectId.isValid(widget.chartId)) {
+                            chartQuery._id = widget.chartId;
+                        }
+
+                        const chart = await Chart.findOne(
+                            chartQuery._id ? { $or: [{ chartId: widget.chartId }, { _id: widget.chartId }] } : { chartId: widget.chartId }
+                        ).lean();
 
                         if (chart) {
                             const datasetId = chart.dataSource?.datasetId;

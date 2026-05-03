@@ -30,8 +30,9 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
       borderColor: borderColor,
       textStyle: { color: textPrimary }
     };
+    const isSingleMeasure = measures.length <= 1;
     const hideXAxis = style.hideXAxis === true;
-    const showLegend = style.showLegend !== false && style.hideLegend !== true;
+    const showLegend = style.showLegend !== false && style.hideLegend !== true && !isSingleMeasure;
     const titleText = String(title || "").trim();
     const titleOption = titleText
       ? {
@@ -370,7 +371,7 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
         borderColor: "rgba(148, 163, 184, 0.1)"
       },
         xAxis: {
-        show: !isPreview && !hideXAxis,
+        show: (!isPreview || style.showAxisInPreview) && !hideXAxis,
         type: hasNumericXAxis ? "value" : "category",
         data: hasNumericXAxis ? undefined : xAxisData,
         name: hasNumericXAxis ? xAxisField : undefined,
@@ -381,7 +382,7 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
         splitLine: { show: false }
       },
       yAxis: {
-        show: !isPreview,
+        show: !isPreview || style.showAxisInPreview,
         type: "value",
         splitLine: { lineStyle: { color: borderColor } },
         axisLabel: { color: textSecondary }

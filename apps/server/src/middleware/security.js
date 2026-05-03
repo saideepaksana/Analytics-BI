@@ -72,7 +72,11 @@ const SANITIZE_OPTIONS = {
 
 const sanitizeValue = (value) => {
   if (typeof value === 'string') {
-    return sanitizeHtml(value, SANITIZE_OPTIONS);
+    // Only apply HTML sanitization if the string actually contains HTML tags
+    if (/<[a-z][\s\S]*>/i.test(value)) {
+      return sanitizeHtml(value, SANITIZE_OPTIONS);
+    }
+    return value;
   }
   if (Array.isArray(value)) {
     return value.map(sanitizeValue);
@@ -101,7 +105,7 @@ const sanitizeInput = (req, res, next) => {
 
 const rateLimitMap = new Map();
 const RATE_LIMIT_WINDOW = 60 * 1000;  // 1 minute
-const RATE_LIMIT_MAX   = 100;          // max requests per window per IP
+const RATE_LIMIT_MAX   = 1000;          // max requests per window per IP
 
 // Clean-up old entries every 5 minutes to prevent memory growth
 setInterval(() => {
@@ -181,7 +185,7 @@ const validateCsrfToken = (userId, token) => {
 
 const SQL_PATTERNS = [
   /(\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC|EXECUTE)\b.*?\b(FROM|INTO|TABLE|SET|WHERE|JOIN)\b)/i,
-  /(--|;|\/\*|\*\/|@@|@@version)/,
+  /(--|\/\*|\*\/|@@|@@version)/,
   /(union.*select|union.*all)/i,
   /(\bor\b\s+\d+\s*=\s*\d+)/i,
   /(\band\b\s+\d+\s*=\s*\d+)/i,
@@ -195,7 +199,7 @@ const DATA_URL_PATTERN = /^data:[a-z]+\/[a-z0-9+.-]+;base64,/i;
 const detectSqlInjection = (value) => {
   if (typeof value !== 'string') return false;
   if (DATA_URL_PATTERN.test(value)) return false;
-  return SQL_PATTERNS.some((p) => p.test(value));
+  return SQL_PATTERNS.some((p) => p.test(value)) && !/&[a-z0-9]+;/i.test(value);
 };
 
 const detectNoSqlInjection = (key) => {

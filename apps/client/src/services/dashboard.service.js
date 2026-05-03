@@ -69,6 +69,7 @@ export const createDashboard = async (payload = {}) => {
     activeTabId,
     thumbnail: payload.thumbnail || null,
     widgets: tabs.flatMap((tab) => tab.widgets || []),
+    filters: payload.filters || {},
   };
 
   const response = await apiClient.post('/dashboards', {
@@ -77,6 +78,7 @@ export const createDashboard = async (payload = {}) => {
     description: payload.description?.trim() || "",
     tabs,
     activeTabId,
+    filters: payload.filters || {},
     _rawFrontendState: rawFrontendState
   });
 
