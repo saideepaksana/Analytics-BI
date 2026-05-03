@@ -77,7 +77,6 @@ const appendTabToPdf = async (page, pdfDoc, job, tabIndex, totalTabs, tabName) =
     const bounds = await getExportBounds(page);
 
     const pageWidthPt = Math.max(1, Math.ceil(bounds.width * PX_TO_PT));
-    const pageHeightPt = Math.max(1, Math.ceil(bounds.height * PX_TO_PT));
     const totalSlices = 1;
     const sliceHeight = bounds.height;
 
@@ -96,13 +95,13 @@ const appendTabToPdf = async (page, pdfDoc, job, tabIndex, totalTabs, tabName) =
             },
         });
 
+        const renderedWidth = pageWidthPt;
+        const renderedHeight = Math.max(1, Math.ceil(clipHeight * PX_TO_PT));
+
         pdfDoc.addPage({
-            size: [pageWidthPt, pageHeightPt],
+            size: [renderedWidth, renderedHeight],
             margin: PDF_MARGIN,
         });
-
-        const renderedWidth = pageWidthPt;
-        const renderedHeight = Math.max(1, Math.floor(clipHeight * PX_TO_PT));
 
         pdfDoc.image(imageBuffer, 0, 0, {
             width: renderedWidth,
