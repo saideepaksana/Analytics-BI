@@ -25,6 +25,7 @@ const QUEUE_NAMES = {
     BULK_INGESTION: "bulk-ingestion",
     RAW_EXPORT: "raw-export",
     DASHBOARD_EXPORT: "dashboard-export",
+    SCHEDULED_EXPORT: "scheduled-export",
     // Extend here as new queues are introduced
 };
 
@@ -116,6 +117,12 @@ const dashboardExportQueue = getQueue(
     RETRY_POLICIES.STANDARD
 );
 
+/** Scheduled export queue for recurring jobs */
+const scheduledExportQueue = getQueue(
+    QUEUE_NAMES.SCHEDULED_EXPORT,
+    RETRY_POLICIES.STANDARD
+);
+
 // ---------------------------------------------------------------------------
 // Convenience helpers
 // ---------------------------------------------------------------------------
@@ -176,6 +183,7 @@ module.exports = {
     bulkIngestionQueue,
     rawExportQueue,
     dashboardExportQueue,
+    scheduledExportQueue,
     addBackgroundTask,
     addBulkIngestionJob,
 };

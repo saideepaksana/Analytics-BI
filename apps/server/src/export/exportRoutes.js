@@ -7,7 +7,10 @@ const {
     downloadExportFile,
     getExportLog, 
     generateEmbedToken,
-    getEmbeddedDashboard
+    getEmbeddedDashboard,
+    createSchedule,
+    listSchedules,
+    deleteSchedule
 } = require("../api/export/exportController");
 const embedTokenAuth = require("../middleware/embedTokenAuth");
 const embedRateLimiter = require("../middleware/embedRateLimiter");
@@ -27,5 +30,10 @@ router.get("/download/:filename", downloadExportFile);
 router.get("/:datasetId/log", getExportLog);
 router.post("/embed/token", generateEmbedToken);
 router.get("/embed/:dashboardId", embedTokenAuth, embedRateLimiter, embedCors, getEmbeddedDashboard);
+
+// Pipeline C: Scheduled Exports
+router.post("/schedules", createSchedule);
+router.get("/schedules", listSchedules);
+router.delete("/schedules/:scheduleId", deleteSchedule);
 
 module.exports = router;

@@ -20,6 +20,7 @@ const { getVisualExportAvailabilityError } = require("../features/export/utils/v
 
 const { runUploadProcessor } = require("./uploadProcessor");
 const { runRawExport } = require("../features/export/workers/rawExportWorker");
+const { runScheduledExport } = require("../features/export/workers/scheduledExportWorker");
 
 const EXPORT_DIR = path.join(os.tmpdir(), "analytics-bi", "exports");
 
@@ -119,6 +120,10 @@ const DASHBOARD_EXPORT_HANDLERS = {
     },
 };
 
+const SCHEDULED_EXPORT_HANDLERS = {
+    "scheduled-export": runScheduledExport,
+};
+
 const workers = {};
 
 const makeProcessor = (handlers, queueName = "unknown") => async (job) => {
@@ -214,6 +219,7 @@ const initWorkers = () => {
 
     startWorker(QUEUE_NAMES.RAW_EXPORT, makeProcessor(RAW_EXPORT_HANDLERS, QUEUE_NAMES.RAW_EXPORT));
     startWorker(QUEUE_NAMES.DASHBOARD_EXPORT, makeProcessor(DASHBOARD_EXPORT_HANDLERS, QUEUE_NAMES.DASHBOARD_EXPORT));
+    startWorker(QUEUE_NAMES.SCHEDULED_EXPORT, makeProcessor(SCHEDULED_EXPORT_HANDLERS, QUEUE_NAMES.SCHEDULED_EXPORT));
 
     const visualExportAvailabilityError = getVisualExportAvailabilityError();
     if (visualExportAvailabilityError) {

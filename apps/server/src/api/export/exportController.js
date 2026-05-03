@@ -4,7 +4,8 @@ const os = require("os");
 const crypto = require("crypto");
 const { ExportLog } = require("../../models/exportLog");
 const Dashboard = require("../../models/Dashboard");
-const { rawExportQueue, dashboardExportQueue } = require("../../jobs/queue");
+const ScheduledExport = require("../../models/ScheduledExport");
+const { rawExportQueue, dashboardExportQueue, scheduledExportQueue } = require("../../jobs/queue");
 const { validateRawExport, validateVisualExport } = require("../../features/export/utils/exportPayloadValidator");
 const { getVisualExportAvailabilityError } = require("../../features/export/utils/visualExportAvailability");
 const dashboardMapper = require("../dashboard/dashboardMapper");
@@ -12,6 +13,13 @@ const { loadDashboard } = require("../dashboard/dashboardService");
 const { isOwnerOrEditor } = require("../../middleware/rbac");
 const embedTokenService = require("../../services/embedTokenService");
 const logger = require("../../core/logger");
+
+const CRON_MAP = {
+    daily: "0 6 * * *",
+    weekly: "0 6 * * 1",
+    monthly: "0 6 1 * *",
+    test: "* * * * *",
+};
 
 const EXPORT_DIR = path.join(os.tmpdir(), "analytics-bi", "exports");
 
@@ -273,6 +281,92 @@ async function getEmbeddedDashboard(req, res) {
     }
 }
 
+async function createSchedule(req, res) {
+    try {
+        const { dashboardId, name, frequency, format, recipients } = req.body;
+        const userId = req.user?.id || "anonymous";
+
+        if (!dashboardId || !name || !frequency) {
+            return res.status(400).json({ error: "dashboardId, name, and frequency are required." });
+        }
+
+        const cron = CRON_MAP[frequency];
+        if (!cron) {
+            return res.status(400).json({ error: `Invalid frequency: ${frequency}` });
+        }
+
+        const dashboard = await Dashboard.findById(dashboardId).lean();
+        if (!dashboard) {
+            return res.status(404).json({ error: "Dashboard not found." });
+        }
+
+        const schedule = await ScheduledExport.create({
+            dashboardId,
+            userId,
+            name,
+            frequency,
+            format: format || "pdf",
+            recipients: recipients || [],
+            status: "active"
+        });
+
+        // Add repeatable job to BullMQ
+        const job = await scheduledExportQueue.add(
+            "scheduled-export",
+            { scheduleId: schedule._id },
+            {
+                repeat: { pattern: cron },
+                jobId: `repeat-${schedule._id}` // Consistent ID for replacement/deletion
+            }
+        );
+
+        schedule.repeatJobKey = job.repeatJobKey;
+        await schedule.save();
+
+        res.status(201).json({ message: "Schedule created.", schedule });
+    } catch (err) {
+        logger.error(`Failed to create schedule: ${err.message}`, "exportController");
+        res.status(500).json({ error: "Failed to create schedule." });
+    }
+}
+
+async function listSchedules(req, res) {
+    try {
+        const { dashboardId } = req.query;
+        const filter = { userId: req.user?.id || "anonymous" };
+        if (dashboardId) filter.dashboardId = dashboardId;
+
+        const schedules = await ScheduledExport.find(filter).sort({ createdAt: -1 }).lean();
+        res.json({ schedules });
+    } catch (err) {
+        res.status(500).json({ error: "Failed to fetch schedules." });
+    }
+}
+
+async function deleteSchedule(req, res) {
+    try {
+        const { scheduleId } = req.params;
+        const userId = req.user?.id || "anonymous";
+
+        const schedule = await ScheduledExport.findOne({ _id: scheduleId, userId });
+        if (!schedule) {
+            return res.status(404).json({ error: "Schedule not found." });
+        }
+
+        // Remove repeatable job from BullMQ
+        if (schedule.repeatJobKey) {
+            const cron = CRON_MAP[schedule.frequency];
+            await scheduledExportQueue.removeRepeatableByKey(schedule.repeatJobKey);
+        }
+
+        await ScheduledExport.deleteOne({ _id: scheduleId });
+        res.json({ message: "Schedule deleted." });
+    } catch (err) {
+        logger.error(`Failed to delete schedule: ${err.message}`, "exportController");
+        res.status(500).json({ error: "Failed to delete schedule." });
+    }
+}
+
 module.exports = {
     startRawExport,
     startVisualExport,
@@ -280,5 +374,8 @@ module.exports = {
     downloadExportFile,
     getExportLog,
     generateEmbedToken,
-    getEmbeddedDashboard
+    getEmbeddedDashboard,
+    createSchedule,
+    listSchedules,
+    deleteSchedule
 };

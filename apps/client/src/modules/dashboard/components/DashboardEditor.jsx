@@ -8,6 +8,7 @@ import { queryDataset } from "../../../services/charts.service";
 import * as annotationsService from "../../../services/annotations.service";
 import { canEditDashboard, canPublishDashboard } from "../../../core/utils/permissions";
 import { saveDraft as saveDraftService, publishDashboard as publishDashboardService } from "../../../services/dashboard.service";
+import ScheduleExportModal from "./ScheduleExportModal";
 
 const ROW_HEIGHT = 42;
 const MIN_WIDGET_W = 4;
@@ -584,6 +585,7 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, saveE
   ));
   const [savingLocal, setSavingLocal] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
   const {
     status,
     progress: exportProgress,
@@ -1399,6 +1401,12 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, saveE
                       <button onClick={() => handleExport("pdf")}>
                         <PdfIcon size={14} /> PDF Document
                       </button>
+                      <button onClick={() => {
+                        setShowExportMenu(false);
+                        setShowScheduleModal(true);
+                      }}>
+                        <Clock size={14} /> Schedule Delivery
+                      </button>
                     </div>
                   )}
 
@@ -1675,6 +1683,13 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, saveE
           {exportError}
         </div>
       ) : null}
+      {showScheduleModal && (
+        <ScheduleExportModal 
+          dashboardId={dashboard.id} 
+          dashboardName={name}
+          onClose={() => setShowScheduleModal(false)} 
+        />
+      )}
     </div>
   );
 }

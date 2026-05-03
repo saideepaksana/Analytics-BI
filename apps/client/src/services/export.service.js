@@ -1,4 +1,5 @@
 import { API_BASE_URL } from "../core/config/env";
+import apiClient from "../core/http/apiClient";
 
 /**
  * Triggers a file download by opening the backend export endpoint 
@@ -244,4 +245,22 @@ export const buildChartRawExportPayload = ({
       dashboardFilters: normalizeFilterList(dashboardFilters),
     },
   };
+};
+
+export const createExportSchedule = async (payload) => {
+  const response = await apiClient.post('/export/schedules', payload);
+  return response.data;
+};
+
+export const listExportSchedules = async (dashboardId) => {
+  const url = dashboardId 
+    ? `/export/schedules?dashboardId=${dashboardId}`
+    : `/export/schedules`;
+  const response = await apiClient.get(url);
+  return response.data;
+};
+
+export const deleteExportSchedule = async (scheduleId) => {
+  const response = await apiClient.delete(`/export/schedules/${scheduleId}`);
+  return response.data;
 };
