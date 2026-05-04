@@ -1,11 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import {
-  AUTH_EVENTS,
-  getCurrentUser,
-  getDefaultPreferences,
-  updateCurrentUserPreferences,
-  updateCurrentUserProfile
-} from "@analytics-bi/shared-lib";
+import { useMemo, useState } from "react";
+import { getDefaultPreferences } from "@analytics-bi/shared-lib";
 import LegacySettingsPage from "../../../../client/src/modules/settings/SettingsPage.jsx";
 
 const FALLBACK_USER = {
@@ -17,26 +11,8 @@ const FALLBACK_USER = {
 };
 
 export default function SettingsPage() {
-  const [user, setUser] = useState(() => getCurrentUser() || FALLBACK_USER);
-  const [preferences, setPreferences] = useState(
-    () => (getCurrentUser() || FALLBACK_USER).preferences || getDefaultPreferences()
-  );
-
-  useEffect(() => {
-    const refresh = () => {
-      const current = getCurrentUser() || FALLBACK_USER;
-      setUser(current);
-      setPreferences(current.preferences || getDefaultPreferences());
-    };
-
-    window.addEventListener(AUTH_EVENTS.CHANGED, refresh);
-    window.addEventListener("storage", refresh);
-
-    return () => {
-      window.removeEventListener(AUTH_EVENTS.CHANGED, refresh);
-      window.removeEventListener("storage", refresh);
-    };
-  }, []);
+  const [user, setUser] = useState(FALLBACK_USER);
+  const [preferences, setPreferences] = useState(() => getDefaultPreferences());
 
   const effectiveUser = useMemo(() => {
     return {
@@ -46,23 +22,11 @@ export default function SettingsPage() {
   }, [preferences, user]);
 
   const handlePreferences = (next) => {
-    setPreferences((prev) => {
-      const merged = { ...prev, ...next };
-      if (effectiveUser?.email && effectiveUser.email !== FALLBACK_USER.email) {
-        updateCurrentUserPreferences(next);
-      }
-      return merged;
-    });
+    setPreferences((prev) => ({ ...prev, ...next }));
   };
 
   const handleProfile = (next) => {
-    setUser((prev) => {
-      const merged = { ...prev, ...next };
-      if (merged?.email && merged.email !== FALLBACK_USER.email) {
-        updateCurrentUserProfile(next);
-      }
-      return merged;
-    });
+    setUser((prev) => ({ ...prev, ...next }));
   };
 
   return (

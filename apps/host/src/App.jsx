@@ -16,7 +16,6 @@ import {
   Database,
   Home,
   LayoutDashboard,
-  LogOut,
   PieChart,
   Settings,
   ShieldAlert,
@@ -24,11 +23,8 @@ import {
   UserCircle2,
 } from "lucide-react";
 import {
-  AUTH_EVENTS,
-  getCurrentUser,
   getDefaultPreferences,
   getEffectiveTheme,
-  logout,
   updateCurrentUserPreferences,
   updateCurrentUserProfile,
   API_BASE_URL,
@@ -37,7 +33,6 @@ import {
 
 // ── Host-local components ────────────────────────────────────────────────────
 import MFELoader from "./components/MFELoader.jsx";
-import ProtectedRoute from "./components/ProtectedRoute.jsx";
 
 // ── Direct imports from client (re-used, never modified) ────────────────────
 import PublicLandingPage from "../../client/src/modules/home/PublicLandingPage.jsx";
@@ -139,28 +134,6 @@ const EXPORT_USER = {
   },
 };
 
-// ── Auth snapshot hook ───────────────────────────────────────────────────────
-
-function useAuthSnapshot() {
-  const [user, setUser] = useState(() => getCurrentUser());
-
-  useEffect(() => {
-    const refresh = () => {
-      setUser(getCurrentUser());
-    };
-
-    window.addEventListener(AUTH_EVENTS.CHANGED, refresh);
-    window.addEventListener("storage", refresh);
-
-    return () => {
-      window.removeEventListener(AUTH_EVENTS.CHANGED, refresh);
-      window.removeEventListener("storage", refresh);
-    };
-  }, []);
-
-  return user;
-}
-
 // ── Workspace context consumer ──────────────────────────────────────────────
 
 function useWorkspace() {
@@ -169,7 +142,7 @@ function useWorkspace() {
 
 // ── Route guards ────────────────────────────────────────────────────────────
 
-function RootEntry({ user }) {
+function RootEntry() {
   const location = useLocation();
   const searchParams = new URLSearchParams(location.search);
   const hasLegacyView = searchParams.has("view");
@@ -185,45 +158,13 @@ function RootEntry({ user }) {
     return <Navigate to={`/app/${mappedRoute}${query ? `?${query}` : ""}`} replace />;
   }
 
-  if (user) {
-    return <Navigate to="/app/home" replace />;
-  }
-
-  return <PublicLandingPage />;
+  return <Navigate to="/app/home" replace />;
 }
 
-function AccessDenied({ allowedRoles }) {
-  return (
-    <section className="workspace-access-denied card">
-      <div className="workspace-access-icon">
-        <ShieldAlert size={22} />
-      </div>
-      <h3>Access Restricted</h3>
-      <p>
-        Your current role does not have access to this page. Allowed roles: {allowedRoles.join(", ")}.
-      </p>
-    </section>
-  );
-}
-
-function RoleRoute({ allowedRoles, children }) {
-  const { user, isExportMode } = useWorkspace();
-
-  if (isExportMode) {
-    return children;
-  }
-
-  if (!allowedRoles.includes(user.role)) {
-    return <AccessDenied allowedRoles={allowedRoles} />;
-  }
-
-  return children;
-}
 
 // ── Workspace Layout (full orchestration shell) ─────────────────────────────
 
 function WorkspaceLayout({
-  user,
   isExportMode,
   preferences,
   onPreferencesChange,
@@ -240,24 +181,17 @@ function WorkspaceLayout({
   const [completionPopup, setCompletionPopup] = useState(null);
 
   const effectiveUser = useMemo(
-    () =>
-      user || {
-        ...EXPORT_USER,
-        preferences,
-      },
-    [preferences, user]
+    () => ({
+      ...EXPORT_USER,
+      preferences,
+    }),
+    [preferences]
   );
 
   const effectiveTheme = getEffectiveTheme(preferences.theme);
   const isImmersive = chartsExploreMode || dashboardEditorMode;
 
-  const visibleNavItems = useMemo(() => {
-    if (isExportMode) {
-      return NAV_ITEMS;
-    }
-
-    return NAV_ITEMS.filter((item) => item.roles.includes(effectiveUser.role));
-  }, [effectiveUser.role, isExportMode]);
+  const visibleNavItems = NAV_ITEMS;
 
   const datasetIdFromQuery = searchParams.get("datasetId") || "";
   const resolvedDatasetId = datasetIdFromQuery || activeDatasetId;
@@ -432,17 +366,7 @@ function WorkspaceLayout({
               );
             })}
           </nav>
-          <button
-            type="button"
-            className="workspace-logout-btn topbar"
-            onClick={() => {
-              logout();
-              navigate("/", { replace: true });
-            }}
-          >
-            <LogOut size={15} />
-            <span>Sign out</span>
-          </button>
+          
         </header>
 
         <main className={`workspace-content ${isImmersive ? "immersive" : ""}`}>
@@ -561,10 +485,9 @@ function WorkspaceSettingsRoute() {
 
 export default function App() {
   const location = useLocation();
-  const user = useAuthSnapshot();
 
   const [guestPreferences, setGuestPreferences] = useState(() => getDefaultPreferences());
-  const preferences = user?.preferences || guestPreferences;
+  const preferences = guestPreferences;
 
   const isExportMode = useMemo(() => {
     const params = new URLSearchParams(location.search);
@@ -629,118 +552,50 @@ export default function App() {
 
   return (
     <Routes>
-      <Route path="/" element={<RootEntry user={user} />} />
+      <Route path="/" element={<RootEntry />} />
 
       <Route
         path="/auth/login"
         element={
-          user && !isExportMode ? (
-            <Navigate to="/app/home" replace />
-          ) : (
-            <MFELoader>
-              <LoginPage />
-            </MFELoader>
-          )
+          <MFELoader>
+            <LoginPage />
+          </MFELoader>
         }
       />
       <Route
         path="/auth/signup"
         element={
-          user && !isExportMode ? (
-            <Navigate to="/app/home" replace />
-          ) : (
-            <MFELoader>
-              <SignUpPage />
-            </MFELoader>
-          )
+          <MFELoader>
+            <SignUpPage />
+          </MFELoader>
         }
       />
 
       <Route path="/embed/:dashboardId" element={<EmbedDashboard />} />
 
-      <Route element={<ProtectedRoute user={user} isExportMode={isExportMode} />}>
-        <Route
-          path="/app"
-          element={
-            <WorkspaceLayout
-              user={user}
-              isExportMode={isExportMode}
-              preferences={preferences}
-              onPreferencesChange={handlePreferencesChange}
-              onProfileChange={handleProfileChange}
-            />
-          }
-        >
-          <Route index element={<Navigate to="home" replace />} />
-
-          <Route
-            path="home"
-            element={
-              <RoleRoute allowedRoles={ROLE_POLICIES.home}>
-                <WorkspaceHomeRoute />
-              </RoleRoute>
-            }
+      <Route
+        path="/app"
+        element={
+          <WorkspaceLayout
+            isExportMode={isExportMode}
+            preferences={preferences}
+            onPreferencesChange={handlePreferencesChange}
+            onProfileChange={handleProfileChange}
           />
-
-          <Route
-            path="ingestion"
-            element={
-              <RoleRoute allowedRoles={ROLE_POLICIES.ingestion}>
-                <WorkspaceIngestionRoute />
-              </RoleRoute>
-            }
-          />
-
-          <Route
-            path="review"
-            element={
-              <RoleRoute allowedRoles={ROLE_POLICIES.review}>
-                <WorkspaceReviewRoute />
-              </RoleRoute>
-            }
-          />
-
-          <Route
-            path="datasets"
-            element={
-              <RoleRoute allowedRoles={ROLE_POLICIES.datasets}>
-                <WorkspaceDatasetsRoute />
-              </RoleRoute>
-            }
-          />
-
-          <Route
-            path="charts"
-            element={
-              <RoleRoute allowedRoles={ROLE_POLICIES.charts}>
-                <WorkspaceChartsRoute />
-              </RoleRoute>
-            }
-          />
-
-          <Route
-            path="dashboards"
-            element={
-              <RoleRoute allowedRoles={ROLE_POLICIES.dashboards}>
-                <WorkspaceDashboardsRoute />
-              </RoleRoute>
-            }
-          />
-
-          <Route
-            path="settings"
-            element={
-              <RoleRoute allowedRoles={ROLE_POLICIES.settings}>
-                <WorkspaceSettingsRoute />
-              </RoleRoute>
-            }
-          />
-
-          <Route path="*" element={<Navigate to="/app/home" replace />} />
-        </Route>
+        }
+      >
+        <Route index element={<Navigate to="home" replace />} />
+        <Route path="home" element={<WorkspaceHomeRoute />} />
+        <Route path="ingestion" element={<WorkspaceIngestionRoute />} />
+        <Route path="review" element={<WorkspaceReviewRoute />} />
+        <Route path="datasets" element={<WorkspaceDatasetsRoute />} />
+        <Route path="charts" element={<WorkspaceChartsRoute />} />
+        <Route path="dashboards" element={<WorkspaceDashboardsRoute />} />
+        <Route path="settings" element={<WorkspaceSettingsRoute />} />
+        <Route path="*" element={<Navigate to="/app/home" replace />} />
       </Route>
 
-      <Route path="*" element={<Navigate to={user ? "/app/home" : "/"} replace />} />
+      <Route path="*" element={<Navigate to="/app/home" replace />} />
     </Routes>
   );
 }
