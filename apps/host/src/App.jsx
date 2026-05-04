@@ -1,4 +1,5 @@
 import { lazy, useCallback, useEffect, useMemo, useState } from "react";
+import useAuthSnapshot from "./core/auth/useAuthSnapshot.js";
 import axios from "axios";
 import { io } from "socket.io-client";
 import {
@@ -142,7 +143,7 @@ function useWorkspace() {
 
 // ── Route guards ────────────────────────────────────────────────────────────
 
-function RootEntry() {
+function RootEntry({ user }) {
   const location = useLocation();
   const searchParams = new URLSearchParams(location.search);
   const hasLegacyView = searchParams.has("view");
@@ -158,7 +159,11 @@ function RootEntry() {
     return <Navigate to={`/app/${mappedRoute}${query ? `?${query}` : ""}`} replace />;
   }
 
-  return <Navigate to="/app/home" replace />;
+  if (user) {
+    return <Navigate to="/app/home" replace />;
+  }
+
+  return <PublicLandingPage />;
 }
 
 
@@ -485,9 +490,10 @@ function WorkspaceSettingsRoute() {
 
 export default function App() {
   const location = useLocation();
+  const user = useAuthSnapshot();
 
   const [guestPreferences, setGuestPreferences] = useState(() => getDefaultPreferences());
-  const preferences = guestPreferences;
+  const preferences = user?.preferences || guestPreferences;
 
   const isExportMode = useMemo(() => {
     const params = new URLSearchParams(location.search);
@@ -552,7 +558,7 @@ export default function App() {
 
   return (
     <Routes>
-      <Route path="/" element={<RootEntry />} />
+      <Route path="/" element={<RootEntry user={user} />} />
 
       <Route
         path="/auth/login"
@@ -595,7 +601,7 @@ export default function App() {
         <Route path="*" element={<Navigate to="/app/home" replace />} />
       </Route>
 
-      <Route path="*" element={<Navigate to="/app/home" replace />} />
+      <Route path="*" element={<Navigate to={user ? "/app/home" : "/"} replace />} />
     </Routes>
   );
 }
