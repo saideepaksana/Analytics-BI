@@ -267,6 +267,140 @@ docker-compose up -d
 
 ---
 
+## Role-Based Access Control (RBAC)
+
+Analytics BI implements a three-tier role-based access control system for multi-user collaboration.
+
+### Roles
+
+| Role | Level | Capabilities |
+|------|-------|--------------|
+| **Admin** | 2 | Full access to all dashboards, charts, and system operations |
+| **Editor** | 1 | Can create, edit, and publish dashboards/charts |
+| **Viewer** | 0 | Read-only access to published dashboards and charts |
+
+### Permission Matrix
+
+| Action | Admin | Editor | Viewer |
+|--------|-------|--------|--------|
+| View published dashboards | ✅ | ✅ | ✅ |
+| View own draft dashboards | ✅ | ✅ | ❌ |
+| Create dashboards/charts | ✅ | ✅ | ❌ |
+| Edit dashboards | ✅ | ✅ | ❌ |
+| Delete dashboards | ✅ | ✅ | ❌ |
+| Publish/Unpublish | ✅ | ✅ | ❌ |
+
+### Implementation
+
+- **Backend**: `requireAuth` + `canMutate` middleware enforces role checks on all write endpoints
+- **Frontend**: `canEditDashboard()`, `canDeleteDashboard()`, etc. conditionally show/disable UI actions
+- **Ownership**: Dashboard owner always has edit/delete rights (editor role or above)
+
+See [SECURITY_AND_RBAC_GUIDE.md](docs/SECURITY_AND_RBAC_GUIDE.md) for detailed documentation.
+
+---
+
+## Draft vs Live Dashboards
+
+Dashboards support a draft/published workflow to keep unpublished changes private.
+
+### States
+
+```
+CREATE → DRAFT (private, owner-only)
+  ↓
+PUBLISH → LIVE (visible to all authorized users)
+  ↓
+UNPUBLISH → DRAFT (hidden again)
+```
+
+### Key Features
+
+- **Draft Dashboards**: Work-in-progress, visible only to creator
+- **Live Dashboards**: Published, visible per role permissions
+- **Separate Storage**: Draft changes don't affect published version until published
+- **Version Control**: Optimistic concurrency control prevents conflicting edits
+
+### UI Indicators
+
+- **DRAFT badge** (Orange): Unpublished, owner-only
+- **LIVE badge** (Green): Published, visible to all
+- **Publish button**: Available for draft dashboards
+- **Unpublish button**: Available for published dashboards
+
+### API Endpoints
+
+```bash
+POST /api/dashboards/:id/publish      # Publish draft
+POST /api/dashboards/:id/unpublish    # Revert to draft
+POST /api/dashboards/:id/save-draft   # Save draft changes
+GET /api/dashboards/:id/draft         # Get draft state
+```
+
+---
+
+## Security Practices
+
+### Security Headers
+
+All API responses include security headers to prevent common vulnerabilities:
+
+- **Content-Security-Policy**: Blocks inline scripts/styles; prevents XSS
+- **X-Frame-Options**: DENY (prevents clickjacking)
+- **Permissions-Policy**: Restricts browser features (camera, microphone, geolocation, etc.)
+- **Strict-Transport-Security**: Enforces HTTPS with preload
+- **X-Content-Type-Options**: Prevents MIME sniffing
+
+### Input Validation & Sanitization
+
+- **HTML Sanitization**: All string inputs sanitized recursively to remove script tags
+- **SQL/NoSQL Injection Detection**: Pattern-based blocking of injection attempts
+- **Rate Limiting**: 1000 requests per IP per minute
+
+### CORS Policy
+
+CORS is restricted to whitelisted origins (configure via `CORS_ORIGIN` environment variable):
+
+```env
+CORS_ORIGIN=http://localhost:5173,https://analytics.example.com
+```
+
+### CSRF Protection
+
+CSRF tokens validated with constant-time comparison to prevent timing attacks.
+
+### Authentication
+
+Currently uses header-based identification (recommended for internal deployments only):
+
+```
+X-User-ID: user@example.com
+X-User-Role: editor|viewer|admin
+```
+
+**⚠️ For Production**: Replace with JWT tokens and server-side verification.
+
+### Running Security Scans
+
+Use OWASP ZAP to scan for vulnerabilities:
+
+```bash
+# Quick baseline scan (5 minutes)
+./scripts/run-zap-scan.sh baseline
+
+# Full active scan (30+ minutes)
+./scripts/run-zap-scan.sh active
+
+# Both scans
+./scripts/run-zap-scan.sh full
+```
+
+Scan reports are saved to `zap_reports/` with HTML and JSON formats.
+
+See [SECURITY_AND_RBAC_GUIDE.md](docs/SECURITY_AND_RBAC_GUIDE.md) for comprehensive security documentation, testing procedures, and production deployment recommendations.
+
+---
+
 ## API Reference
 
 ### Upload & Ingestion
