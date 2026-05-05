@@ -109,6 +109,7 @@ export default function ChartExplore({ chartId, onBack }) {
   const [showGrid, setShowGrid] = useState(true);
   const [showLabels, setShowLabels] = useState(false);
   const [showTitle, setShowTitle] = useState(true);
+  const [showAxisInPreview, setShowAxisInPreview] = useState(true);
   const [colorScheme, setColorScheme] = useState("vivid");
   const [stacking, setStacking] = useState(false);
 
@@ -234,6 +235,7 @@ export default function ChartExplore({ chartId, onBack }) {
             setShowGrid(chart.style?.showGrid !== false);
             setShowLabels(chart.style?.showLabels === true);
             setShowTitle(chart.style?.showTitle !== false);
+            setShowAxisInPreview(chart.style?.showAxisInPreview !== false);
             setColorScheme(getSchemeByPalette(chart.style?.colorPalette || []));
             setStacking(chart.visualization?.series?.stack || false);
             setLastSaved(chart.updatedAt);
@@ -350,7 +352,7 @@ export default function ChartExplore({ chartId, onBack }) {
     if (resultData.length > 0) {
       setIsDirty(true);
     }
-  }, [chartName, showLegend, showGrid, showLabels, showTitle, colorScheme, stacking]);
+  }, [chartName, showLegend, showGrid, showLabels, showTitle, showAxisInPreview, colorScheme, stacking]);
 
   // ── Execute query ──
   const handleUpdateChart = useCallback(async () => {
@@ -441,6 +443,7 @@ export default function ChartExplore({ chartId, onBack }) {
           showGrid,
           showLabels,
           showTitle,
+          showAxisInPreview,
         },
       };
 
@@ -454,7 +457,7 @@ export default function ChartExplore({ chartId, onBack }) {
     } finally {
       setIsSaving(false);
     }
-  }, [savedChartId, chartName, selectedDatasetId, chartType, xAxis, metrics, dimensionsList, filters, sortBy, showLegend, showGrid, showLabels, showTitle, colorScheme, columns, binSize, stacking]);
+  }, [savedChartId, chartName, selectedDatasetId, chartType, xAxis, metrics, dimensionsList, filters, sortBy, showLegend, showGrid, showLabels, showTitle, showAxisInPreview, colorScheme, columns, binSize, stacking]);
 
   const handleExport = useCallback((format) => {
     if (!selectedDatasetId) {
@@ -735,6 +738,8 @@ export default function ChartExplore({ chartId, onBack }) {
             onToggleLabels={() => setShowLabels((v) => !v)}
             showTitle={showTitle}
             onToggleTitle={() => setShowTitle((v) => !v)}
+            showAxisInPreview={showAxisInPreview}
+            onToggleAxisInPreview={() => setShowAxisInPreview((v) => !v)}
             colorScheme={colorScheme}
             onColorSchemeChange={setColorScheme}
             colorSchemeOptions={Object.entries(COLOR_SCHEMES).map(([id, colors]) => ({

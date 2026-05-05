@@ -63,6 +63,8 @@ export default function QueryPanel({
   onToggleLabels,
   showTitle = false,
   onToggleTitle,
+  showAxisInPreview = true,
+  onToggleAxisInPreview,
   // Distribution chart specific
   binSize = 10,
   onSetBinSize,
@@ -428,6 +430,18 @@ export default function QueryPanel({
                 className={`toggle-switch ${showTitle ? "on" : ""}`}
                 onClick={onToggleTitle}
                 aria-label="Toggle chart title"
+              />
+            </div>
+
+            <div className="customize-toggle">
+              <div className="customize-toggle-copy">
+                <label>Preview Axes</label>
+                <span>Always show X/Y axis labels in dashboard previews.</span>
+              </div>
+              <button
+                className={`toggle-switch ${showAxisInPreview ? "on" : ""}`}
+                onClick={onToggleAxisInPreview}
+                aria-label="Toggle preview axes"
               />
             </div>
 

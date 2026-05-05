@@ -300,11 +300,23 @@ const runVisualExport = async (job) => {
                         (m) => String(m.aggregation || "").toUpperCase() === "RAW"
                     );
 
-                    const dashboardFilters = enrichedState.filters || [];
+                    const dashboardFilters = enrichedState.filters || {};
+                    let relevantFilters = {};
+                    if (Array.isArray(dashboardFilters)) {
+                        relevantFilters = dashboardFilters.filter(f => !f.datasetId || f.datasetId === datasetId);
+                    } else {
+                        relevantFilters = Object.entries(dashboardFilters).reduce((acc, [id, f]) => {
+                            if (!f.datasetId || f.datasetId === datasetId) {
+                                acc[id] = f;
+                            }
+                            return acc;
+                        }, {});
+                    }
+
                     const cq = {
                         ...chart.query,
                         raw: chart.query?.raw || isScatter || isDistribution || (isLineOrArea && hasRawMeasure),
-                        filters: mergeFilters(chart.query?.filters || [], dashboardFilters)
+                        filters: mergeFilters(chart.query?.filters || [], relevantFilters)
                     };
 
                     const { results } = await executeDatasetQuery(datasetId, cq);

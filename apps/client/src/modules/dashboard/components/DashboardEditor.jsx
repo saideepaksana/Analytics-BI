@@ -232,6 +232,7 @@ function DashboardWidgetChart({ chart, dashboardFilters = [], onRenderComplete, 
       style={{ ...chart.style, minHeight: "0px" }}
       stacking={chart.visualization?.series?.stack || false}
       title={title}
+      isPreview={true}
       onRenderComplete={handleRenderComplete}
     />
   );

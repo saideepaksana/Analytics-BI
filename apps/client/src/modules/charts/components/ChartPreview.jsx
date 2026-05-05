@@ -95,7 +95,7 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
         tooltip: isPreview ? { show: false } : { ...darkTooltip, trigger: "item" },
         grid: isPreview ? { top: '5%', left: '5%', right: '5%', bottom: '5%' } : { top: gridTop, left: "10%", right: "10%", bottom: "15%", containLabel: true },
         xAxis: {
-          show: !isPreview && !hideXAxis,
+          show: (!isPreview || style.showAxisInPreview !== false) && !hideXAxis,
           type: "category",
           data: axisData,
           axisLine: { show: !hideXAxis, lineStyle: { color: borderStrong } },
@@ -103,7 +103,7 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
           axisLabel: { show: !hideXAxis, color: textSecondary, rotate: axisData.length > 5 ? 30 : 0 }
         },
         yAxis: {
-          show: !isPreview,
+          show: (!isPreview || style.showAxisInPreview !== false),
           type: "value",
           splitLine: { lineStyle: { color: borderColor } },
           axisLabel: { color: textSecondary }
@@ -179,7 +179,7 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
         tooltip: isPreview ? { show: false } : { ...darkTooltip, trigger: "axis" },
         grid: isPreview ? { top: '5%', left: '5%', right: '5%', bottom: '15%' } : { top: gridTop, left: "10%", right: "10%", bottom: "15%", containLabel: true },
         xAxis: {
-          show: !isPreview && !hideXAxis,
+          show: (!isPreview || style.showAxisInPreview !== false) && !hideXAxis,
           type: "category",
           data: binLabels,
           axisLine: { show: !hideXAxis, lineStyle: { color: borderStrong } },
@@ -187,7 +187,7 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
           axisLabel: { show: !hideXAxis, color: textSecondary, rotate: binLabels.length > 8 ? 35 : 0 }
         },
         yAxis: {
-          show: !isPreview,
+          show: (!isPreview || style.showAxisInPreview !== false),
           type: "value",
           splitLine: { lineStyle: { color: borderColor } },
           axisLabel: { color: textSecondary }
@@ -224,7 +224,7 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
         },
         grid: isPreview ? { top: 0, left: 0, right: 0, bottom: 0 } : { top: titleText ? "16%" : "12%", left: "3%", right: "4%", bottom: "12%", containLabel: true },
         xAxis: {
-          show: !isPreview && !hideXAxis,
+          show: (!isPreview || style.showAxisInPreview !== false) && !hideXAxis,
           type: "value",
           name: xFieldKey,
           nameTextStyle: { color: textSecondary, show: !hideXAxis },
@@ -234,7 +234,7 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
           splitLine: { lineStyle: { color: borderColor } }
         },
         yAxis: {
-          show: !isPreview,
+          show: (!isPreview || style.showAxisInPreview !== false),
           type: "value",
           name: yFieldKey,
           nameTextStyle: { color: textSecondary },
@@ -375,7 +375,7 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
         borderColor: "rgba(148, 163, 184, 0.1)"
       },
         xAxis: {
-        show: (!isPreview || style.showAxisInPreview) && !hideXAxis,
+        show: (!isPreview || style.showAxisInPreview !== false) && !hideXAxis,
         type: hasNumericXAxis ? "value" : "category",
         data: hasNumericXAxis ? undefined : xAxisData,
         name: hasNumericXAxis ? xAxisField : undefined,
@@ -386,7 +386,7 @@ const ChartPreview = ({ type, data = [], dimensions = [], measures = [], style =
         splitLine: { show: false }
       },
       yAxis: {
-        show: !isPreview || style.showAxisInPreview,
+        show: (!isPreview || style.showAxisInPreview !== false),
         type: "value",
         splitLine: { lineStyle: { color: borderColor } },
         axisLabel: { color: textSecondary }
