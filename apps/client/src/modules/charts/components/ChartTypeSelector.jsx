@@ -2,8 +2,6 @@ import React from "react";
 import { BarChart3, LineChart, PieChart, AreaChart, ScatterChart, Box, Hash, Table as TableIcon } from "lucide-react";
 
 const CHART_TYPES = [
-  { id: "kpi", label: "KPI Summary Card", icon: Hash, description: "Display a single key performance indicator." },
-  { id: "table", label: "Data Table", icon: TableIcon, description: "Show raw or aggregated data in a tabular grid." },
   { id: "bar", label: "Bar Chart", icon: BarChart3, description: "Compare categorical data using rectangular bars." },
   { id: "line", label: "Line Chart", icon: LineChart, description: "Display trends over time or continuous categories." },
   { id: "pie", label: "Pie Chart", icon: PieChart, description: "Show proportions of a whole across categories." },
@@ -11,6 +9,8 @@ const CHART_TYPES = [
   { id: "scatter", label: "Scatter Plot", icon: ScatterChart, description: "Identify relationships between two numeric variables." },
   { id: "boxplot", label: "Box Plot", icon: Box, description: "Visualize data distribution through quartiles." },
   { id: "histogram", label: "Histogram", icon: BarChart3, description: "Show frequency distribution of a numeric variable." },
+  { id: "kpi", label: "KPI Summary Card", icon: Hash, description: "Display a single key performance indicator." },
+  { id: "table", label: "Data Table", icon: TableIcon, description: "Show raw or aggregated data in a tabular grid." },
 ];
 
 export default function ChartTypeSelector({ selectedType, onSelect }) {

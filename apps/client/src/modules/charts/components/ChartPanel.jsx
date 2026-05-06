@@ -3,6 +3,7 @@ import {
   AlertTriangle, BarChart2
 } from "lucide-react";
 import ReactECharts from "echarts-for-react";
+import ChartPreview from "./ChartPreview";
 
 /**
  * ChartPanel — Right panel with chart type toolbar, live chart, status bar, and results/samples tabs.
@@ -453,6 +454,7 @@ export default function ChartPanel({
   // Get table columns from data
   const tableColumns = data.length > 0 ? Object.keys(data[0]) : [];
   const sampleColumns = sampleData.length > 0 ? Object.keys(sampleData[0]) : [];
+  const isKpiOrTable = chartType === "kpi" || chartType === "table";
 
   return (
     <div className="chart-panel">
@@ -473,7 +475,16 @@ export default function ChartPanel({
 
       {/* Chart area */}
       <div className="chart-render-area">
-        {chartOption ? (
+        {isKpiOrTable ? (
+          <ChartPreview
+            type={chartType}
+            data={data}
+            dimensions={dimensionsList}
+            measures={metrics}
+            style={{ minHeight: "100%" }}
+            title={showTitle ? chartTitle : ""}
+          />
+        ) : chartOption ? (
           <div ref={containerRef} style={{ width: "100%", height: "100%" }}>
             <ReactECharts
               ref={echartsRef}

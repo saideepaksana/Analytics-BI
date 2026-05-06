@@ -20,8 +20,6 @@ const AGGREGATIONS = ["COUNT", "SUM", "AVG", "MIN", "MAX", "RAW"];
 const FILTER_OPERATORS = ["=", "!=", ">", ">=", "<", "<=", "IN", "NOT IN"];
 const NUMERIC_TYPE_REGEX = /(int|float|number|decimal|double|long|short|numeric|real)/;
 const CHART_TYPES = [
-  { id: "kpi", icon: Hash, label: "KPI" },
-  { id: "table", icon: Table, label: "Table" },
   { id: "bar", icon: BarChart3, label: "Bar Chart" },
   { id: "line", icon: LineChart, label: "Line Chart" },
   { id: "scatter", icon: ScatterChart, label: "Scatter Plot" },
@@ -29,6 +27,8 @@ const CHART_TYPES = [
   { id: "pie", icon: PieChart, label: "Pie Chart" },
   { id: "boxplot", icon: Box, label: "Box Plot" },
   { id: "histogram", icon: BarChart, label: "Histogram" },
+  { id: "kpi", icon: Hash, label: "KPI" },
+  { id: "table", icon: Table, label: "Table" },
 ];
 
 /**

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   deleteAllQuarantineRows,
   deleteQuarantineRow,
+  clearDatasetMetadataCache,
   getDatasetMetadata,
   restoreAllValidQuarantineRows,
   restoreQuarantineRow,
@@ -66,9 +67,10 @@ export const useMetadata = (datasetId, options = {}) => {
       }
 
       await updateSchemaColumn(datasetId, columnName, updates);
+      clearDatasetMetadataCache(datasetId);
       await fetchMetadata();
     },
-    [datasetId]
+    [datasetId, fetchMetadata]
   );
 
   const deleteQuarantinedRow = useCallback(
