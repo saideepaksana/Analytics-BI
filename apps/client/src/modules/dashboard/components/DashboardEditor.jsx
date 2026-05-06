@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Grip, Loader2, MoveDiagonal2, Pencil, Plus, PlusCircle, Save, Trash2, X, MoreVertical, Star, User, Clock, MessageSquare, Download, FileSpreadsheet, FileText as PdfIcon, Send, FileEdit, History, Info } from "lucide-react";
+import { ArrowLeft, Grip, Loader2, MoveDiagonal2, Pencil, Plus, PlusCircle, Save, Trash2, X, MoreVertical, Star, User, Clock, MessageSquare, Download, FileSpreadsheet, FileText as PdfIcon, Send, FileEdit, History, Info, Code } from "lucide-react";
 import html2canvas from "html2canvas";
 import { useExportStatus } from "../../../hooks/useExportStatus";
 import { buildChartQueryForExport, buildChartRawExportPayload, mergeNormalizedFilters } from "../../../services/export.service";
@@ -12,6 +12,7 @@ import { saveDraft as saveDraftService, publishDashboard as publishDashboardServ
 import GlobalFilterPanel from "./GlobalFilterPanel";
 import ScheduleExportModal from "./ScheduleExportModal";
 import ExportHistoryModal from "./ExportHistoryModal";
+import EmbedModal from "./EmbedModal";
 
 const ROW_HEIGHT = 42;
 const MIN_WIDGET_W = 4;
@@ -712,6 +713,7 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, saveE
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [showExportHistoryModal, setShowExportHistoryModal] = useState(false);
+  const [showEmbedModal, setShowEmbedModal] = useState(false);
   const {
     status,
     progress: exportProgress,
@@ -1571,6 +1573,12 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, saveE
                       }}>
                         <History size={14} /> Export History
                       </button>
+                      <button onClick={() => {
+                        setShowExportMenu(false);
+                        setShowEmbedModal(true);
+                      }}>
+                        <Code size={14} /> Embed Dashboard
+                      </button>
                     </div>
                   )}
 
@@ -1876,6 +1884,13 @@ export default function DashboardEditor({ mode, dashboard, charts, saving, saveE
             if (restoredState.activeTab) setActiveTabId(restoredState.activeTab);
             if (restoredState.filters) setFilters(restoredState.filters);
           }}
+        />
+      )}
+      {showEmbedModal && (
+        <EmbedModal 
+          dashboardId={dashboard.id} 
+          dashboardName={name}
+          onClose={() => setShowEmbedModal(false)} 
         />
       )}
     </div>

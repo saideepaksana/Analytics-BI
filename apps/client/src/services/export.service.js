@@ -270,3 +270,8 @@ export const getDashboardExportHistory = async (dashboardId) => {
   const response = await apiClient.get(`/export/dashboards/${dashboardId}/log`);
   return response.data;
 };
+
+export const generateEmbedToken = async (payload) => {
+  const response = await apiClient.post('/export/embed/token', payload);
+  return response.data;
+};
