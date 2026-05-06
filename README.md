@@ -157,10 +157,11 @@ analytics-bi/
 │           ├── pipelines/         # Data processing: parser, schema inference, DTS, query
 │           └── services/          # Business logic services
 │
-├── packages/
-│   ├── shared-types/              # Shared TypeScript types (workspace package)
-│   └── ui-components/             # Shared UI component library (workspace package)
+├── apps/shared-lib/                   # Shared utilities for MFE communication
+│   └── src/                           # apiClient, authBridge, eventBus, env config
 │
+│   # Note: packages/shared-types/ and packages/ui-components/ are referenced in
+│   # the workspace config but not yet created. Shared code lives in apps/shared-lib/.
 ├── docs/
 │   ├── architecture.md            # Detailed architecture & data flow diagrams
 │   ├── Structure.md               # Project structure notes
@@ -592,6 +593,44 @@ HTTP 200 + Socket.IO stage: done (100%)
 | `start` | `npm start` | Start with node |
 
 
+---
+
+## Contributing
+
+Contributions are welcome! Please follow these guidelines:
+
+1. **Fork** the repository and create a feature branch from `main`:
+   ```bash
+   git checkout -b feature/your-feature-name
+   ```
+
+2. **Install dependencies** and ensure everything builds:
+   ```bash
+   npm install
+   npm run dev
+   ```
+
+3. **Code style**:
+   - Follow existing patterns in the codebase
+   - Use meaningful variable and function names
+   - Add JSDoc comments for public functions
+   - Run `npm run lint` in `apps/client` before committing
+
+4. **Commit messages**: Use clear, descriptive commit messages:
+   ```
+   feat: add scatter plot support to chart builder
+   fix: resolve DLQ restore-all race condition
+   docs: update API reference for export endpoints
+   ```
+
+5. **Pull Requests**:
+   - Provide a clear description of the change and its motivation
+   - Reference any related issues
+   - Ensure no regressions in existing functionality
+
+6. **Testing**: Verify your changes work end-to-end (upload → visualize → export) before submitting.
+
+---
 
 ## License
 
