@@ -1,0 +1,114 @@
+services:
+  mongo:
+    image: mongo:6-jammy
+    container_name: analytics-mongo-mfe
+    ports:
+      - "27018:27017"
+    volumes:
+      - mongo_data_mfe:/data/db
+    restart: unless-stopped
+    networks:
+      - analytics-network-mfe
+
+  redis:
+    image: redis:7-alpine
+    container_name: analytics-redis-mfe
+    ports:
+      - "6380:6379"
+    restart: unless-stopped
+    networks:
+      - analytics-network-mfe
+
+  server:
+    image: node:20-slim
+    container_name: analytics-server-mfe
+    working_dir: /app
+    command: npm run dev -w apps/server
+    volumes:
+      - .:/app
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      - MONGO_URI=mongodb://mongo:27017/analytics-bi
+      - REDIS_HOST=redis
+      - NODE_ENV=development
+      - CORS_ORIGIN=http://localhost:5173,http://localhost:5001,http://localhost:5002,http://localhost:5003,http://localhost:5004
+      - EMBED_ALLOWED_ORIGINS=http://localhost:5173,http://localhost:5001,http://localhost:5002,http://localhost:5003,http://localhost:5004
+    depends_on:
+      - mongo
+      - redis
+    networks:
+      - analytics-network-mfe
+
+  host:
+    image: node:20-slim
+    container_name: analytics-host
+    working_dir: /app
+    command: npm run dev -w apps/host -- --host 0.0.0.0
+    volumes:
+      - .:/app
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_BASE_URL=http://localhost:5000/api
+      - VITE_SOCKET_URL=http://localhost:5000
+    depends_on:
+      - server
+    networks:
+      - analytics-network-mfe
+
+  mfe-auth:
+    image: node:20-slim
+    container_name: analytics-mfe-auth
+    working_dir: /app
+    command: npm run dev -w apps/mfe-auth -- --host 0.0.0.0
+    volumes:
+      - .:/app
+    ports:
+      - "5001:5001"
+    networks:
+      - analytics-network-mfe
+
+  mfe-analytics:
+    image: node:20-slim
+    container_name: analytics-mfe-analytics
+    working_dir: /app
+    command: npm run dev -w apps/mfe-analytics -- --host 0.0.0.0
+    volumes:
+      - .:/app
+    ports:
+      - "5002:5002"
+    networks:
+      - analytics-network-mfe
+
+  mfe-data-mgmt:
+    image: node:20-slim
+    container_name: analytics-mfe-data-mgmt
+    working_dir: /app
+    command: npm run dev -w apps/mfe-data-mgmt -- --host 0.0.0.0
+    volumes:
+      - .:/app
+    ports:
+      - "5003:5003"
+    networks:
+      - analytics-network-mfe
+
+  mfe-tools:
+    image: node:20-slim
+    container_name: analytics-mfe-tools
+    working_dir: /app
+    command: npm run dev -w apps/mfe-tools -- --host 0.0.0.0
+    volumes:
+      - .:/app
+    ports:
+      - "5004:5004"
+    networks:
+      - analytics-network-mfe
+
+networks:
+  analytics-network-mfe:
+    driver: bridge
+
+volumes:
+  mongo_data_mfe:

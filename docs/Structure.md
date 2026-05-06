@@ -1,47 +1,80 @@
-# Analytics BI Platform
+# Analytics BI Repository Structure
 
-## System Architecture
+This repository is a monorepo that hosts the frontend applications, backend API, and shared utilities. The codebase supports a monolith client and a host + microfrontend migration path.
 
-This project utilizes a **Monorepo Architecture** to manage both the frontend client and backend server within a single repository. This allows for seamless sharing of types and UI components while keeping domains strictly isolated. 
-
-Our structure is designed to support the immediate MERN-stack data ingestion pipeline while reserving specific modules and pipelines for future Artificial Intelligence (AI) and Machine Learning features.
-
-### Directory Structure
+## Top-Level Layout
 
 ```text
 analytics-bi/
-├── packages/                  # Shared internal libraries
-│   ├── shared-types/          # Shared TypeScript interfaces (e.g., Schema, User, AiChatResponse)
-│   └── ui-components/         # Reusable Tailwind/Lucide UI components
 ├── apps/
-│   ├── client/                # FRONTEND (React.js, Tailwind, Socket.io-client)
-│   │   ├── src/
-│   │   │   ├── core/          # Core layout, routing, and context
-│   │   │   ├── modules/       # Domain-driven feature modules
-│   │   │   │   ├── ingestion/ # Data upload and wizard UI
-│   │   │   │   ├── data-review/# Schema review and quarantine UI
-│   │   │   │   ├── builder/   # Query Builder UI 
-│   │   │   │   ├── dashboard/ # Dashboards & Visualizations
-│   │   │   │   │   └── components/AiSummaryCard.tsx  # Future AI Feature
-│   │   │   │   ├── sql-editor/# SQL Query Interface
-│   │   │   │   │   └── components/AiAssistant.tsx    # Future AI Feature
-│   │   │   │   └── chatbot/   # Future AI NLP Chatbot
-│   │   │   └── services/      # API clients (Axios) and Socket listeners
-│   │   └── package.json
-│   │
-│   └── server/                # BACKEND (Node.js, Express, MongoDB)
-│       ├── src/
-│       │   ├── api/           # Express routes & controllers
-│       │   │   ├── upload/    # File reception and storage routes
-│       │   │   ├── query/     # Data querying routes
-│       │   │   └── ai/        # Future: Routes for NLP and Forecasting
-│       │   ├── core/          # DB connection, Server setup, Socket.io init
-│       │   ├── models/        # Mongoose Schemas (Raw Data, Metadata, DLQ)
-│       │   ├── services/      # External integrations
-│       │   │   └── llm/       # Future: Prompts, LangChain, Model configs
-│       │   └── pipelines/     # Data Processing Engine
-│       │       ├── parser/    # Stream-based parsing logic
-│       │       ├── dts/       # Data Transformation Services (Cleaning)
-│       │       └── schema/    # Schema inference and relationship mapping
-│       └── package.json
-└── package.json
+│   ├── client/                 # Monolith React client (primary UI today)
+│   ├── host/                   # MFE host shell (Module Federation)
+│   ├── mfe-auth/               # Remote: auth routes (login, signup)
+│   ├── mfe-analytics/          # Remote: charts and dashboards
+│   ├── mfe-data-mgmt/          # Remote: ingestion, datasets, review
+│   ├── mfe-tools/              # Remote: tools (settings, SQL, builder)
+│   ├── server/                 # Express API, jobs, pipelines
+│   └── shared-lib/             # Shared MFE utilities and API helpers
+├── docs/                       # Canonical technical documentation
+├── docker-compose.yml          # Monolith stack orchestration
+├── docker-compose.mfe.yml      # MFE stack orchestration
+├── package.json                # Workspace root (npm workspaces)
+└── README.md
+```
+
+## Frontend Applications
+
+### apps/client (Monolith UI)
+
+Primary UI built with React 19 + Vite 7. It contains all major user flows:
+- ingestion wizard and upload progress
+- datasets browser and data review
+- chart creation and exploration
+- dashboard gallery and editor
+- export management and scheduled exports
+
+Key folders:
+```text
+apps/client/src/
+├── core/            # API config, auth, utilities
+├── services/        # REST API clients
+├── modules/         # Feature modules (ingestion, charts, dashboard, etc.)
+├── components/      # Shared UI components
+└── hooks/           # Shared hooks
+```
+
+### apps/host + apps/mfe-*
+
+Module Federation-based split used for incremental migration. The host provides shell layout and routing; each remote maps to a feature area while reusing shared-lib and backend APIs.
+
+## Backend Application
+
+### apps/server (Express API)
+
+Key folders:
+```text
+apps/server/src/
+├── api/             # REST routes/controllers (upload, datasets, charts, dashboards)
+├── core/            # DB, Redis, Socket.IO, logging, validation
+├── export/          # Export endpoints and orchestration
+├── features/        # Feature-specific modules (export workers)
+├── jobs/            # BullMQ queues/workers and retry policies
+├── middleware/      # Request-level middleware (auth, RBAC, idempotency, security)
+├── models/          # Mongoose schemas (Metadata, Chart, Dashboard, ExportLog, etc.)
+├── pipelines/       # Parser, schema inference, DTS transform, query helpers
+├── services/        # Business logic and integrations (DLQ, email, LLM, embed tokens)
+└── scripts/         # Maintenance and test helpers
+```
+
+## Shared Library
+
+### apps/shared-lib
+
+Cross-app utilities used by the host and remotes:
+- API base URLs and environment helpers
+- shared API client and error handling
+- auth bridge and event bus
+
+## Documentation
+
+The full documentation set lives under `docs/`. Start with `docs/README.md` for an index and onboarding path.
