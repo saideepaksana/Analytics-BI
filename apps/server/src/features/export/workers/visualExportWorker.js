@@ -339,7 +339,7 @@ const runVisualExport = async (job) => {
         const exportHeight = Math.max(800, height);
 
         await page.setViewport({ width: exportWidth, height: exportHeight });
-        await page.emulateMediaType("print");
+        await page.emulateMediaType("screen");
 
         // Block unnecessary resources to speed up page load
         await page.setRequestInterception(true);
